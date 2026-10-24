@@ -1,0 +1,68 @@
+package com.example.xcommandcenter.data.db
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.xcommandcenter.data.dao.BookDao
+import com.example.xcommandcenter.data.dao.GoalDao
+import com.example.xcommandcenter.data.dao.HabitDao
+import com.example.xcommandcenter.data.dao.LinkDao
+import com.example.xcommandcenter.data.dao.NoteDao
+import com.example.xcommandcenter.data.dao.ProjectDao
+import com.example.xcommandcenter.data.dao.QuoteDao
+import com.example.xcommandcenter.data.dao.TaskDao
+import com.example.xcommandcenter.data.entity.BookEntity
+import com.example.xcommandcenter.data.entity.ChapterEntity
+import com.example.xcommandcenter.data.entity.GoalEntity
+import com.example.xcommandcenter.data.entity.HabitEntity
+import com.example.xcommandcenter.data.entity.HabitMarkEntity
+import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.LinkEntity
+import com.example.xcommandcenter.data.entity.NoteEntity
+import com.example.xcommandcenter.data.entity.ProjectEntity
+import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.TaskEntity
+
+@Database(
+    entities = [
+        TaskEntity::class,
+        GoalEntity::class,
+        HabitEntity::class,
+        HabitMarkEntity::class,
+        ProjectEntity::class,
+        NoteEntity::class,
+        BookEntity::class,
+        ChapterEntity::class,
+        QuoteEntity::class,
+        LinkEntity::class,
+    ],
+    views = [ItemIndexEntry::class],
+    version = 1,
+)
+@TypeConverters(Converters::class)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun taskDao(): TaskDao
+    abstract fun goalDao(): GoalDao
+    abstract fun habitDao(): HabitDao
+    abstract fun projectDao(): ProjectDao
+    abstract fun noteDao(): NoteDao
+    abstract fun bookDao(): BookDao
+    abstract fun quoteDao(): QuoteDao
+    abstract fun linkDao(): LinkDao
+
+    companion object {
+        fun create(context: Context): AppDatabase =
+            Room.databaseBuilder(context, AppDatabase::class.java, "xcommandcenter.db")
+                .addCallback(
+                    object : Callback() {
+                        // Runs once, inside the transaction that creates the schema, so the
+                        // seed is all-or-nothing and never re-inserted on later launches.
+                        override fun onCreate(db: SupportSQLiteDatabase) = SeedData.insert(db)
+                    },
+                )
+                .build()
+    }
+}

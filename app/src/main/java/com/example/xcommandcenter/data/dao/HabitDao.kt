@@ -1,0 +1,60 @@
+package com.example.xcommandcenter.data.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
+import com.example.xcommandcenter.data.entity.HabitEntity
+import com.example.xcommandcenter.data.entity.HabitMarkEntity
+import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
+
+@Dao
+interface HabitDao {
+    @Query("SELECT * FROM habits ORDER BY createdAt")
+    fun observeAll(): Flow<List<HabitEntity>>
+
+    @Query("SELECT * FROM habits WHERE id = :id")
+    suspend fun get(id: Long): HabitEntity?
+
+    @Insert
+    suspend fun insert(habit: HabitEntity): Long
+
+    @Update
+    suspend fun update(habit: HabitEntity)
+
+    @Query("SELECT * FROM habit_marks")
+    fun observeAllMarks(): Flow<List<HabitMarkEntity>>
+
+    @Query("SELECT * FROM habit_marks WHERE habitId = :habitId")
+    fun observeMarks(habitId: Long): Flow<List<HabitMarkEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMark(mark: HabitMarkEntity)
+
+    @Query("DELETE FROM habit_marks WHERE habitId = :habitId AND date = :date")
+    suspend fun deleteMark(habitId: Long, date: LocalDate)
+
+    @Query("SELECT COUNT(*) FROM habit_marks WHERE habitId = :habitId AND date = :date")
+    suspend fun markCount(habitId: Long, date: LocalDate): Int
+
+    @Transaction
+    suspend fun toggleMark(habitId: Long, date: LocalDate) {
+        if (markCount(habitId, date) > 0) deleteMark(habitId, date) else insertMark(HabitMarkEntity(habitId, date))
+    }
+
+    /** Marks go with the habit through the foreign key's ON DELETE CASCADE. */
+    @Query("DELETE FROM habits WHERE id = :id")
+    suspend fun deleteRow(id: Long)
+
+    @Query("DELETE FROM links WHERE (aType = 'HABIT' AND aId = :id) OR (bType = 'HABIT' AND bId = :id)")
+    suspend fun deleteLinks(id: Long)
+
+    @Transaction
+    suspend fun delete(id: Long) {
+        deleteLinks(id)
+        deleteRow(id)
+    }
+}

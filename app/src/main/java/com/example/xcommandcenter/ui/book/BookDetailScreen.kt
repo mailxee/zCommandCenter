@@ -1,0 +1,155 @@
+package com.example.xcommandcenter.ui.book
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.xcommandcenter.R
+import com.example.xcommandcenter.data.entity.ChapterEntity
+import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.AppViewModelProvider
+import com.example.xcommandcenter.ui.common.DetailScaffold
+import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.SectionTitle
+
+@Composable
+fun BookDetailScreen(
+    onBack: () -> Unit,
+    onOpen: (ItemRef) -> Unit,
+    viewModel: BookDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
+) {
+    val id by viewModel.itemId.collectAsStateWithLifecycle()
+    val linked by viewModel.linked.collectAsStateWithLifecycle()
+    val chapters by viewModel.chapters.collectAsStateWithLifecycle()
+    val book = viewModel.book
+    var addingChapter by rememberSaveable { mutableStateOf(false) }
+
+    DetailScaffold(
+        title = if (id == 0L) "New book" else "Book",
+        viewModel = viewModel,
+        onBack = onBack,
+        onSave = viewModel::save,
+        onDelete = if (id == 0L) null else viewModel::delete,
+        deleteWarning = "This also deletes its chapters and removes all links to the book and its chapters.",
+    ) {
+        OutlinedTextField(
+            value = book.title,
+            onValueChange = { v -> viewModel.update { it.copy(title = v) } },
+            label = { Text("Title") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = book.author,
+            onValueChange = { v -> viewModel.update { it.copy(author = v) } },
+            label = { Text("Author") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = book.description,
+            onValueChange = { v -> viewModel.update { it.copy(description = v) } },
+            label = { Text("Description") },
+            minLines = 3,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        SectionTitle("Table of contents")
+        if (id == 0L) {
+            Text("Save the book to add chapters.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Card(Modifier.fillMaxWidth()) {
+                if (chapters.isEmpty()) Text("No chapters yet.", modifier = Modifier.padding(16.dp))
+                chapters.forEachIndexed { index, chapter ->
+                    if (index > 0) HorizontalDivider()
+                    ChapterRow(
+                        chapter = chapter,
+                        isFirst = index == 0,
+                        isLast = index == chapters.lastIndex,
+                        onOpen = { onOpen(ItemRef(ItemType.CHAPTER, chapter.id)) },
+                        onRead = { viewModel.addRead(chapter.id) },
+                        onInternalized = { viewModel.setInternalized(chapter.id, it) },
+                        onMove = { viewModel.moveChapter(chapter.id, it) },
+                    )
+                }
+                TextButton(onClick = { addingChapter = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text("Add chapter")
+                }
+            }
+        }
+
+        LinkedItemsSection(viewModel, linked, onOpen)
+    }
+
+    if (addingChapter) {
+        var title by rememberSaveable { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { addingChapter = false },
+            title = { Text("New chapter") },
+            text = {
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.addChapter(title); addingChapter = false },
+                    enabled = title.isNotBlank(),
+                ) { Text("Add") }
+            },
+            dismissButton = { TextButton(onClick = { addingChapter = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun ChapterRow(
+    chapter: ChapterEntity,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onOpen: () -> Unit,
+    onRead: () -> Unit,
+    onInternalized: (Boolean) -> Unit,
+    onMove: (Int) -> Unit,
+) {
+    Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp)) {
+        Text(
+            "${chapter.position + 1}. ${chapter.title}",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Read ${chapter.readCount}×", style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onRead) { Text("+1") }
+            Checkbox(checked = chapter.internalized, onCheckedChange = onInternalized)
+            Text("Internalized", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = { onMove(-1) }, enabled = !isFirst) {
+                Icon(painterResource(R.drawable.ic_arrow_up), contentDescription = "Move up")
+            }
+            IconButton(onClick = { onMove(1) }, enabled = !isLast) {
+                Icon(painterResource(R.drawable.ic_arrow_down), contentDescription = "Move down")
+            }
+        }
+    }
+}

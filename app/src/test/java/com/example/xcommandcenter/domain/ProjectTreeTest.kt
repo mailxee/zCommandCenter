@@ -1,0 +1,23 @@
+package com.example.xcommandcenter.domain
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class ProjectTreeTest {
+    private data class Node(val id: Long, val parent: Long?)
+
+    private val nodes = listOf(Node(1, null), Node(2, 1), Node(3, 2), Node(4, null), Node(5, 1))
+
+    @Test
+    fun `flatten is depth first with depths`() {
+        val rows = ProjectTree.flatten(nodes, Node::id, Node::parent)
+        assertEquals(listOf(1L, 2L, 3L, 5L, 4L), rows.map { it.node.id })
+        assertEquals(listOf(0, 1, 2, 1, 0), rows.map { it.depth })
+    }
+
+    @Test
+    fun `subtree contains root and all descendants`() {
+        assertEquals(setOf(1L, 2L, 3L, 5L), ProjectTree.subtreeIds(1, nodes, Node::id, Node::parent))
+        assertEquals(setOf(4L), ProjectTree.subtreeIds(4, nodes, Node::id, Node::parent))
+    }
+}
