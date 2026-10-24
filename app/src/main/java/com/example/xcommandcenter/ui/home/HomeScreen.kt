@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
@@ -34,7 +35,9 @@ fun HomeScreen(
 ) {
     val order by viewModel.tabOrder.collectAsStateWithLifecycle()
     // Remember the tab itself, not its index, so reordering in Settings keeps the selection.
-    var selectedName by rememberSaveable { mutableStateOf(order.first().name) }
+    // Null until the user picks one: the first tab of the stored order is then shown, even though
+    // that order loads a moment after the first frame.
+    var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = order.firstOrNull { it.name == selectedName } ?: order.first()
 
     Scaffold(
@@ -55,7 +58,7 @@ fun HomeScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected)) {
+            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected), edgePadding = 8.dp) {
                 order.forEach { tab ->
                     Tab(
                         selected = tab == selected,

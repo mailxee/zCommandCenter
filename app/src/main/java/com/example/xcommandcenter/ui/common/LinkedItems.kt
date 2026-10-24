@@ -76,6 +76,7 @@ fun LinkedItemsSection(
                         )
                         group.forEach { entry ->
                             ListItem(
+                                colors = clearListItemColors(),
                                 headlineContent = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                                 supportingContent = entry.describe()?.let { { Text(it) } },
                                 trailingContent = {
@@ -134,6 +135,7 @@ fun LinkPickerDialog(
                 Column {
                     ItemType.tabs.forEach { option ->
                         ListItem(
+                            colors = clearListItemColors(),
                             headlineContent = { Text(option.tabLabel) },
                             modifier = Modifier.clickable { tab = option },
                         )
@@ -155,6 +157,7 @@ fun LinkPickerDialog(
                         items(candidates, key = { "${it.type}-${it.id}" }) { entry ->
                             val linked = entry.ref in alreadyLinked
                             ListItem(
+                                colors = clearListItemColors(),
                                 headlineContent = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                                 supportingContent = {
                                     val detail = listOfNotNull(entry.describe(), if (linked) "Already linked" else null)

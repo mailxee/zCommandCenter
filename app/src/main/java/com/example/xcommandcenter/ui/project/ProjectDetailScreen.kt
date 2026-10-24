@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.xcommandcenter.ui.common.clearListItemColors
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -94,6 +95,7 @@ fun ProjectDetailScreen(
                 }
                 children.forEach { child ->
                     ListItem(
+                        colors = clearListItemColors(),
                         headlineContent = { Text(child.title) },
                         modifier = Modifier.clickable { onOpen(ItemRef(ItemType.PROJECT, child.id)) },
                     )
@@ -117,6 +119,7 @@ fun ProjectDetailScreen(
             text = {
                 Column {
                     ListItem(
+                        colors = clearListItemColors(),
                         headlineContent = { Text("None (top level)") },
                         modifier = Modifier.clickable {
                             viewModel.update { it.copy(parentId = null) }
@@ -126,6 +129,7 @@ fun ProjectDetailScreen(
                     LazyColumn(Modifier.heightIn(max = 360.dp)) {
                         items(options, key = { it.node.id }) { row ->
                             ListItem(
+                                colors = clearListItemColors(),
                                 headlineContent = { Text(row.node.title) },
                                 modifier = Modifier
                                     .padding(start = (row.depth * 16).dp)

@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Modifier
+import com.example.xcommandcenter.ui.common.clearListItemColors
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -83,6 +84,7 @@ fun SettingsScreen(
             Card(Modifier.fillMaxWidth()) {
                 order.forEachIndexed { index, tab ->
                     ListItem(
+                        colors = clearListItemColors(),
                         headlineContent = { Text(tab.tabLabel) },
                         leadingContent = { Text("${index + 1}") },
                         trailingContent = {

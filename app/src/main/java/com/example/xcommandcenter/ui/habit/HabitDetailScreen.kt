@@ -28,6 +28,7 @@ import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.SectionTitle
+import com.example.xcommandcenter.ui.home.times
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -130,8 +131,8 @@ fun HabitDetailScreen(
             val streak = HabitStats.streak(saved.category, saved.recurrence, saved.startDate, marks, today)
             SectionTitle("History")
             Text(
-                if (positive) "Current streak: $streak · Done ${marks.size} times"
-                else "Clean streak: $streak · Missed ${marks.size} times",
+                if (positive) "Current streak: $streak · Done ${times(marks.size)}"
+                else "Clean streak: $streak · Missed ${times(marks.size)}",
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(

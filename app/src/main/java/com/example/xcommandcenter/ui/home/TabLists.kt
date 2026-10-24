@@ -99,8 +99,8 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 title = habit.name,
                 lines = listOf(
                     "${habit.category.label} · ${habit.recurrence.describe()}",
-                    if (positive) "Streak ${summary.streak} · done ${summary.totalMarks} times"
-                    else "Clean streak ${summary.streak} · missed ${summary.totalMarks} times",
+                    if (positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
+                    else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
                 ),
                 links = links[ref].orEmpty(),
                 onClick = { onOpen(ref) },
@@ -263,6 +263,8 @@ private fun ItemCard(
         }
     }
 }
+
+fun times(count: Int): String = if (count == 1) "once" else "$count times"
 
 private fun linkLabel(entry: ItemIndexEntry): String {
     val title = entry.title.let { if (it.length > 40) it.take(39) + "…" else it }
