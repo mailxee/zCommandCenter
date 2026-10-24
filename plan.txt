@@ -1,0 +1,91 @@
+xCommandCenter - Revised Plan
+
+OVERVIEW
+A personal command center for Android. Seven tabs (Tasks, Goals, Habits, Projects, Notes, Books, Quotes) share one local database. Any item in any tab can be linked to any item in any other tab. Each tab displays all items linked to its items.
+
+PLATFORM AND TECHNOLOGY
+- Language: Kotlin
+- UI: Jetpack Compose with Material 3
+- Storage: Room database (local only, no network)
+- Minimum Android version: API 26 (Android 8.0)
+- Target: latest stable SDK in the project template
+- Reminders: WorkManager or AlarmManager, must fire when the app is closed
+- Notifications: request POST_NOTIFICATIONS permission on Android 13+
+- Version control: git, commit after each major step
+
+NAVIGATION
+- Main screen uses a scrollable tab row with seven tabs.
+- Settings screen lets the user change the order of the tabs. The chosen order persists across launches.
+
+COMMON RULES (apply to all tabs)
+- Every item has a numeric primary key (auto-generated) and a creation timestamp.
+- Every item can be created, viewed, edited, and deleted.
+- Links are two-way and stored in a single many-to-many link table. Linking A to B makes A appear on B's page and B appear on A's page.
+- Link creation uses a picker dialog. The user first selects a tab, then selects an item from that tab. The picker includes a search field to filter items by title.
+- Each tab's detail view has a "Linked items" section, grouped by tab type.
+- Deleting an item removes its links.
+
+TAB 1: TASKS
+Fields: title, description, due date, reminder date/time, priority, completed flag.
+- Priority is one of: Low, Medium, High, Critical. Critical is the highest.
+- A reminder must fire as a notification even when the app is closed.
+- Tasks can be sorted by due date or priority.
+
+TAB 2: GOALS
+Fields: title, strategy description.
+
+TAB 3: HABITS
+Fields: name, category, recurrence, notes.
+- Two categories:
+  - Positive: the user marks each occurrence when the habit is performed.
+  - Negative: the user marks each occurrence when the habit was missed.
+- Recurrence is one of: Daily, Weekly (user selects one or more weekdays), Monthly (user selects a day of the month), Every N days (user enters N).
+- A day with no mark is treated as unknown, not as success. Streaks count only days with an explicit mark.
+- Show the current streak and the total count of marks for each habit.
+
+TAB 4: PROJECTS
+Fields: title, description.
+- Projects form a tree. Each project has at most one parent project and any number of child projects. There is no depth limit.
+- Project detail view shows the parent, child projects, and linked items.
+- Tasks can be linked to a project through the standard link mechanism.
+
+TAB 5: NOTES
+Fields: title (optional), body text.
+- Notes are free-form thoughts and ideas. Keep the editor simple.
+
+TAB 6: BOOKS
+Fields: title, author, description.
+- Each book has a table of contents made of chapters.
+- Each chapter has: title, read count (integer, can be incremented many times), and an internalized flag (boolean, set manually by the user, can be unset).
+- Chapters can be added, reordered, edited, and deleted.
+
+TAB 7: QUOTES
+Fields: text, source (free text, optional), author (optional).
+- Quotes may or may not be linked to books.
+
+CROSS-TAB LINKS
+- Any item in any tab can link to any item in any other tab, including items in the same tab.
+- Notes and quotes can link to each other.
+- Chapters are linked as part of their book. Linking to a chapter is allowed and the link shows the chapter name and its parent book.
+
+SEED DATA
+- Populate the database on first launch with about 5 items in each tab.
+- Create linkages among the seed items so every tab shows linked items. Examples: a task linked to a book, a quote linked to a book and a note, a habit linked to a goal, a project containing tasks.
+- Seed data is inserted only when the database is first created.
+
+ARCHITECTURE AND DOCUMENTATION
+- Use a clear layered structure: data (Room entities, DAOs, repositories), domain (use cases where useful), and UI (Compose screens and ViewModels).
+- Write ARCHITECTURE.md at the project root. For each design decision, record: what was chosen, the alternatives considered, and why each alternative was rejected.
+- Include a walkthrough of one user action, from tap to database write to screen update.
+- Include a list of every file created and its purpose.
+
+DEFINITION OF DONE
+- App builds without errors or warnings in Android Studio.
+- App runs on the AVD without crashing.
+- All seven tabs are reachable and reorderable from Settings.
+- Seed data is visible and linked across tabs.
+- A task reminder fires with the app closed.
+- ARCHITECTURE.md is complete.
+- Changes are committed to git.
+
+Use Kotlin, Jetpack Compose, Room for storage, and a single many-to-many link table for cross-tab relationships. Commit to git after each major step. Write ARCHITECTURE.md explaining every design decision, the alternatives considered, and why each was rejected.
