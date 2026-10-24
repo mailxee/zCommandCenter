@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * added once it has been saved and has a real id.
  */
 abstract class ItemDetailViewModel(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val type: ItemType,
     private val links: LinkRepository,
 ) : ViewModel() {
@@ -65,6 +65,8 @@ abstract class ItemDetailViewModel(
 
     protected fun onSaved(id: Long, note: String = "Saved") {
         _itemId.value = id
+        // A new item now exists; if the process dies, the restored screen must reopen it, not a blank form.
+        savedStateHandle[Routes.ARG_ID] = id
         message = note
     }
 

@@ -33,6 +33,7 @@ object Notifications {
             taskId.toInt(),
             Intent(context, MainActivity::class.java)
                 .putExtra(MainActivity.EXTRA_OPEN_TASK_ID, taskId)
+                .putExtra(MainActivity.EXTRA_TOKEN, System.currentTimeMillis())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
