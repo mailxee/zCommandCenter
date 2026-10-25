@@ -37,10 +37,33 @@ data class HabitSummary(
     val markedToday: Boolean,
 )
 
+/** One row of the Projects tab: a project, or a task linked to the project above it. */
+sealed interface ProjectTreeItem {
+    val key: String
+    val depth: Int
+
+    data class Project(
+        val project: ProjectEntity,
+        override val depth: Int,
+        val collapsed: Boolean,
+        val subprojectCount: Int,
+        val taskCount: Int,
+    ) : ProjectTreeItem {
+        override val key: String get() = "project-${project.id}"
+        val hasChildren: Boolean get() = subprojectCount + taskCount > 0
+    }
+
+    /** A task linked to several projects appears under each, so the key includes the project. */
+    data class Task(val task: TaskEntity, val projectId: Long, override val depth: Int) : ProjectTreeItem {
+        override val key: String get() = "task-$projectId-${task.id}"
+    }
+}
+
 class HomeViewModel(container: AppContainer) : ViewModel() {
     private val tasksRepo = container.taskRepository
     private val habitsRepo = container.habitRepository
     private val projectsRepo = container.projectRepository
+    private val collapsedProjects = container.collapsedProjectsRepository
 
     val tabOrder: StateFlow<List<ItemType>> = container.tabOrderRepository.order.stateIn(TabOrder.default)
 
@@ -79,15 +102,51 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     val showCompletedProjects = MutableStateFlow(false)
 
+    val showCompletedProjectTasks = MutableStateFlow(false)
+
+    /** Tasks linked to each project id: open first, then by due date and title. */
+    private val tasksByProject: Flow<Map<Long, List<TaskEntity>>> =
+        combine(tasksRepo.observeAll(), linksByOwner) { tasks, links ->
+            val byId = tasks.associateBy { it.id }
+            val order = compareBy<TaskEntity> { it.completed }
+                .thenBy(nullsLast()) { it.dueDate }
+                .thenBy { it.title.lowercase() }
+            links.filterKeys { it.type == ItemType.PROJECT }
+                .map { (ref, entries) ->
+                    ref.id to entries.filter { it.type == ItemType.TASK }.mapNotNull { byId[it.id] }.sortedWith(order)
+                }
+                .toMap()
+        }
+
     /**
-     * The project tree, without completed projects unless [showCompletedProjects] is on. Hiding
-     * never orphans an open project: everything below a completed project is completed too.
+     * The Projects tab: the project tree with each project's linked tasks right below it, ahead of
+     * its subprojects. Completed projects and tasks are left out unless their toggle is on; hiding
+     * a completed project never orphans an open one, because everything below it is completed too.
+     * A collapsed project hides its tasks and its whole subtree.
      */
-    val projects: StateFlow<List<ProjectTree.Row<ProjectEntity>>> =
-        combine(projectsRepo.observeAll(), showCompletedProjects) { all, showCompleted ->
-            val visible = if (showCompleted) all else all.filterNot { it.completed }
-            ProjectTree.flatten(visible, { p -> p.id }, { p -> p.parentId })
-        }.stateIn(emptyList())
+    val projectTree: StateFlow<List<ProjectTreeItem>> = combine(
+        projectsRepo.observeAll(),
+        tasksByProject,
+        showCompletedProjects,
+        showCompletedProjectTasks,
+        container.collapsedProjectsRepository.collapsed,
+    ) { all, tasksByProject, showProjects, showTasks, collapsed ->
+        val visible = if (showProjects) all else all.filterNot { it.completed }
+        val subprojectCounts = visible.groupingBy { it.parentId }.eachCount()
+        ProjectTree.flatten(visible, { it.id }, { it.parentId }, collapsed).flatMap { row ->
+            val project = row.node
+            val tasks = tasksByProject[project.id].orEmpty().filter { showTasks || !it.completed }
+            val isCollapsed = project.id in collapsed
+            val projectItem = ProjectTreeItem.Project(project, row.depth, isCollapsed, subprojectCounts[project.id] ?: 0, tasks.size)
+            if (isCollapsed) listOf(projectItem)
+            else listOf(projectItem) + tasks.map { ProjectTreeItem.Task(it, project.id, row.depth + 1) }
+        }
+    }.stateIn(emptyList())
+
+    /** Completed tasks linked to any project, for the toggle's label. */
+    val completedProjectTaskCount: StateFlow<Int> = tasksByProject
+        .map { byProject -> byProject.values.flatten().filter { it.completed }.distinctBy { it.id }.size }
+        .stateIn(0)
 
     val completedProjectCount: StateFlow<Int> = projectsRepo.observeAll()
         .map { all -> all.count { it.completed } }
@@ -112,6 +171,14 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     fun setShowCompletedProjects(show: Boolean) {
         showCompletedProjects.value = show
+    }
+
+    fun setShowCompletedProjectTasks(show: Boolean) {
+        showCompletedProjectTasks.value = show
+    }
+
+    fun setProjectCollapsed(projectId: Long, collapsed: Boolean) {
+        viewModelScope.launch { collapsedProjects.setCollapsed(projectId, collapsed) }
     }
 
     fun setProjectCompleted(project: ProjectEntity, completed: Boolean) {

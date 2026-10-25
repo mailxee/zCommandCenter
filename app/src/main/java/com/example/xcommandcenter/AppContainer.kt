@@ -2,6 +2,7 @@ package com.example.xcommandcenter
 
 import android.content.Context
 import com.example.xcommandcenter.data.db.AppDatabase
+import com.example.xcommandcenter.data.prefs.CollapsedProjectsRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
@@ -24,6 +25,7 @@ class AppContainer(context: Context) {
 
     val reminderScheduler = ReminderScheduler(context)
     val tabOrderRepository = TabOrderRepository(context)
+    val collapsedProjectsRepository = CollapsedProjectsRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
     val taskRepository = TaskRepository(database.taskDao(), reminderScheduler)
     val goalRepository = GoalRepository(database.goalDao())

@@ -16,6 +16,13 @@ class ProjectTreeTest {
     }
 
     @Test
+    fun `flatten lists collapsed nodes but nothing below them`() {
+        val rows = ProjectTree.flatten(nodes, Node::id, Node::parent, collapsed = setOf(2L))
+        assertEquals(listOf(1L, 2L, 5L, 4L), rows.map { it.node.id })
+        assertEquals(listOf(1L, 4L), ProjectTree.flatten(nodes, Node::id, Node::parent, collapsed = setOf(1L)).map { it.node.id })
+    }
+
+    @Test
     fun `subtree contains root and all descendants`() {
         assertEquals(setOf(1L, 2L, 3L, 5L), ProjectTree.subtreeIds(1, nodes, Node::id, Node::parent))
         assertEquals(setOf(4L), ProjectTree.subtreeIds(4, nodes, Node::id, Node::parent))

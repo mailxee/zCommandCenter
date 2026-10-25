@@ -216,9 +216,20 @@ is completed only if every project below it is completed.
   (`ProjectDao.reopen`, `saveDetails`). The rule therefore always holds.
 - Completion is applied at once, from the list checkbox or the detail screen, not on ✓. Saving
   the form keeps the stored flag, so a form opened before a toggle can't undo it.
-- The Projects tab hides completed projects unless "Show completed" is on (not persisted, like
+- The Projects tab hides completed projects unless "Completed projects" is on (not persisted, like
   the task sort). Hiding never orphans an open project, because of the rule.
 - Schema v2 adds the column through a Room `AutoMigration(1 → 2)`, so existing data is kept.
+
+**Projects tab as an outline (confirmed with the user):** each project's linked tasks are listed
+right below it, ahead of its subprojects, as outlined cards with their own checkbox. A task linked
+to several projects appears under each. Open tasks come first, and completed tasks are hidden unless
+the "Completed tasks" chip is on. The project's "Linked:" line leaves tasks out, since they are
+rows of their own. A chevron on any project with visible tasks or subprojects collapses all of
+them; a collapsed project says what it hides ("2 subprojects · 1 task hidden"). Collapsed ids are
+kept in DataStore (`CollapsedProjectsRepository`) so the outline survives restarts; the two
+"Completed" chips reset each launch, like the task sort. The rows are built in
+`HomeViewModel.projectTree` from the existing project, task and link flows, with
+`ProjectTree.flatten(…, collapsed)` skipping what is under collapsed projects; no new query.
 
 | Alternative | Why rejected |
 |---|---|
@@ -293,7 +304,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `domain/Priority.kt` | Low < Medium < High < Critical; ordinal is the sort rank. |
 | `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled`, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
-| `domain/ProjectTree.kt` | Flatten a project tree with depths; compute a subtree (cycle prevention) and ancestors (completion). |
+| `domain/ProjectTree.kt` | Flatten a project tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
 
 ### data/entity/ (Room tables and view)
@@ -329,7 +340,9 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `data/db/AppDatabase.kt` | Room database declaration (10 tables, 1 view) and builder with the seed callback. |
 | `data/db/Converters.kt` | `LocalDate` ⇄ epoch day. |
 | `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history and 27 cross-tab links. |
+| `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
+| `data/prefs/CollapsedProjectsRepository.kt` | Which projects are collapsed in the Projects tab. |
 
 ### data/repository/
 | File | Purpose |
@@ -364,7 +377,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted tasks, habit summaries, project tree, …) and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, FAB to create an item in the current tab. |
-| `ui/home/TabLists.kt` | The seven tab lists; every row shows what it is linked to. |
+| `ui/home/TabLists.kt` | The seven tab lists; every row shows what it is linked to. Projects is a collapsible outline with linked tasks. |
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status. |
 | `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, completed; links. |
@@ -380,7 +393,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 ### Resources
 | File | Purpose |
 |---|---|
-| `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_arrow_up.xml`, `ic_arrow_down.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_settings.xml` | Material icons used in the UI. |
+| `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_arrow_up.xml`, `ic_arrow_down.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_expand_less.xml`, `ic_expand_more.xml`, `ic_settings.xml` | Material icons used in the UI. |
 | `app/src/main/res/drawable/ic_notification.xml` | Status-bar icon for reminders. |
 
 ### Tests (`app/src/test/java/com/example/xcommandcenter/`)
@@ -388,7 +401,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 |---|---|
 | `domain/HabitStatsTest.kt` | Positive/negative streaks, scheduled-only counting, month-end clamping, recent occurrences. |
 | `domain/TabOrderTest.kt` | Parsing defaults, round trip, unknown/missing tabs, moves. |
-| `domain/ProjectTreeTest.kt` | Depth-first flattening, subtree and ancestor computation. |
+| `domain/ProjectTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 
 Run them with `./gradlew testDebugUnitTest`.
