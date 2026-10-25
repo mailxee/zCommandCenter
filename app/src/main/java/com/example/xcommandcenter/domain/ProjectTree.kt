@@ -31,4 +31,13 @@ object ProjectTree {
         }
         return result
     }
+
+    /** Parent, grandparent, … of [id], up to a root. Excludes [id] itself. */
+    fun <T> ancestorIds(id: Long, nodes: List<T>, idOf: (T) -> Long, parentId: (T) -> Long?): Set<Long> {
+        val parents = nodes.associate { idOf(it) to parentId(it) }
+        val result = mutableSetOf<Long>()
+        var current = parents[id]
+        while (current != null && current != id && result.add(current)) current = parents[current]
+        return result
+    }
 }

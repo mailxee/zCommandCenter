@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -24,4 +25,6 @@ data class ProjectEntity(
     val description: String = "",
     val parentId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Only true when every project below this one is completed too (enforced by [com.example.xcommandcenter.data.dao.ProjectDao]). */
+    @ColumnInfo(defaultValue = "0") val completed: Boolean = false,
 )

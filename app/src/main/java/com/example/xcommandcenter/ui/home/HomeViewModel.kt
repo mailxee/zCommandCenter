@@ -16,6 +16,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ProjectTree
 import com.example.xcommandcenter.domain.TabOrder
+import com.example.xcommandcenter.ui.project.BlockedCompletion
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,6 +40,7 @@ data class HabitSummary(
 class HomeViewModel(container: AppContainer) : ViewModel() {
     private val tasksRepo = container.taskRepository
     private val habitsRepo = container.habitRepository
+    private val projectsRepo = container.projectRepository
 
     val tabOrder: StateFlow<List<ItemType>> = container.tabOrderRepository.order.stateIn(TabOrder.default)
 
@@ -75,9 +77,24 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             }
         }.stateIn(emptyList())
 
-    val projects: StateFlow<List<ProjectTree.Row<ProjectEntity>>> = container.projectRepository.observeAll()
-        .map { ProjectTree.flatten(it, { p -> p.id }, { p -> p.parentId }) }
-        .stateIn(emptyList())
+    val showCompletedProjects = MutableStateFlow(false)
+
+    /**
+     * The project tree, without completed projects unless [showCompletedProjects] is on. Hiding
+     * never orphans an open project: everything below a completed project is completed too.
+     */
+    val projects: StateFlow<List<ProjectTree.Row<ProjectEntity>>> =
+        combine(projectsRepo.observeAll(), showCompletedProjects) { all, showCompleted ->
+            val visible = if (showCompleted) all else all.filterNot { it.completed }
+            ProjectTree.flatten(visible, { p -> p.id }, { p -> p.parentId })
+        }.stateIn(emptyList())
+
+    val completedProjectCount: StateFlow<Int> = projectsRepo.observeAll()
+        .map { all -> all.count { it.completed } }
+        .stateIn(0)
+
+    /** Set when ticking a project was refused because of open subprojects. */
+    val blockedCompletion = MutableStateFlow<BlockedCompletion?>(null)
 
     val notes: StateFlow<List<NoteEntity>> = container.noteRepository.observeAll().stateIn(emptyList())
 
@@ -91,6 +108,30 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     fun setTaskCompleted(id: Long, completed: Boolean) {
         viewModelScope.launch { tasksRepo.setCompleted(id, completed) }
+    }
+
+    fun setShowCompletedProjects(show: Boolean) {
+        showCompletedProjects.value = show
+    }
+
+    fun setProjectCompleted(project: ProjectEntity, completed: Boolean) {
+        viewModelScope.launch {
+            if (completed) {
+                val open = projectsRepo.complete(project.id)
+                if (open > 0) blockedCompletion.value = BlockedCompletion(project.id, project.title, open)
+            } else {
+                projectsRepo.reopen(project.id)
+            }
+        }
+    }
+
+    fun completeWithSubprojects(projectId: Long) {
+        blockedCompletion.value = null
+        viewModelScope.launch { projectsRepo.completeWithSubprojects(projectId) }
+    }
+
+    fun dismissBlockedCompletion() {
+        blockedCompletion.value = null
     }
 
     fun toggleHabitToday(habitId: Long) {

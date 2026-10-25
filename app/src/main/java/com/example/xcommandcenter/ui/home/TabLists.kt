@@ -34,6 +34,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.display
+import com.example.xcommandcenter.ui.project.CompleteProjectDialog
 import java.time.Instant
 import java.time.ZoneId
 
@@ -122,18 +123,46 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows by viewModel.projects.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = rows.isEmpty(), emptyText = "No projects yet.") {
-        items(rows, key = { it.node.id }) { row ->
-            val ref = ItemRef(ItemType.PROJECT, row.node.id)
-            Box(Modifier.padding(start = (row.depth * 20).dp)) {
-                ItemCard(
-                    title = row.node.title,
-                    lines = listOfNotNull(row.node.description.ifBlank { null }),
-                    links = links[ref].orEmpty(),
-                    onClick = { onOpen(ref) },
+    val showCompleted by viewModel.showCompletedProjects.collectAsStateWithLifecycle()
+    val completedCount by viewModel.completedProjectCount.collectAsStateWithLifecycle()
+    val blocked by viewModel.blockedCompletion.collectAsStateWithLifecycle()
+    val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
+    ItemList(
+        empty = rows.isEmpty(),
+        emptyText = if (allHidden) "All projects are completed." else "No projects yet.",
+    ) {
+        if (completedCount > 0) {
+            item {
+                FilterChip(
+                    selected = showCompleted,
+                    onClick = { viewModel.setShowCompletedProjects(!showCompleted) },
+                    label = { Text("Show completed ($completedCount)") },
                 )
             }
         }
+        items(rows, key = { it.node.id }) { row ->
+            val project = row.node
+            val ref = ItemRef(ItemType.PROJECT, project.id)
+            Box(Modifier.padding(start = (row.depth * 20).dp)) {
+                ItemCard(
+                    title = project.title,
+                    lines = listOfNotNull(project.description.ifBlank { null }),
+                    links = links[ref].orEmpty(),
+                    onClick = { onOpen(ref) },
+                    done = project.completed,
+                    leading = {
+                        Checkbox(checked = project.completed, onCheckedChange = { viewModel.setProjectCompleted(project, it) })
+                    },
+                )
+            }
+        }
+    }
+    blocked?.let {
+        CompleteProjectDialog(
+            blocked = it,
+            onCompleteAll = { viewModel.completeWithSubprojects(it.projectId) },
+            onDismiss = viewModel::dismissBlockedCompletion,
+        )
     }
 }
 

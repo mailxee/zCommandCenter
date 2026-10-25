@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -23,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDecoration
 import com.example.xcommandcenter.ui.common.clearListItemColors
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +52,8 @@ fun ProjectDetailScreen(
 
     val parent = all.firstOrNull { it.id == project.parentId }
     val children = if (id == 0L) emptyList() else all.filter { it.parentId == id }
+    // Read from the database, not the form: completion is saved immediately, outside the form.
+    val completed = all.firstOrNull { it.id == id }?.completed ?: false
 
     DetailScaffold(
         title = if (id == 0L) "New project" else "Project",
@@ -73,6 +77,12 @@ fun ProjectDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (id != 0L) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = completed, onCheckedChange = viewModel::setCompleted)
+                Text("Completed")
+            }
+        }
 
         SectionTitle("Parent project")
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -96,7 +106,9 @@ fun ProjectDetailScreen(
                 children.forEach { child ->
                     ListItem(
                         colors = clearListItemColors(),
-                        headlineContent = { Text(child.title) },
+                        headlineContent = {
+                            Text(child.title, textDecoration = if (child.completed) TextDecoration.LineThrough else null)
+                        },
                         modifier = Modifier.clickable { onOpen(ItemRef(ItemType.PROJECT, child.id)) },
                     )
                 }
@@ -107,6 +119,10 @@ fun ProjectDetailScreen(
         }
 
         LinkedItemsSection(viewModel, linked, onOpen)
+    }
+
+    viewModel.blockedCompletion?.let {
+        CompleteProjectDialog(it, viewModel::completeWithSubprojects, viewModel::dismissBlockedCompletion)
     }
 
     if (choosingParent) {

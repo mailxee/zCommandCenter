@@ -19,8 +19,16 @@ class ProjectRepository(private val dao: ProjectDao) {
             val forbidden = ProjectTree.subtreeIds(project.id, all, { it.id }, { it.parentId })
             require(parentId !in forbidden) { "A project cannot be moved under itself or its descendants" }
         }
-        return if (project.id == 0L) dao.insert(project) else project.id.also { dao.update(project) }
+        return dao.saveDetails(project)
     }
+
+    /** Returns the number of open subprojects; the project is completed only when that is 0. */
+    suspend fun complete(id: Long): Int = dao.complete(id)
+
+    suspend fun completeWithSubprojects(id: Long) = dao.completeWithSubprojects(id)
+
+    /** Also reopens completed ancestors, since a completed project can't have open subprojects. */
+    suspend fun reopen(id: Long) = dao.reopen(id)
 
     suspend fun delete(id: Long) = dao.delete(id)
 }

@@ -20,4 +20,16 @@ class ProjectTreeTest {
         assertEquals(setOf(1L, 2L, 3L, 5L), ProjectTree.subtreeIds(1, nodes, Node::id, Node::parent))
         assertEquals(setOf(4L), ProjectTree.subtreeIds(4, nodes, Node::id, Node::parent))
     }
+
+    @Test
+    fun `ancestors walk up to the root`() {
+        assertEquals(setOf(2L, 1L), ProjectTree.ancestorIds(3, nodes, Node::id, Node::parent))
+        assertEquals(emptySet<Long>(), ProjectTree.ancestorIds(4, nodes, Node::id, Node::parent))
+    }
+
+    @Test
+    fun `ancestors stop on cyclic data`() {
+        val cyclic = listOf(Node(1, 3), Node(2, 1), Node(3, 2))
+        assertEquals(setOf(1L, 3L), ProjectTree.ancestorIds(2, cyclic, Node::id, Node::parent))
+    }
 }

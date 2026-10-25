@@ -68,9 +68,10 @@ internal object SeedData {
         row("goals", "id" to 5L, "title" to "Spanish to B1 level",
             "strategy" to "Short daily practice plus one conversation class per week.")
 
-        // Projects: two trees.
+        // Projects: two trees; one finished subproject shows completion.
         row("projects", "id" to 1L, "title" to "xCommandCenter app", "description" to "Personal command center for Android.", "parentId" to null)
-        row("projects", "id" to 2L, "title" to "Data layer", "description" to "Room entities, DAOs and repositories.", "parentId" to 1L)
+        row("projects", "id" to 2L, "title" to "Data layer", "description" to "Room entities, DAOs and repositories.", "parentId" to 1L,
+            "completed" to true)
         row("projects", "id" to 3L, "title" to "UI polish", "description" to "Make every tab pleasant to use.", "parentId" to 1L)
         row("projects", "id" to 4L, "title" to "Home renovation", "description" to "Small improvements around the flat.", "parentId" to null)
         row("projects", "id" to 5L, "title" to "Paint the bedroom", "description" to "Pick a color, buy paint, paint on a weekend.", "parentId" to 4L)

@@ -205,7 +205,29 @@ reorders with up/down buttons.
 | Koin | A runtime service locator with no compile-time checks. Not needed at this size. |
 | Singletons in `object`s | Hidden global state, harder to replace in tests. |
 
-### 2.11 Build configuration
+### 2.11 Project completion
+
+**Chosen (confirmed with the user):** a `completed` flag on `projects`, with one rule: a project
+is completed only if every project below it is completed.
+- Ticking a project with open subprojects is refused, and a dialog offers to complete it
+  together with its whole subtree (`ProjectDao.complete` / `completeWithSubprojects`).
+- Anything that leaves an open project under a completed one reopens the completed ancestors:
+  unticking a subproject, adding a child, or moving an open project under a completed parent
+  (`ProjectDao.reopen`, `saveDetails`). The rule therefore always holds.
+- Completion is applied at once, from the list checkbox or the detail screen, not on ✓. Saving
+  the form keeps the stored flag, so a form opened before a toggle can't undo it.
+- The Projects tab hides completed projects unless "Show completed" is on (not persisted, like
+  the task sort). Hiding never orphans an open project, because of the rule.
+- Schema v2 adds the column through a Room `AutoMigration(1 → 2)`, so existing data is kept.
+
+| Alternative | Why rejected |
+|---|---|
+| Independent flags per project | The user wants a parent to count as done only when its subprojects are. |
+| Completing a parent silently completes its subtree | Too easy to close work by accident; the user asked for a block plus an explicit "complete all". |
+| Refusing to reopen a subproject under a completed parent | Forces the user to reopen from the top down; reopening the ancestors is what the rule implies. |
+| `fallbackToDestructiveMigration` | Would wipe the user's data on upgrade. |
+
+### 2.12 Build configuration
 
 - Gradle version catalog, AGP 9.4 with its built-in Kotlin, the Compose compiler plugin, and KSP
   for Room. KSP replaces kapt, which is deprecated and slower.
@@ -250,7 +272,7 @@ file changed; template files left as they were (launcher icons, backup rules, Gr
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
-| `app/schemas/.../AppDatabase/1.json` (created, generated) | Exported Room schema v1, the baseline for future migrations. |
+| `app/schemas/.../AppDatabase/1.json`, `2.json` (created, generated) | Exported Room schemas; v2 adds `projects.completed` via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
 | `ARCHITECTURE.md` (created) | This document. |
 
@@ -271,7 +293,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `domain/Priority.kt` | Low < Medium < High < Critical; ordinal is the sort rank. |
 | `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled`, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
-| `domain/ProjectTree.kt` | Flatten a project tree with depths; compute a subtree (cycle prevention). |
+| `domain/ProjectTree.kt` | Flatten a project tree with depths; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
 
 ### data/entity/ (Room tables and view)
@@ -281,7 +303,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `data/entity/GoalEntity.kt` | `goals`: title, strategy. |
 | `data/entity/HabitEntity.kt` | `habits`: name, category, flat recurrence columns, start date, notes; maps to `Recurrence`. |
 | `data/entity/HabitMarkEntity.kt` | `habit_marks`: one explicit mark per habit per date (cascade on habit delete). |
-| `data/entity/ProjectEntity.kt` | `projects`: title, description, self-referencing `parentId`. |
+| `data/entity/ProjectEntity.kt` | `projects`: title, description, self-referencing `parentId`, completed. |
 | `data/entity/NoteEntity.kt` | `notes`: optional title, body. |
 | `data/entity/BookEntity.kt` | `books`: title, author, description; `BookWithProgress` projection for the list. |
 | `data/entity/ChapterEntity.kt` | `chapters`: book, position, title, read count, internalized (cascade on book delete). |
@@ -296,7 +318,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `data/dao/TaskDao.kt` | Task CRUD, completion toggle, pending reminders, transactional delete with links. |
 | `data/dao/GoalDao.kt` | Goal CRUD, transactional delete with links. |
 | `data/dao/HabitDao.kt` | Habit CRUD, marks (observe, toggle), transactional delete with links. |
-| `data/dao/ProjectDao.kt` | Project CRUD; delete moves children to the grandparent and removes links. |
+| `data/dao/ProjectDao.kt` | Project CRUD; completion rule (complete, complete subtree, reopen with ancestors); delete moves children to the grandparent and removes links. |
 | `data/dao/NoteDao.kt` | Note CRUD, transactional delete with links. |
 | `data/dao/BookDao.kt` | Books with progress, chapters (add, rename, read count, internalized, reorder, delete + renumber), book delete with chapter links. |
 | `data/dao/QuoteDao.kt` | Quote CRUD, transactional delete with links. |
@@ -348,7 +370,8 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, completed; links. |
 | `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; links. |
 | `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; links. |
-| `ui/project/ProjectDetailViewModel.kt`, `ProjectDetailScreen.kt` | Project form, parent picker (no cycles), child list, add child; links. |
+| `ui/project/ProjectDetailViewModel.kt`, `ProjectDetailScreen.kt` | Project form, completed checkbox, parent picker (no cycles), child list, add child; links. |
+| `ui/project/CompleteProjectDialog.kt` | "Complete all" dialog shown when a project still has open subprojects. |
 | `ui/note/NoteDetailViewModel.kt`, `NoteDetailScreen.kt` | Simple note editor; links. |
 | `ui/book/BookDetailViewModel.kt`, `BookDetailScreen.kt` | Book form and table of contents (add, +1 read, internalized, reorder); links. |
 | `ui/book/ChapterDetailViewModel.kt`, `ChapterDetailScreen.kt` | Chapter title, read count ±1, internalized, parent book, delete; links. |
@@ -365,7 +388,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 |---|---|
 | `domain/HabitStatsTest.kt` | Positive/negative streaks, scheduled-only counting, month-end clamping, recent occurrences. |
 | `domain/TabOrderTest.kt` | Parsing defaults, round trip, unknown/missing tabs, moves. |
-| `domain/ProjectTreeTest.kt` | Depth-first flattening and subtree computation. |
+| `domain/ProjectTreeTest.kt` | Depth-first flattening, subtree and ancestor computation. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 
 Run them with `./gradlew testDebugUnitTest`.
