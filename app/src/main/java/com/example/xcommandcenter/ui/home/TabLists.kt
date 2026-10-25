@@ -35,12 +35,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.display
+import com.example.xcommandcenter.ui.common.label
 import com.example.xcommandcenter.ui.project.CompleteProjectDialog
 import java.time.Instant
 import java.time.ZoneId
@@ -49,8 +51,11 @@ import java.time.ZoneId
 fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val tasks by viewModel.tasks.collectAsStateWithLifecycle()
     val sort by viewModel.taskSort.collectAsStateWithLifecycle()
+    val repeat by viewModel.repeatFilter.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = tasks.isEmpty(), emptyText = "No tasks yet.") {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    // Either filter can empty the list; then say so instead of "No tasks yet".
+    ItemList(empty = tasks.isEmpty(), emptyText = "No tasks yet.", filtered = tagFilter.active || repeat != RepeatFilter.ALL) {
         item {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 TaskSort.entries.forEachIndexed { index, option ->
@@ -63,16 +68,30 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
+        item {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                RepeatFilter.entries.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = repeat == option,
+                        onClick = { viewModel.setRepeatFilter(option) },
+                        shape = SegmentedButtonDefaults.itemShape(index, RepeatFilter.entries.size),
+                        label = { Text(option.label, maxLines = 1) },
+                    )
+                }
+            }
+        }
         items(tasks, key = { it.id }) { task ->
             val ref = ItemRef(ItemType.TASK, task.id)
             ItemCard(
                 title = task.title,
                 lines = listOfNotNull(
                     "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
+                    task.recurrence?.let { "Repeats: ${it.describe()}" },
                     task.reminderAt?.takeIf { !task.completed && it > System.currentTimeMillis() }
                         ?.let { "Reminder ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().display()}" },
                 ),
                 links = links[ref].orEmpty(),
+                tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
                 done = task.completed,
                 emphasis = task.priority == Priority.CRITICAL && !task.completed,
@@ -86,10 +105,11 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val goals by viewModel.goals.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.") {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active) {
         items(goals, key = { it.id }) { goal ->
             val ref = ItemRef(ItemType.GOAL, goal.id)
-            ItemCard(goal.title, listOfNotNull(goal.strategy.ifBlank { null }), links[ref].orEmpty(), { onOpen(ref) })
+            ItemCard(goal.title, listOfNotNull(goal.strategy.ifBlank { null }), links[ref].orEmpty(), { onOpen(ref) }, tags = tagFilter.tagsOf(ref))
         }
     }
 }
@@ -98,7 +118,8 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val habits by viewModel.habits.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.") {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active) {
         items(habits, key = { it.habit.id }) { summary ->
             val habit = summary.habit
             val ref = ItemRef(ItemType.HABIT, habit.id)
@@ -111,6 +132,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
                 ),
                 links = links[ref].orEmpty(),
+                tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
                 trailing = {
                     if (summary.scheduledToday) {
@@ -135,10 +157,12 @@ fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val showCompletedTasks by viewModel.showCompletedProjectTasks.collectAsStateWithLifecycle()
     val completedTaskCount by viewModel.completedProjectTaskCount.collectAsStateWithLifecycle()
     val blocked by viewModel.blockedCompletion.collectAsStateWithLifecycle()
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
     ItemList(
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All projects are completed." else "No projects yet.",
+        filtered = tagFilter.active,
     ) {
         if (completedCount > 0 || completedTaskCount > 0) {
             item {
@@ -163,8 +187,8 @@ fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
         items(rows, key = { it.key }) { row ->
             Box(Modifier.padding(start = (row.depth * 20).dp)) {
                 when (row) {
-                    is ProjectTreeItem.Project -> ProjectRow(row, links, viewModel, onOpen)
-                    is ProjectTreeItem.Task -> ProjectTaskRow(row.task, viewModel, onOpen)
+                    is ProjectTreeItem.Project -> ProjectRow(row, links, tagFilter, viewModel, onOpen)
+                    is ProjectTreeItem.Task -> ProjectTaskRow(row.task, tagFilter, viewModel, onOpen)
                 }
             }
         }
@@ -182,6 +206,7 @@ fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 private fun ProjectRow(
     row: ProjectTreeItem.Project,
     links: Map<ItemRef, List<ItemIndexEntry>>,
+    tagFilter: TagFilter,
     viewModel: HomeViewModel,
     onOpen: (ItemRef) -> Unit,
 ) {
@@ -200,6 +225,7 @@ private fun ProjectRow(
             hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden"),
         ),
         links = otherLinks,
+        tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
         done = project.completed,
         leading = {
@@ -220,12 +246,17 @@ private fun ProjectRow(
 
 /** A task linked to the project above it; outlined so it reads differently from a project. */
 @Composable
-private fun ProjectTaskRow(task: TaskEntity, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+private fun ProjectTaskRow(task: TaskEntity, tagFilter: TagFilter, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+    val ref = ItemRef(ItemType.TASK, task.id)
     ItemCard(
         title = task.title,
-        lines = listOf("${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: "")),
+        lines = listOfNotNull(
+            "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
+            task.recurrence?.let { "Repeats: ${it.describe()}" },
+        ),
         links = emptyList(),
-        onClick = { onOpen(ItemRef(ItemType.TASK, task.id)) },
+        tags = tagFilter.tagsOf(ref),
+        onClick = { onOpen(ref) },
         done = task.completed,
         emphasis = task.priority == Priority.CRITICAL && !task.completed,
         outlined = true,
@@ -237,13 +268,15 @@ private fun ProjectTaskRow(task: TaskEntity, viewModel: HomeViewModel, onOpen: (
 fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = notes.isEmpty(), emptyText = "No notes yet.") {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    ItemList(empty = notes.isEmpty(), emptyText = "No notes yet.", filtered = tagFilter.active) {
         items(notes, key = { it.id }) { note ->
             val ref = ItemRef(ItemType.NOTE, note.id)
             ItemCard(
                 title = note.title.ifBlank { "Untitled" },
                 lines = listOfNotNull(note.body.ifBlank { null }),
                 links = links[ref].orEmpty(),
+                tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
             )
         }
@@ -254,7 +287,8 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val books by viewModel.books.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = books.isEmpty(), emptyText = "No books yet.") {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active) {
         items(books, key = { it.book.id }) { item ->
             val ref = ItemRef(ItemType.BOOK, item.book.id)
             ItemCard(
@@ -264,6 +298,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
                 ),
                 links = links[ref].orEmpty(),
+                tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
             )
         }
@@ -274,7 +309,8 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val quotes by viewModel.quotes.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.") {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active) {
         items(quotes, key = { it.id }) { quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
             val attribution = listOf(quote.author, quote.source).filter { it.isNotBlank() }.joinToString(", ")
@@ -282,6 +318,7 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 title = "“${quote.text}”",
                 lines = listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }),
                 links = links[ref].orEmpty(),
+                tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
                 italicTitle = true,
             )
@@ -290,7 +327,7 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-private fun ItemList(empty: Boolean, emptyText: String, content: LazyListScope.() -> Unit) {
+private fun ItemList(empty: Boolean, emptyText: String, filtered: Boolean = false, content: LazyListScope.() -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 88.dp),
@@ -300,7 +337,7 @@ private fun ItemList(empty: Boolean, emptyText: String, content: LazyListScope.(
         if (empty) {
             item {
                 Text(
-                    "$emptyText Tap + to add one.",
+                    if (filtered) "Nothing here matches the current filters." else "$emptyText Tap + to add one.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
@@ -310,13 +347,14 @@ private fun ItemList(empty: Boolean, emptyText: String, content: LazyListScope.(
     }
 }
 
-/** A list row: title, detail lines, and the titles of everything the item is linked to. */
+/** A list row: title, detail lines, the item's tags, and the titles of everything it is linked to. */
 @Composable
 private fun ItemCard(
     title: String,
     lines: List<String>,
     links: List<ItemIndexEntry>,
     onClick: () -> Unit,
+    tags: List<TagEntity> = emptyList(),
     done: Boolean = false,
     emphasis: Boolean = false,
     italicTitle: Boolean = false,
@@ -342,6 +380,15 @@ private fun ItemCard(
                         line,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (tags.isNotEmpty()) {
+                    Text(
+                        tags.joinToString("  ") { it.label() },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )

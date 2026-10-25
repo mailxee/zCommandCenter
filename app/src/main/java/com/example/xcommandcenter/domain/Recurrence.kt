@@ -19,7 +19,10 @@ enum class RecurrenceType(val label: String) {
     EVERY_N_DAYS("Every N days"),
 }
 
-/** When a habit is due. [isScheduled] is the single source of truth for every streak rule. */
+/**
+ * When a habit or a repeating task is due. [isScheduled] is the single source of truth for every
+ * streak rule and for when a repeating task's next occurrence falls.
+ */
 sealed interface Recurrence {
     fun isScheduled(date: LocalDate, start: LocalDate): Boolean
 
@@ -54,7 +57,23 @@ sealed interface Recurrence {
         override fun describe() = if (n == 1) "Every day" else "Every $n days"
     }
 
+    /**
+     * The first scheduled date after [date], counting the schedule from [date] itself (so "every
+     * 3 days" gives date + 3). Null when nothing is scheduled within 400 days, e.g. a weekly rule
+     * with no weekdays.
+     */
+    fun nextAfter(date: LocalDate): LocalDate? =
+        generateSequence(date.plusDays(1)) { it.plusDays(1) }.take(400).firstOrNull { isScheduled(it, date) }
+
     companion object {
+        /** Builds a recurrence from the flat columns that habits and tasks store. */
+        fun of(type: RecurrenceType, weekdays: Int, dayOfMonth: Int, intervalDays: Int): Recurrence = when (type) {
+            RecurrenceType.DAILY -> Daily
+            RecurrenceType.WEEKLY -> Weekly(daysFromMask(weekdays))
+            RecurrenceType.MONTHLY -> Monthly(dayOfMonth)
+            RecurrenceType.EVERY_N_DAYS -> EveryNDays(intervalDays)
+        }
+
         /** Bit i of the mask is [DayOfWeek] with value i + 1 (bit 0 = Monday). */
         fun daysFromMask(mask: Int): Set<DayOfWeek> =
             DayOfWeek.entries.filter { mask and (1 shl (it.value - 1)) != 0 }.toSet()

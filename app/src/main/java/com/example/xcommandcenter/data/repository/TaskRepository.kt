@@ -14,16 +14,31 @@ class TaskRepository(
 
     suspend fun get(id: Long): TaskEntity? = dao.get(id)
 
-    /** Inserts when [TaskEntity.id] is 0, otherwise updates. Returns the task's id. */
+    /**
+     * Inserts when [TaskEntity.id] is 0, otherwise updates. A change to `completed` goes through
+     * [setCompleted], so completing a repeating task from its form also creates the next one.
+     * Returns the task's id.
+     */
     suspend fun save(task: TaskEntity): Long {
-        val id = if (task.id == 0L) dao.insert(task) else task.id.also { dao.update(task) }
-        syncReminder(task.copy(id = id))
+        val stored = if (task.id == 0L) null else dao.get(task.id)
+        val wasCompleted = stored?.completed ?: false
+        val toWrite = task.copy(completed = wasCompleted, nextCreated = stored?.nextCreated ?: false)
+        val id = if (task.id == 0L) dao.insert(toWrite) else task.id.also { dao.update(toWrite) }
+        if (task.completed != wasCompleted) setCompleted(id, task.completed) else dao.get(id)?.let(::syncReminder)
         return id
     }
 
-    suspend fun setCompleted(id: Long, completed: Boolean) {
-        dao.setCompleted(id, completed)
+    /** Completing a repeating task creates its next occurrence; returns that task's id, if any. */
+    suspend fun setCompleted(id: Long, completed: Boolean): Long? {
+        val nextId = if (completed) {
+            dao.complete(id)
+        } else {
+            dao.setCompleted(id, false)
+            null
+        }
         dao.get(id)?.let(::syncReminder)
+        nextId?.let { dao.get(it) }?.let(::syncReminder)
+        return nextId
     }
 
     suspend fun delete(id: Long) {

@@ -1,10 +1,18 @@
 package com.example.xcommandcenter.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.xcommandcenter.domain.Priority
+import com.example.xcommandcenter.domain.Recurrence
+import com.example.xcommandcenter.domain.RecurrenceType
 import java.time.LocalDate
 
+/**
+ * A task repeats when [recurrenceType] is set; the schedule is stored as flat columns, as on
+ * habits, and read through [recurrence]. Completing a repeating task creates a copy due on the
+ * next occurrence (see [com.example.xcommandcenter.data.dao.TaskDao.complete]).
+ */
 @Entity(tableName = "tasks")
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -16,4 +24,15 @@ data class TaskEntity(
     val priority: Priority = Priority.MEDIUM,
     val completed: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-)
+    /** Null for a one-off task. */
+    val recurrenceType: RecurrenceType? = null,
+    /** Weekday bitmask for WEEKLY, see [Recurrence.daysFromMask]. */
+    @ColumnInfo(defaultValue = "0") val weekdays: Int = 0,
+    @ColumnInfo(defaultValue = "1") val dayOfMonth: Int = 1,
+    @ColumnInfo(defaultValue = "2") val intervalDays: Int = 2,
+    /** Set once completing this occurrence has created the next one, so unticking and ticking again doesn't make another. */
+    @ColumnInfo(defaultValue = "0") val nextCreated: Boolean = false,
+) {
+    val recurrence: Recurrence?
+        get() = recurrenceType?.let { Recurrence.of(it, weekdays, dayOfMonth, intervalDays) }
+}

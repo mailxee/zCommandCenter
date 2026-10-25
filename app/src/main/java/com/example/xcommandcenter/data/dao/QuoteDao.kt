@@ -28,9 +28,13 @@ interface QuoteDao {
     @Query("DELETE FROM links WHERE (aType = 'QUOTE' AND aId = :id) OR (bType = 'QUOTE' AND bId = :id)")
     suspend fun deleteLinks(id: Long)
 
+    @Query("DELETE FROM item_tags WHERE type = 'QUOTE' AND itemId = :id")
+    suspend fun deleteTags(id: Long)
+
     @Transaction
     suspend fun delete(id: Long) {
         deleteLinks(id)
+        deleteTags(id)
         deleteRow(id)
     }
 }

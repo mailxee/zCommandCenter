@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -14,22 +13,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
-import com.example.xcommandcenter.domain.Recurrence
-import com.example.xcommandcenter.domain.RecurrenceType
-import com.example.xcommandcenter.domain.shortName
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RecurrenceFields
 import com.example.xcommandcenter.ui.common.SectionTitle
+import com.example.xcommandcenter.ui.common.TagsSection
 import com.example.xcommandcenter.ui.home.times
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -79,43 +75,17 @@ fun HabitDetailScreen(
         }
 
         SectionTitle("Recurrence")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RecurrenceType.entries.forEach { type ->
-                FilterChip(
-                    selected = habit.recurrenceType == type,
-                    onClick = { viewModel.update { it.copy(recurrenceType = type) } },
-                    label = { Text(type.label) },
-                )
-            }
-        }
-        when (habit.recurrenceType) {
-            RecurrenceType.DAILY -> Unit
-            RecurrenceType.WEEKLY -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val days = Recurrence.daysFromMask(habit.weekdays)
-                DayOfWeek.entries.forEach { day ->
-                    FilterChip(
-                        selected = day in days,
-                        onClick = {
-                            val updated = if (day in days) days - day else days + day
-                            viewModel.update { it.copy(weekdays = Recurrence.maskFromDays(updated)) }
-                        },
-                        label = { Text(day.shortName()) },
-                    )
-                }
-            }
-            RecurrenceType.MONTHLY -> NumberField(
-                "Day of month (1-31)",
-                viewModel.dayOfMonthText,
-                { viewModel.dayOfMonthText = it },
-                help = "In shorter months, days past the end fall on the last day.",
-            )
-            RecurrenceType.EVERY_N_DAYS -> NumberField(
-                "N (days)",
-                viewModel.intervalText,
-                { viewModel.intervalText = it },
-                help = "Counted from the habit's start date.",
-            )
-        }
+        RecurrenceFields(
+            type = habit.recurrenceType,
+            weekdays = habit.weekdays,
+            dayOfMonthText = viewModel.dayOfMonthText,
+            intervalText = viewModel.intervalText,
+            onType = { type -> if (type != null) viewModel.update { it.copy(recurrenceType = type) } },
+            onWeekdays = { mask -> viewModel.update { it.copy(weekdays = mask) } },
+            onDayOfMonth = { viewModel.dayOfMonthText = it },
+            onInterval = { viewModel.intervalText = it },
+            intervalHelp = "Counted from the habit's start date.",
+        )
 
         OutlinedTextField(
             value = habit.notes,
@@ -152,19 +122,7 @@ fun HabitDetailScreen(
             }
         }
 
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, linked, onOpen)
     }
-}
-
-@Composable
-private fun NumberField(label: String, value: String, onChange: (String) -> Unit, help: String) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { v -> onChange(v.filter(Char::isDigit).take(3)) },
-        label = { Text(label) },
-        supportingText = { Text(help) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth(),
-    )
 }

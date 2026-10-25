@@ -23,6 +23,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 
 /**
  * First-launch content: about five items per tab, cross-linked so every tab shows links.
@@ -88,6 +89,10 @@ internal object SeedData {
             "dueDate" to today.plusDays(2), "reminderAt" to reminder, "priority" to Priority.MEDIUM, "completed" to false)
         row("tasks", "id" to 5L, "title" to "Register for the half marathon", "description" to "Early-bird price ends soon.",
             "dueDate" to today.plusDays(7), "reminderAt" to null, "priority" to Priority.CRITICAL, "completed" to false)
+        row("tasks", "id" to 6L, "title" to "Water the plants", "description" to "Kitchen herbs and the balcony.",
+            "dueDate" to today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)), "reminderAt" to null,
+            "priority" to Priority.LOW, "completed" to false,
+            "recurrenceType" to RecurrenceType.WEEKLY, "weekdays" to Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)))
 
         // Habits, started a month ago so streaks have history.
         val start = today.minusDays(30)
@@ -191,7 +196,25 @@ internal object SeedData {
             QUOTE to 4L to (BOOK to 3L),
             QUOTE to 4L to (PROJECT to 1L),
             QUOTE to 5L to (PROJECT to 1L),
+            TASK to 6L to (PROJECT to 4L),
         ).forEach { (from, to) -> link(db, from, to, created()) }
+
+        // Tags (no createdAt column, so not through row()).
+        listOf(1L to "work", 2L to "home", 3L to "health", 4L to "reading").forEach { (id, name) ->
+            db.insert("tags", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply { put("id", id); put("name", name) })
+        }
+        listOf(
+            TASK to 1L to 1L, TASK to 2L to 1L, PROJECT to 1L to 1L, GOAL to 3L to 1L,
+            TASK to 4L to 2L, TASK to 6L to 2L, PROJECT to 4L to 2L, PROJECT to 5L to 2L,
+            TASK to 5L to 3L, HABIT to 1L to 3L, GOAL to 1L to 3L,
+            TASK to 3L to 4L, BOOK to 1L to 4L, BOOK to 2L to 4L, HABIT to 2L to 4L, GOAL to 2L to 4L,
+        ).forEach { (item, tagId) ->
+            db.insert("item_tags", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
+                put("type", item.first.name)
+                put("itemId", item.second)
+                put("tagId", tagId)
+            })
+        }
     }
 
     private fun link(db: SupportSQLiteDatabase, from: Pair<ItemType, Long>, to: Pair<ItemType, Long>, createdAt: Long) {

@@ -23,14 +23,14 @@ object AppViewModelProvider {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
         initializer { with(container()) { HomeViewModel(this) } }
         initializer { with(container()) { SettingsViewModel(tabOrderRepository, reminderScheduler) } }
-        initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository) } }
-        initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository) } }
-        initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository) } }
-        initializer { with(container()) { ProjectDetailViewModel(createSavedStateHandle(), projectRepository, linkRepository) } }
-        initializer { with(container()) { NoteDetailViewModel(createSavedStateHandle(), noteRepository, linkRepository) } }
-        initializer { with(container()) { BookDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository) } }
-        initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository) } }
-        initializer { with(container()) { QuoteDetailViewModel(createSavedStateHandle(), quoteRepository, linkRepository) } }
+        initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { ProjectDetailViewModel(createSavedStateHandle(), projectRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { NoteDetailViewModel(createSavedStateHandle(), noteRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { BookDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { QuoteDetailViewModel(createSavedStateHandle(), quoteRepository, linkRepository, tagRepository) } }
     }
 
     private fun CreationExtras.container(): AppContainer =

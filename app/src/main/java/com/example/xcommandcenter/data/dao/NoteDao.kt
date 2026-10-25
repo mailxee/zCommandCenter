@@ -28,9 +28,13 @@ interface NoteDao {
     @Query("DELETE FROM links WHERE (aType = 'NOTE' AND aId = :id) OR (bType = 'NOTE' AND bId = :id)")
     suspend fun deleteLinks(id: Long)
 
+    @Query("DELETE FROM item_tags WHERE type = 'NOTE' AND itemId = :id")
+    suspend fun deleteTags(id: Long)
+
     @Transaction
     suspend fun delete(id: Long) {
         deleteLinks(id)
+        deleteTags(id)
         deleteRow(id)
     }
 }

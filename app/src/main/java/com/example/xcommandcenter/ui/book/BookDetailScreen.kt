@@ -34,6 +34,7 @@ import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.SectionTitle
+import com.example.xcommandcenter.ui.common.TagsSection
 
 @Composable
 fun BookDetailScreen(
@@ -101,6 +102,7 @@ fun BookDetailScreen(
             }
         }
 
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, linked, onOpen)
     }
 

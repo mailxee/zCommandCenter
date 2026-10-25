@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.launch
@@ -16,7 +17,8 @@ class GoalDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: GoalRepository,
     links: LinkRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.GOAL, links) {
+    tags: TagRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.GOAL, links, tags) {
 
     var goal by mutableStateOf(GoalEntity(title = ""))
         private set

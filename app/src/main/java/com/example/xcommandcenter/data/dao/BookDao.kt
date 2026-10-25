@@ -50,11 +50,19 @@ interface BookDao {
     )
     suspend fun deleteChapterLinksOfBook(bookId: Long)
 
-    /** Chapters go with the book through ON DELETE CASCADE; their links are removed first. */
+    @Query("DELETE FROM item_tags WHERE type = 'BOOK' AND itemId = :id")
+    suspend fun deleteTags(id: Long)
+
+    @Query("DELETE FROM item_tags WHERE type = 'CHAPTER' AND itemId IN (SELECT id FROM chapters WHERE bookId = :bookId)")
+    suspend fun deleteChapterTagsOfBook(bookId: Long)
+
+    /** Chapters go with the book through ON DELETE CASCADE; their links and tags are removed first. */
     @Transaction
     suspend fun delete(id: Long) {
         deleteChapterLinksOfBook(id)
+        deleteChapterTagsOfBook(id)
         deleteLinks(id)
+        deleteTags(id)
         deleteRow(id)
     }
 
@@ -94,6 +102,9 @@ interface BookDao {
     @Query("DELETE FROM links WHERE (aType = 'CHAPTER' AND aId = :id) OR (bType = 'CHAPTER' AND bId = :id)")
     suspend fun deleteChapterLinks(id: Long)
 
+    @Query("DELETE FROM item_tags WHERE type = 'CHAPTER' AND itemId = :id")
+    suspend fun deleteChapterTags(id: Long)
+
     @Transaction
     suspend fun addChapter(bookId: Long, title: String): Long =
         insertChapter(ChapterEntity(bookId = bookId, position = nextChapterPosition(bookId), title = title))
@@ -102,6 +113,7 @@ interface BookDao {
     suspend fun deleteChapter(id: Long) {
         val chapter = getChapter(id) ?: return
         deleteChapterLinks(id)
+        deleteChapterTags(id)
         deleteChapterRow(id)
         renumber(chapters(chapter.bookId))
     }

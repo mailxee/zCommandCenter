@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.QuoteRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.launch
@@ -16,7 +17,8 @@ class QuoteDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: QuoteRepository,
     links: LinkRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.QUOTE, links) {
+    tags: TagRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.QUOTE, links, tags) {
 
     var quote by mutableStateOf(QuoteEntity(text = ""))
         private set

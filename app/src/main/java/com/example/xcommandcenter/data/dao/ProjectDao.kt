@@ -43,6 +43,9 @@ interface ProjectDao {
     @Query("DELETE FROM links WHERE (aType = 'PROJECT' AND aId = :id) OR (bType = 'PROJECT' AND bId = :id)")
     suspend fun deleteLinks(id: Long)
 
+    @Query("DELETE FROM item_tags WHERE type = 'PROJECT' AND itemId = :id")
+    suspend fun deleteTags(id: Long)
+
     /** Inserts or updates the editable fields; the stored completion state is kept. */
     @Transaction
     suspend fun saveDetails(project: ProjectEntity): Long {
@@ -86,6 +89,7 @@ interface ProjectDao {
         val project = get(id) ?: return
         reparentChildren(id, project.parentId)
         deleteLinks(id)
+        deleteTags(id)
         deleteRow(id)
     }
 }
