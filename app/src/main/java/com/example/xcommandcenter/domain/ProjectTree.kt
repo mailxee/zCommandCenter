@@ -5,8 +5,16 @@ object ProjectTree {
 
     data class Row<T>(val node: T, val depth: Int)
 
-    /** Depth-first order with depth, roots first. Nodes whose parent is missing are treated as roots. */
-    fun <T> flatten(nodes: List<T>, id: (T) -> Long, parentId: (T) -> Long?): List<Row<T>> {
+    /**
+     * Depth-first order with depth, roots first. Nodes whose parent is missing are treated as roots.
+     * Nodes in [collapsed] are listed, but nothing below them is.
+     */
+    fun <T> flatten(
+        nodes: List<T>,
+        id: (T) -> Long,
+        parentId: (T) -> Long?,
+        collapsed: Set<Long> = emptySet(),
+    ): List<Row<T>> {
         val ids = nodes.map(id).toSet()
         val children = nodes.groupBy { node -> parentId(node)?.takeIf { it in ids } }
         val result = mutableListOf<Row<T>>()
@@ -14,7 +22,7 @@ object ProjectTree {
         fun visit(node: T, depth: Int) {
             if (!visited.add(id(node))) return // Guards against corrupt cyclic data.
             result += Row(node, depth)
-            children[id(node)].orEmpty().forEach { visit(it, depth + 1) }
+            if (id(node) !in collapsed) children[id(node)].orEmpty().forEach { visit(it, depth + 1) }
         }
         children[null].orEmpty().forEach { visit(it, 0) }
         return result

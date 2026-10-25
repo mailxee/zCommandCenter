@@ -3,6 +3,7 @@ package com.example.xcommandcenter.ui.home
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +15,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -23,12 +27,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -121,39 +128,44 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 
 @Composable
 fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
-    val rows by viewModel.projects.collectAsStateWithLifecycle()
+    val rows by viewModel.projectTree.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val showCompleted by viewModel.showCompletedProjects.collectAsStateWithLifecycle()
     val completedCount by viewModel.completedProjectCount.collectAsStateWithLifecycle()
+    val showCompletedTasks by viewModel.showCompletedProjectTasks.collectAsStateWithLifecycle()
+    val completedTaskCount by viewModel.completedProjectTaskCount.collectAsStateWithLifecycle()
     val blocked by viewModel.blockedCompletion.collectAsStateWithLifecycle()
     val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
     ItemList(
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All projects are completed." else "No projects yet.",
     ) {
-        if (completedCount > 0) {
+        if (completedCount > 0 || completedTaskCount > 0) {
             item {
-                FilterChip(
-                    selected = showCompleted,
-                    onClick = { viewModel.setShowCompletedProjects(!showCompleted) },
-                    label = { Text("Show completed ($completedCount)") },
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (completedCount > 0) {
+                        FilterChip(
+                            selected = showCompleted,
+                            onClick = { viewModel.setShowCompletedProjects(!showCompleted) },
+                            label = { Text("Completed projects ($completedCount)") },
+                        )
+                    }
+                    if (completedTaskCount > 0) {
+                        FilterChip(
+                            selected = showCompletedTasks,
+                            onClick = { viewModel.setShowCompletedProjectTasks(!showCompletedTasks) },
+                            label = { Text("Completed tasks ($completedTaskCount)") },
+                        )
+                    }
+                }
             }
         }
-        items(rows, key = { it.node.id }) { row ->
-            val project = row.node
-            val ref = ItemRef(ItemType.PROJECT, project.id)
+        items(rows, key = { it.key }) { row ->
             Box(Modifier.padding(start = (row.depth * 20).dp)) {
-                ItemCard(
-                    title = project.title,
-                    lines = listOfNotNull(project.description.ifBlank { null }),
-                    links = links[ref].orEmpty(),
-                    onClick = { onOpen(ref) },
-                    done = project.completed,
-                    leading = {
-                        Checkbox(checked = project.completed, onCheckedChange = { viewModel.setProjectCompleted(project, it) })
-                    },
-                )
+                when (row) {
+                    is ProjectTreeItem.Project -> ProjectRow(row, links, viewModel, onOpen)
+                    is ProjectTreeItem.Task -> ProjectTaskRow(row.task, viewModel, onOpen)
+                }
             }
         }
     }
@@ -164,6 +176,61 @@ fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             onDismiss = viewModel::dismissBlockedCompletion,
         )
     }
+}
+
+@Composable
+private fun ProjectRow(
+    row: ProjectTreeItem.Project,
+    links: Map<ItemRef, List<ItemIndexEntry>>,
+    viewModel: HomeViewModel,
+    onOpen: (ItemRef) -> Unit,
+) {
+    val project = row.project
+    val ref = ItemRef(ItemType.PROJECT, project.id)
+    // Linked tasks are rows of their own below the project, so the "Linked:" line leaves them out.
+    val otherLinks = links[ref].orEmpty().filter { it.type != ItemType.TASK }
+    val hidden = listOfNotNull(
+        row.subprojectCount.takeIf { it > 0 }?.let { if (it == 1) "1 subproject" else "$it subprojects" },
+        row.taskCount.takeIf { it > 0 }?.let { if (it == 1) "1 task" else "$it tasks" },
+    )
+    ItemCard(
+        title = project.title,
+        lines = listOfNotNull(
+            project.description.ifBlank { null },
+            hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden"),
+        ),
+        links = otherLinks,
+        onClick = { onOpen(ref) },
+        done = project.completed,
+        leading = {
+            Checkbox(checked = project.completed, onCheckedChange = { viewModel.setProjectCompleted(project, it) })
+        },
+        trailing = {
+            if (row.hasChildren) {
+                IconButton(onClick = { viewModel.setProjectCollapsed(project.id, !row.collapsed) }) {
+                    Icon(
+                        painterResource(if (row.collapsed) R.drawable.ic_expand_more else R.drawable.ic_expand_less),
+                        contentDescription = if (row.collapsed) "Expand" else "Collapse",
+                    )
+                }
+            }
+        },
+    )
+}
+
+/** A task linked to the project above it; outlined so it reads differently from a project. */
+@Composable
+private fun ProjectTaskRow(task: TaskEntity, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+    ItemCard(
+        title = task.title,
+        lines = listOf("${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: "")),
+        links = emptyList(),
+        onClick = { onOpen(ItemRef(ItemType.TASK, task.id)) },
+        done = task.completed,
+        emphasis = task.priority == Priority.CRITICAL && !task.completed,
+        outlined = true,
+        leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
+    )
 }
 
 @Composable
@@ -253,10 +320,11 @@ private fun ItemCard(
     done: Boolean = false,
     emphasis: Boolean = false,
     italicTitle: Boolean = false,
+    outlined: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    val content: @Composable ColumnScope.() -> Unit = {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             leading?.invoke()
             Column(Modifier.weight(1f).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -290,6 +358,11 @@ private fun ItemCard(
             }
             trailing?.invoke()
         }
+    }
+    if (outlined) {
+        OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
+    } else {
+        Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
 
