@@ -1,6 +1,7 @@
 package com.example.xcommandcenter
 
 import android.content.Context
+import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
 import com.example.xcommandcenter.data.prefs.CollapsedProjectsRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
@@ -36,4 +37,5 @@ class AppContainer(context: Context) {
     val noteRepository = NoteRepository(database.noteDao())
     val bookRepository = BookRepository(database.bookDao())
     val quoteRepository = QuoteRepository(database.quoteDao())
+    val backupRepository = BackupRepository(context, database.backupDao(), taskRepository, reminderScheduler, tabOrderRepository)
 }
