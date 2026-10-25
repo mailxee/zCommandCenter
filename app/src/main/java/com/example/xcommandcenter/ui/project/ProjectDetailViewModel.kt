@@ -55,5 +55,32 @@ class ProjectDetailViewModel(
         }
     }
 
+    /** Set when ticking "Completed" was refused because of open subprojects. */
+    var blockedCompletion by mutableStateOf<BlockedCompletion?>(null)
+        private set
+
+    /** Applied at once, not on save; the form's copy of `completed` is never written. */
+    fun setCompleted(completed: Boolean) {
+        val id = itemId.value
+        viewModelScope.launch {
+            if (completed) {
+                val open = repository.complete(id)
+                if (open > 0) blockedCompletion = BlockedCompletion(id, project.title, open)
+            } else {
+                repository.reopen(id)
+            }
+        }
+    }
+
+    fun completeWithSubprojects() {
+        val id = blockedCompletion?.projectId ?: return
+        blockedCompletion = null
+        viewModelScope.launch { repository.completeWithSubprojects(id) }
+    }
+
+    fun dismissBlockedCompletion() {
+        blockedCompletion = null
+    }
+
     fun delete() = deleteThen { repository.delete(it) }
 }
