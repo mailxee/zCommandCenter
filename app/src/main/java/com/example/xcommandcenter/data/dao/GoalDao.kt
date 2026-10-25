@@ -28,9 +28,13 @@ interface GoalDao {
     @Query("DELETE FROM links WHERE (aType = 'GOAL' AND aId = :id) OR (bType = 'GOAL' AND bId = :id)")
     suspend fun deleteLinks(id: Long)
 
+    @Query("DELETE FROM item_tags WHERE type = 'GOAL' AND itemId = :id")
+    suspend fun deleteTags(id: Long)
+
     @Transaction
     suspend fun delete(id: Long) {
         deleteLinks(id)
+        deleteTags(id)
         deleteRow(id)
     }
 }

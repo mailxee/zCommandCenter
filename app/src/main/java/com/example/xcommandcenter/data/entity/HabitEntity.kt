@@ -27,10 +27,5 @@ data class HabitEntity(
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     val recurrence: Recurrence
-        get() = when (recurrenceType) {
-            RecurrenceType.DAILY -> Recurrence.Daily
-            RecurrenceType.WEEKLY -> Recurrence.Weekly(Recurrence.daysFromMask(weekdays))
-            RecurrenceType.MONTHLY -> Recurrence.Monthly(dayOfMonth)
-            RecurrenceType.EVERY_N_DAYS -> Recurrence.EveryNDays(intervalDays)
-        }
+        get() = Recurrence.of(recurrenceType, weekdays, dayOfMonth, intervalDays)
 }

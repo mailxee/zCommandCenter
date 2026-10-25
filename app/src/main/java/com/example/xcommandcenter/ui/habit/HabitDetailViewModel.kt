@@ -8,9 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
-import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
+import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -23,7 +24,8 @@ class HabitDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: HabitRepository,
     links: LinkRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.HABIT, links) {
+    tags: TagRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.HABIT, links, tags) {
 
     /** The habit being edited. */
     var habit by mutableStateOf(HabitEntity(name = ""))
@@ -68,14 +70,10 @@ class HabitDetailViewModel(
     fun save() {
         val dayOfMonth = dayOfMonthText.toIntOrNull()
         val interval = intervalText.toIntOrNull()
-        val error = when {
-            habit.name.isBlank() -> "A name is required"
-            habit.recurrenceType == RecurrenceType.WEEKLY && habit.weekdays == 0 -> "Pick at least one weekday"
-            habit.recurrenceType == RecurrenceType.MONTHLY && (dayOfMonth == null || dayOfMonth !in 1..31) ->
-                "Day of month must be between 1 and 31"
-            habit.recurrenceType == RecurrenceType.EVERY_N_DAYS && (interval == null || interval !in 1..365) ->
-                "N must be between 1 and 365"
-            else -> null
+        val error = if (habit.name.isBlank()) {
+            "A name is required"
+        } else {
+            recurrenceError(habit.recurrenceType, habit.weekdays, dayOfMonthText, intervalText)
         }
         if (error != null) {
             message = error

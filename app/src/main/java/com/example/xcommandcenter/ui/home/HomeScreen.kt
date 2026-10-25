@@ -1,8 +1,15 @@
 package com.example.xcommandcenter.ui.home
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -16,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -25,6 +33,7 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
+import com.example.xcommandcenter.ui.common.label
 
 @Composable
 fun HomeScreen(
@@ -67,6 +76,7 @@ fun HomeScreen(
                     )
                 }
             }
+            TagFilterBar(viewModel)
             when (selected) {
                 ItemType.TASK -> TasksTab(viewModel, onOpen)
                 ItemType.GOAL -> GoalsTab(viewModel, onOpen)
@@ -77,6 +87,30 @@ fun HomeScreen(
                 ItemType.QUOTE -> QuotesTab(viewModel, onOpen)
                 ItemType.CHAPTER -> Unit // Not a tab.
             }
+        }
+    }
+}
+
+/** One filter for every tab: selected tags stay selected when switching tabs. Hidden until something is tagged. */
+@Composable
+private fun TagFilterBar(viewModel: HomeViewModel) {
+    val tags by viewModel.allTags.collectAsStateWithLifecycle()
+    val filter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    if (tags.isEmpty()) return
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (filter.active) {
+            AssistChip(onClick = viewModel::clearTags, label = { Text("Clear") })
+        }
+        tags.forEach { tag ->
+            FilterChip(
+                selected = tag.id in filter.selected,
+                onClick = { viewModel.toggleTag(tag.id) },
+                label = { Text(tag.label()) },
+            )
         }
     }
 }

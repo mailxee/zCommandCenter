@@ -11,6 +11,7 @@ import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
 import com.example.xcommandcenter.data.repository.ProjectRepository
 import com.example.xcommandcenter.data.repository.QuoteRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.reminder.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,7 @@ class AppContainer(context: Context) {
     val tabOrderRepository = TabOrderRepository(context)
     val collapsedProjectsRepository = CollapsedProjectsRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
+    val tagRepository = TagRepository(database.tagDao())
     val taskRepository = TaskRepository(database.taskDao(), reminderScheduler)
     val goalRepository = GoalRepository(database.goalDao())
     val habitRepository = HabitRepository(database.habitDao())

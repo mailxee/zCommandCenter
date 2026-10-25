@@ -52,9 +52,13 @@ interface HabitDao {
     @Query("DELETE FROM links WHERE (aType = 'HABIT' AND aId = :id) OR (bType = 'HABIT' AND bId = :id)")
     suspend fun deleteLinks(id: Long)
 
+    @Query("DELETE FROM item_tags WHERE type = 'HABIT' AND itemId = :id")
+    suspend fun deleteTags(id: Long)
+
     @Transaction
     suspend fun delete(id: Long) {
         deleteLinks(id)
+        deleteTags(id)
         deleteRow(id)
     }
 }

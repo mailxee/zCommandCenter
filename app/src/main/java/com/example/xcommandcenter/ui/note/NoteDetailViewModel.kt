@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.launch
@@ -16,7 +17,8 @@ class NoteDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: NoteRepository,
     links: LinkRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links) {
+    tags: TagRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags) {
 
     var note by mutableStateOf(NoteEntity())
         private set

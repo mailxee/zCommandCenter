@@ -14,6 +14,7 @@ import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.dao.NoteDao
 import com.example.xcommandcenter.data.dao.ProjectDao
 import com.example.xcommandcenter.data.dao.QuoteDao
+import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
@@ -21,10 +22,12 @@ import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.ProjectEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 
 @Database(
@@ -39,11 +42,13 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         ChapterEntity::class,
         QuoteEntity::class,
         LinkEntity::class,
+        TagEntity::class,
+        ItemTagEntity::class,
     ],
     views = [ItemIndexEntry::class],
-    version = 2,
-    // 2: projects.completed
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    version = 3,
+    // 2: projects.completed. 3: task recurrence columns, tags and item_tags.
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -55,6 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun quoteDao(): QuoteDao
     abstract fun linkDao(): LinkDao
+    abstract fun tagDao(): TagDao
 
     companion object {
         fun create(context: Context): AppDatabase =

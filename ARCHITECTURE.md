@@ -238,7 +238,48 @@ kept in DataStore (`CollapsedProjectsRepository`) so the outline survives restar
 | Refusing to reopen a subproject under a completed parent | Forces the user to reopen from the top down; reopening the ancestors is what the rule implies. |
 | `fallbackToDestructiveMigration` | Would wipe the user's data on upgrade. |
 
-### 2.12 Build configuration
+### 2.12 Repeating tasks: completing creates the next occurrence
+
+**Chosen (confirmed with the user):** a task can carry the same schedule types as a habit (daily,
+weekly on chosen days, monthly, every N days), stored as nullable flat columns on `tasks` and
+read through the shared `Recurrence.of`. Ticking a repeating task completes it and inserts a copy
+due on `Recurrence.nextAfter(dueDate)`, the first scheduled day after the old due date, counting
+the schedule from that date. The reminder moves by the same number of days, and the copy gets the
+same links and tags, so it stays under its project and in its filters (`TaskDao.complete`, one
+transaction). The completed task stays as history and gets `nextCreated = true`, so unticking and
+ticking it again doesn't make a second copy. A repeating task must have a due date. Completing from
+the form goes through the same path (`TaskRepository.save` routes a change of `completed` to
+`setCompleted`). The Tasks tab filters by All / Repeating / One-off; like the sort, the filter
+resets each launch.
+
+| Alternative | Why rejected |
+|---|---|
+| Roll the same task's due date forward | The user wanted finished occurrences kept as history. |
+| Generate future occurrences ahead of time | Clutters every list and needs a horizon and cleanup. |
+| A separate "series" table | One nullable schedule on the task is enough while copies only need to inherit it. |
+
+### 2.13 Tags
+
+**Chosen (confirmed with the user):** `tags(id, name)` with a case-insensitive unique name (NOCASE
+column), and `item_tags(type, itemId, tagId)` with a composite primary key. Like links, the item
+side can't have a foreign key, so every item DAO's delete also deletes the item's tag rows. The tag
+side cascades. Removing a tag from its last item deletes the tag. Tags left behind by deleted items
+are never offered, because the filter bar and suggestions list only tags in use. All eight item
+types can be tagged from a "Tags" card on their detail screen, after the first save.
+
+One shared filter bar under the tab row applies to every tab. An item shows only if it carries
+**all** the selected tags. On Projects, matching projects and tasks show together with the
+projects above them, so the tree still reads. Every row shows its tags (`#name`). The selection
+is in memory, and selected tags that are no longer in use drop out, so a filter can't get stuck on.
+Schema v3 adds the tables and the task schedule columns through `AutoMigration(2 → 3)`.
+
+| Alternative | Why rejected |
+|---|---|
+| Tags as a comma-separated text column on each table | No uniqueness, renames touch every row, and matching needs string parsing in SQL. |
+| Tags as a kind of link target | Links are between real items. Tags would show up in "Linked items" and the picker. |
+| A filter per tab | The user chose one shared filter. |
+
+### 2.14 Build configuration
 
 - Gradle version catalog, AGP 9.4 with its built-in Kotlin, the Compose compiler plugin, and KSP
   for Room. KSP replaces kapt, which is deprecated and slower.
@@ -283,7 +324,7 @@ file changed; template files left as they were (launcher icons, backup rules, Gr
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
-| `app/schemas/.../AppDatabase/1.json`, `2.json` (created, generated) | Exported Room schemas; v2 adds `projects.completed` via auto-migration. |
+| `app/schemas/.../AppDatabase/1.json`, `2.json`, `3.json` (created, generated) | Exported Room schemas; v2 adds `projects.completed`, v3 adds task schedules and tags, both via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
 | `ARCHITECTURE.md` (created) | This document. |
 
@@ -302,7 +343,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 |---|---|
 | `domain/ItemType.kt` | Enum of linkable types (seven tabs + `CHAPTER`) and `ItemRef(type, id)`. |
 | `domain/Priority.kt` | Low < Medium < High < Critical; ordinal is the sort rank. |
-| `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled`, weekday bitmask helpers. |
+| `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled` and `nextAfter`, `Recurrence.of` from stored columns, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
 | `domain/ProjectTree.kt` | Flatten a project tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
@@ -310,7 +351,8 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 ### data/entity/ (Room tables and view)
 | File | Purpose |
 |---|---|
-| `data/entity/TaskEntity.kt` | `tasks`: title, description, due date, reminder time, priority, completed. |
+| `data/entity/TaskEntity.kt` | `tasks`: title, description, due date, reminder time, priority, completed, optional schedule, next-occurrence flag. |
+| `data/entity/TagEntity.kt` | `tags` (unique name ignoring case), `item_tags` (which item carries which tag) and the `ItemTag` projection. |
 | `data/entity/GoalEntity.kt` | `goals`: title, strategy. |
 | `data/entity/HabitEntity.kt` | `habits`: name, category, flat recurrence columns, start date, notes; maps to `Recurrence`. |
 | `data/entity/HabitMarkEntity.kt` | `habit_marks`: one explicit mark per habit per date (cascade on habit delete). |
@@ -326,7 +368,8 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | File | Purpose |
 |---|---|
 | `data/dao/LinkDao.kt` | Insert/delete links; linked items of one item; all links from both ends; picker search. |
-| `data/dao/TaskDao.kt` | Task CRUD, completion toggle, pending reminders, transactional delete with links. |
+| `data/dao/TaskDao.kt` | Task CRUD, completion (creates a repeating task's next occurrence with its links and tags), pending reminders, transactional delete with links and tags. |
+| `data/dao/TagDao.kt` | Tags in use, all item tags, one item's tags, add (reusing a name) and remove (deleting unused tags). |
 | `data/dao/GoalDao.kt` | Goal CRUD, transactional delete with links. |
 | `data/dao/HabitDao.kt` | Habit CRUD, marks (observe, toggle), transactional delete with links. |
 | `data/dao/ProjectDao.kt` | Project CRUD; completion rule (complete, complete subtree, reopen with ancestors); delete moves children to the grandparent and removes links. |
@@ -337,9 +380,9 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 ### data/db/ and data/prefs/
 | File | Purpose |
 |---|---|
-| `data/db/AppDatabase.kt` | Room database declaration (10 tables, 1 view) and builder with the seed callback. |
+| `data/db/AppDatabase.kt` | Room database declaration (12 tables, 1 view) and builder with the seed callback. |
 | `data/db/Converters.kt` | `LocalDate` ⇄ epoch day. |
-| `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history and 27 cross-tab links. |
+| `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history, 28 cross-tab links, a repeating task and four tags. |
 | `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedProjectsRepository.kt` | Which projects are collapsed in the Projects tab. |
@@ -348,7 +391,8 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | File | Purpose |
 |---|---|
 | `data/repository/LinkRepository.kt` | Link/unlink with normalization, linked items, links grouped by owner, per-tab search (Books includes chapters). |
-| `data/repository/TaskRepository.kt` | Task save/complete/delete that keeps the alarm in sync; reschedule all. |
+| `data/repository/TaskRepository.kt` | Task save/complete/delete that keeps the alarms (including a new occurrence's) in sync; reschedule all. |
+| `data/repository/TagRepository.kt` | Tags in use, tags grouped by item, add (trimmed, `#` dropped) and remove. |
 | `data/repository/GoalRepository.kt` | Goal access (insert-or-update save). |
 | `data/repository/HabitRepository.kt` | Habits and marks as `Map`/`Set` of dates; toggle marks. |
 | `data/repository/ProjectRepository.kt` | Project access; rejects moving a project under its own subtree. |
@@ -371,16 +415,18 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `ui/theme/Theme.kt` | Material 3 theme (dynamic color on Android 12+, light/dark fallback). |
 | `ui/navigation/Routes.kt` | Route strings: home, settings, `item/{type}/{id}?parent=`. |
 | `ui/navigation/AppNavHost.kt` | Navigation graph; dispatches the item route to the right detail screen; opens a task from a reminder. |
-| `ui/common/ItemDetailViewModel.kt` | Base ViewModel: current id, linked items, link/unlink, picker search, messages, close-after-delete. |
+| `ui/common/ItemDetailViewModel.kt` | Base ViewModel: current id, linked items and tags, link/unlink, tag/untag, picker search, messages, close-after-delete. |
+| `ui/common/Tags.kt` | "Tags" card of every detail screen and its add-tag dialog with suggestions. |
+| `ui/common/RecurrenceFields.kt` | Schedule editor and its validation, shared by habits and tasks. |
 | `ui/common/DetailScaffold.kt` | Shared detail frame: back/save/delete (with confirmation), snackbar, scrolling content. |
 | `ui/common/LinkedItems.kt` | "Linked items" card grouped by tab, and the two-step link picker dialog with search. |
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
-| `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted tasks, habit summaries, project tree, …) and quick actions. |
-| `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, FAB to create an item in the current tab. |
+| `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, project tree, …), the shared tag filter and quick actions. |
+| `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
 | `ui/home/TabLists.kt` | The seven tab lists; every row shows what it is linked to. Projects is a collapsible outline with linked tasks. |
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status. |
 | `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts. |
-| `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, completed; links. |
+| `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
 | `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; links. |
 | `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; links. |
 | `ui/project/ProjectDetailViewModel.kt`, `ProjectDetailScreen.kt` | Project form, completed checkbox, parent picker (no cycles), child list, add child; links. |
@@ -401,6 +447,7 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 |---|---|
 | `domain/HabitStatsTest.kt` | Positive/negative streaks, scheduled-only counting, month-end clamping, recent occurrences. |
 | `domain/TabOrderTest.kt` | Parsing defaults, round trip, unknown/missing tabs, moves. |
+| `domain/RecurrenceTest.kt` | Next occurrence for each schedule type, month-end clamping, empty weekly rule, building from columns. |
 | `domain/ProjectTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 

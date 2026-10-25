@@ -3,6 +3,7 @@ package com.example.xcommandcenter.ui.task
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -21,7 +22,9 @@ import com.example.xcommandcenter.ui.common.DateField
 import com.example.xcommandcenter.ui.common.DateTimeField
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RecurrenceFields
 import com.example.xcommandcenter.ui.common.SectionTitle
+import com.example.xcommandcenter.ui.common.TagsSection
 
 @Composable
 fun TaskDetailScreen(
@@ -67,10 +70,31 @@ fun TaskDetailScreen(
         }
         DateField("Due date", form.dueDate) { date -> viewModel.update { it.copy(dueDate = date) } }
         DateTimeField("Reminder", form.reminder) { time -> viewModel.update { it.copy(reminder = time) } }
+        SectionTitle("Repeat")
+        RecurrenceFields(
+            type = form.recurrenceType,
+            weekdays = form.weekdays,
+            dayOfMonthText = viewModel.dayOfMonthText,
+            intervalText = viewModel.intervalText,
+            onType = { type -> viewModel.update { it.copy(recurrenceType = type) } },
+            onWeekdays = { mask -> viewModel.update { it.copy(weekdays = mask) } },
+            onDayOfMonth = { viewModel.dayOfMonthText = it },
+            onInterval = { viewModel.intervalText = it },
+            intervalHelp = "Counted from the due date.",
+            noneLabel = "Doesn't repeat",
+        )
+        if (form.recurrenceType != null) {
+            Text(
+                "Completing this task adds the next occurrence, due on the next scheduled date after this one.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = form.completed, onCheckedChange = { c -> viewModel.update { it.copy(completed = c) } })
             Text("Completed")
         }
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, linked, onOpen)
     }
 }

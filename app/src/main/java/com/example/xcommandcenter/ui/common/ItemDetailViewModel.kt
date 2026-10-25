@@ -7,7 +7,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.navigation.Routes
@@ -22,14 +24,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Shared behavior of every detail screen: which item is shown, its linked items, linking and
- * unlinking, and one-shot messages. An id of 0 means "new item, not saved yet"; links can be
+ * Shared behavior of every detail screen: which item is shown, its linked items and tags, linking
+ * and tagging, and one-shot messages. An id of 0 means "new item, not saved yet"; links can be
  * added once it has been saved and has a real id.
  */
 abstract class ItemDetailViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val type: ItemType,
     private val links: LinkRepository,
+    private val tagRepository: TagRepository,
 ) : ViewModel() {
 
     private val _itemId = MutableStateFlow(savedStateHandle.get<Long>(Routes.ARG_ID) ?: 0L)
@@ -39,6 +42,24 @@ abstract class ItemDetailViewModel(
     val linked: StateFlow<List<ItemIndexEntry>> = _itemId
         .flatMapLatest { id -> if (id == 0L) flowOf(emptyList()) else links.observeLinked(ItemRef(type, id)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** This item's tags; like links, they can be added once the item has been saved. */
+    val tags: StateFlow<List<TagEntity>> = _itemId
+        .flatMapLatest { id -> if (id == 0L) flowOf(emptyList()) else tagRepository.observeTags(ItemRef(type, id)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Every tag in use, offered as suggestions when adding one. */
+    val allTags: StateFlow<List<TagEntity>> = tagRepository.observeInUse()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun addTag(name: String) {
+        if (itemId.value == 0L) return
+        viewModelScope.launch { tagRepository.add(ref, name) }
+    }
+
+    fun removeTag(tagId: Long) {
+        viewModelScope.launch { tagRepository.remove(ref, tagId) }
+    }
 
     /** Shown once in a snackbar, then cleared by the screen. */
     var message by mutableStateOf<String?>(null)

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ProjectEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.ProjectRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import com.example.xcommandcenter.ui.navigation.Routes
@@ -20,7 +21,8 @@ class ProjectDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: ProjectRepository,
     links: LinkRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.PROJECT, links) {
+    tags: TagRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.PROJECT, links, tags) {
 
     var project by mutableStateOf(
         ProjectEntity(title = "", parentId = savedStateHandle.get<Long>(Routes.ARG_PARENT)?.takeIf { it != 0L }),
