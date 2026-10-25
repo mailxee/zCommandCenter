@@ -1,11 +1,14 @@
 # xCommandCenter — Architecture
 
 A personal command center for Android. Seven tabs (Tasks, Goals, Habits, Projects, Notes,
-Books, Quotes) share one local Room database, and any item can be linked to any other item.
+Books, Quotes) share one local Room database. Any item can be linked to any other item and
+tagged, and one tag filter applies to every tab. Projects form a tree with completion, tasks can
+repeat, and habits track streaks.
 
 - Language: Kotlin · UI: Jetpack Compose + Material 3 · Storage: Room (SQLite), local only
 - minSdk 26, compile/target SDK 37 (the template's values)
 - Reminders: `AlarmManager` → `BroadcastReceiver` → notification
+- Launcher icon: the xCommandCenter logo as an adaptive icon (§2.14)
 
 ---
 
@@ -23,9 +26,12 @@ reminder/  AlarmManager + receivers          (works with the app closed)
 
 - **ui** never touches DAOs. Each screen has one ViewModel; ViewModels expose `StateFlow`s (from
   Room `Flow`s) and Compose state for form fields.
-- **data** owns persistence. Repositories add behavior that is more than SQL: `TaskRepository`
-  keeps alarms in step with stored reminders, `ProjectRepository` rejects cycles,
-  `LinkRepository` normalizes link pairs.
+- **data** owns persistence. Repositories and `@Transaction` DAO methods add behavior that is
+  more than SQL: `TaskRepository` keeps alarms in step with stored reminders and `TaskDao.complete`
+  creates a repeating task's next occurrence, `ProjectRepository` rejects cycles and `ProjectDao`
+  enforces the completion rule, `LinkRepository` normalizes link pairs, and `TagDao` reuses tag
+  names and deletes unused tags. Small UI settings (tab order, collapsed projects) live in
+  DataStore under `data/prefs`.
 - **domain** has no Android or Room imports, so its rules are unit-tested on the JVM.
 - **reminder** is called by `TaskRepository` and by system broadcasts.
 
@@ -54,7 +60,7 @@ Queries match the item on either side.
 
 **Trade-off:** there is no foreign key, so the database will not remove links when an item is
 deleted. Every item DAO therefore has a `@Transaction delete(id)` that deletes the item's links
-and the item together (§2.4).
+(and tags, §2.13) and the item together (§2.4).
 
 ### 2.2 `item_index` database view for titles across tables
 
@@ -85,17 +91,17 @@ grouped by tab, so chapters appear under Books.
 
 ### 2.4 Deleting items: transactional DAO methods
 
-**Chosen:** each DAO has `@Transaction suspend fun delete(id)` that deletes the item's links,
-then the item. Special cases:
-- **Book:** also deletes the links of all its chapters. The chapters themselves go through the foreign key's `ON DELETE CASCADE`.
+**Chosen:** each DAO has `@Transaction suspend fun delete(id)` that deletes the item's links and
+tags, then the item. Special cases:
+- **Book:** also deletes the links and tags of all its chapters. The chapters themselves go through the foreign key's `ON DELETE CASCADE`.
 - **Habit:** marks cascade through their foreign key.
 - **Project:** child projects are moved up to the deleted project's parent, so a subtree is never silently deleted.
-- **Chapter:** links removed, then the remaining chapters are renumbered.
+- **Chapter:** links and tags removed, then the remaining chapters are renumbered.
 
 | Alternative | Why rejected |
 |---|---|
 | SQLite triggers | Hidden from the Kotlin code, and their behaviour on cascaded deletes is easy to get wrong. |
-| Two repository calls without a transaction | A crash between them would leave orphan links. |
+| Two repository calls without a transaction | A crash between them would leave orphan links or tags. |
 | Cascade-delete child projects | Deleting a parent would silently destroy work. Moving children up loses nothing. |
 | Leave child projects at top level (`SET NULL`) | Throws away where they sat in the tree. The FK still uses `SET NULL` as a safety net. |
 
@@ -109,7 +115,9 @@ then the item. Special cases:
 - Monthly on day 29–31 falls on the last day of shorter months. "Every N days" counts from the habit's start date.
 
 **Storage:** recurrence is stored as flat columns on `habits` (`recurrenceType`, `weekdays`
-bitmask, `dayOfMonth`, `intervalDays`) and exposed as a sealed `Recurrence` type. Marks go in
+bitmask, `dayOfMonth`, `intervalDays`) and exposed as a sealed `Recurrence` type through
+`Recurrence.of`, which repeating tasks use too (§2.12); the editor (`RecurrenceFields`) is
+shared as well. Marks go in
 `habit_marks(habitId, date)` with a composite primary key, so a date can be marked only once.
 Streaks are computed on read by the pure function `HabitStats.streak`.
 
@@ -154,11 +162,12 @@ and streaks look current.
 | A "seeded" flag in preferences | Two sources of truth: clearing one but not the other re-seeds or skips seeding. |
 | A prepackaged `.db` asset (`createFromAsset`) | A binary file to maintain, with dates fixed at build time. |
 
-### 2.8 Tab order in DataStore Preferences
+### 2.8 Tab order (and other UI settings) in DataStore Preferences
 
 **Chosen:** a comma-separated list of tab names under one key. `TabOrder.parse` ignores unknown
 names and appends missing tabs, so adding a tab in a later version can't hide it. Settings
-reorders with up/down buttons.
+reorders with up/down buttons. The same preferences file (`SettingsStore.kt`, one DataStore
+instance per process) also holds the set of collapsed projects (§2.11).
 
 | Alternative | Why rejected |
 |---|---|
@@ -173,12 +182,13 @@ reorders with up/down buttons.
   "new". A single route lets any linked item open, whatever its type, from any screen.
   - *Rejected:* type-safe `@Serializable` routes need the kotlinx-serialization plugin for little gain over one route.
   - *Rejected:* a separate route per type duplicates the same three arguments eight times.
-- **`ItemDetailViewModel` base class:** holds the id, the linked items `Flow`, link/unlink,
-  picker search, and the message/closed state that every detail screen shares. `DetailScaffold`
-  and `LinkedItemsSection` are the matching UI.
+- **`ItemDetailViewModel` base class:** holds the id, the linked items and tags `Flow`s,
+  link/unlink, tag/untag, picker search, and the message/closed state that every detail screen
+  shares. `DetailScaffold`, `TagsSection` and `LinkedItemsSection` are the matching UI.
   - *Rejected:* copying this logic into each of the eight screens.
-- **Explicit save (✓ button):** a new item gets an id when first saved. Linking is enabled after
-  that, because a link needs a real id.
+- **Explicit save (✓ button):** a new item gets an id when first saved. Linking and tagging are
+  enabled after that, because both need a real id. Completing a project is the one exception:
+  it applies at once, outside the form (§2.11).
   - *Rejected:* auto-saving every keystroke creates empty items whenever the user backs out of a "new" screen.
   - *Rejected:* creating the item when the screen opens has the same problem.
 - **Surviving process death:** after the first save, the new id is written to the screen's
@@ -188,11 +198,11 @@ reorders with up/down buttons.
   rotation.
   - *Rejected:* acting only on a launch without saved state; this missed taps that restore an old task.
   - *Rejected:* clearing the extra from the intent; the system's copy of the intent still has it after process death.
-- **Lists show links inline:** every row ends with "Linked: …", from one query over all links, so
-  each tab shows what its items are linked to.
+- **Lists show tags and links inline:** every row shows its tags (`#name`) and ends with
+  "Linked: …", each from one query over all rows, so each tab shows how its items are organised.
 - **Chapter reorder** uses up/down buttons and renumbers positions `0..n-1` in a transaction.
-- **Icons** are eight vector drawables. *Rejected:* the Compose material-icons artifacts, a large
-  dependency for eight glyphs.
+- **Icons** are ten small vector drawables. *Rejected:* the Compose material-icons artifacts, a
+  large dependency for ten glyphs.
 
 ### 2.10 Dependency injection by hand
 
@@ -205,7 +215,7 @@ reorders with up/down buttons.
 | Koin | A runtime service locator with no compile-time checks. Not needed at this size. |
 | Singletons in `object`s | Hidden global state, harder to replace in tests. |
 
-### 2.11 Project completion
+### 2.11 Project completion and the Projects outline
 
 **Chosen (confirmed with the user):** a `completed` flag on `projects`, with one rule: a project
 is completed only if every project below it is completed.
@@ -279,7 +289,26 @@ Schema v3 adds the tables and the task schedule columns through `AutoMigration(2
 | Tags as a kind of link target | Links are between real items. Tags would show up in "Linked items" and the picker. |
 | A filter per tab | The user chose one shared filter. |
 
-### 2.14 Build configuration
+### 2.14 Launcher icon
+
+**Chosen:** an adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml`).
+The foreground is the logo artwork (the Z with the orange corner, book, bulb and calendar) cropped
+from the user's design, as one PNG per density (`mipmap-*dpi/ic_launcher_foreground.png`, 108dp
+canvas). The artwork fills the middle 66dp, so no launcher mask (circle, squircle, rounded square)
+clips it, and its outer band fades out. The background layer is a vector with the logo tile's dark
+vertical gradient (`#333741` to `#151822`), extended to the full canvas, so the fade has no visible
+edge. The template's robot foreground and the legacy per-density `ic_launcher*.webp` images were
+removed: minSdk is 26, so the adaptive icon is always used. There is no monochrome layer yet, so
+Android 13+ themed icons show the full-colour logo.
+
+| Alternative | Why rejected |
+|---|---|
+| Use the whole rounded tile as the foreground | The launcher's own mask would wrap a second, clipped outline around it. |
+| Flat background colour | The artwork's background is a gradient, so a flat colour would show a box around it. |
+| Redraw the logo as a vector | Loses the original's shading; the bitmap at five densities is sharp on every screen. |
+| Monochrome layer from the bitmap | A themed icon is a one-colour silhouette; the bitmap's alpha would give a solid square. |
+
+### 2.15 Build configuration
 
 - Gradle version catalog, AGP 9.4 with its built-in Kotlin, the Compose compiler plugin, and KSP
   for Room. KSP replaces kapt, which is deprecated and slower.
@@ -313,7 +342,7 @@ same path keeps any other open screen in sync, such as the habit's detail screen
 
 Source paths below are relative to `app/src/main/java/com/example/xcommandcenter/` unless they
 start with `app/` or are at the project root. "Created" = new for this app; "Modified" = template
-file changed; template files left as they were (launcher icons, backup rules, Gradle wrapper,
+file changed; template files left as they were (backup rules, Gradle wrapper,
 `settings.gradle.kts`, `gradle.properties`, `rules.keep`, `strings.xml`) are not listed.
 
 ### Build & project (modified / created)
@@ -329,13 +358,14 @@ file changed; template files left as they were (launcher icons, backup rules, Gr
 | `ARCHITECTURE.md` (created) | This document. |
 
 Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `values/colors.xml`,
-`values-night/themes.xml` (MDC theme no longer used).
+`values-night/themes.xml` (MDC theme no longer used), `drawable/ic_launcher_foreground.xml` and the
+ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 
 ### App & wiring
 | File | Purpose |
 |---|---|
 | `XCommandCenterApp.kt` | `Application`: builds the `AppContainer`, creates the notification channel, re-registers pending reminders at start (this also opens and seeds the DB). |
-| `AppContainer.kt` | Hand-written DI container: database, repositories, reminder scheduler, app-wide coroutine scope. |
+| `AppContainer.kt` | Hand-written DI container: database, repositories (including tags and the two preference stores), reminder scheduler, app-wide coroutine scope. |
 | `MainActivity.kt` | Single activity: edge-to-edge Compose host, asks for notification permission, opens a task when launched from its reminder. |
 
 ### domain/ (pure Kotlin)
@@ -370,12 +400,12 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `data/dao/LinkDao.kt` | Insert/delete links; linked items of one item; all links from both ends; picker search. |
 | `data/dao/TaskDao.kt` | Task CRUD, completion (creates a repeating task's next occurrence with its links and tags), pending reminders, transactional delete with links and tags. |
 | `data/dao/TagDao.kt` | Tags in use, all item tags, one item's tags, add (reusing a name) and remove (deleting unused tags). |
-| `data/dao/GoalDao.kt` | Goal CRUD, transactional delete with links. |
-| `data/dao/HabitDao.kt` | Habit CRUD, marks (observe, toggle), transactional delete with links. |
-| `data/dao/ProjectDao.kt` | Project CRUD; completion rule (complete, complete subtree, reopen with ancestors); delete moves children to the grandparent and removes links. |
-| `data/dao/NoteDao.kt` | Note CRUD, transactional delete with links. |
-| `data/dao/BookDao.kt` | Books with progress, chapters (add, rename, read count, internalized, reorder, delete + renumber), book delete with chapter links. |
-| `data/dao/QuoteDao.kt` | Quote CRUD, transactional delete with links. |
+| `data/dao/GoalDao.kt` | Goal CRUD, transactional delete with links and tags. |
+| `data/dao/HabitDao.kt` | Habit CRUD, marks (observe, toggle), transactional delete with links and tags. |
+| `data/dao/ProjectDao.kt` | Project CRUD; completion rule (complete, complete subtree, reopen with ancestors); delete moves children to the grandparent and removes links and tags. |
+| `data/dao/NoteDao.kt` | Note CRUD, transactional delete with links and tags. |
+| `data/dao/BookDao.kt` | Books with progress, chapters (add, rename, read count, internalized, reorder, delete + renumber), chapter and book deletes with their links and tags. |
+| `data/dao/QuoteDao.kt` | Quote CRUD, transactional delete with links and tags. |
 
 ### data/db/ and data/prefs/
 | File | Purpose |
@@ -423,24 +453,27 @@ Removed from the template: `ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt`, `
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, project tree, …), the shared tag filter and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
-| `ui/home/TabLists.kt` | The seven tab lists; every row shows what it is linked to. Projects is a collapsible outline with linked tasks. |
+| `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Projects is a collapsible outline with linked tasks. |
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status. |
 | `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
-| `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; links. |
-| `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; links. |
-| `ui/project/ProjectDetailViewModel.kt`, `ProjectDetailScreen.kt` | Project form, completed checkbox, parent picker (no cycles), child list, add child; links. |
+| `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; tags; links. |
+| `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; tags; links. |
+| `ui/project/ProjectDetailViewModel.kt`, `ProjectDetailScreen.kt` | Project form, completed checkbox, parent picker (no cycles), child list, add child; tags; links. |
 | `ui/project/CompleteProjectDialog.kt` | "Complete all" dialog shown when a project still has open subprojects. |
-| `ui/note/NoteDetailViewModel.kt`, `NoteDetailScreen.kt` | Simple note editor; links. |
-| `ui/book/BookDetailViewModel.kt`, `BookDetailScreen.kt` | Book form and table of contents (add, +1 read, internalized, reorder); links. |
-| `ui/book/ChapterDetailViewModel.kt`, `ChapterDetailScreen.kt` | Chapter title, read count ±1, internalized, parent book, delete; links. |
-| `ui/quote/QuoteDetailViewModel.kt`, `QuoteDetailScreen.kt` | Quote text, optional author and source; links. |
+| `ui/note/NoteDetailViewModel.kt`, `NoteDetailScreen.kt` | Simple note editor; tags; links. |
+| `ui/book/BookDetailViewModel.kt`, `BookDetailScreen.kt` | Book form and table of contents (add, +1 read, internalized, reorder); tags; links. |
+| `ui/book/ChapterDetailViewModel.kt`, `ChapterDetailScreen.kt` | Chapter title, read count ±1, internalized, parent book, delete; tags; links. |
+| `ui/quote/QuoteDetailViewModel.kt`, `QuoteDetailScreen.kt` | Quote text, optional author and source; tags; links. |
 
 ### Resources
 | File | Purpose |
 |---|---|
 | `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_arrow_up.xml`, `ic_arrow_down.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_expand_less.xml`, `ic_expand_more.xml`, `ic_settings.xml` | Material icons used in the UI. |
 | `app/src/main/res/drawable/ic_notification.xml` | Status-bar icon for reminders. |
+| `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`, `ic_launcher_round.xml` (modified) | Adaptive launcher icon: logo foreground over the gradient background, no monochrome layer. |
+| `app/src/main/res/mipmap-*dpi/ic_launcher_foreground.png` (created) | Logo artwork for each density (108–432 px), centred in the 66dp safe zone with faded edges. |
+| `app/src/main/res/drawable/ic_launcher_background.xml` (modified) | The logo tile's dark vertical gradient across the full icon canvas. |
 
 ### Tests (`app/src/test/java/com/example/xcommandcenter/`)
 | File | Purpose |
@@ -457,7 +490,11 @@ Run them with `./gradlew testDebugUnitTest`.
 
 ## 5. Verification performed
 
-Done on 2026-10-24 on the `Medium_Phone` AVD (Android API 37).
+All checks ran on the `Medium_Phone` AVD (Android API 37). The first version was verified on
+2026-10-24; each later feature on 2026-10-25, installing over the previous version's data so the
+database migrations were exercised too.
+
+### First version (2026-10-24)
 
 | Definition of Done item | How it was checked | Result |
 |---|---|---|
@@ -472,3 +509,20 @@ Done on 2026-10-24 on the `Medium_Phone` AVD (Android API 37).
 Two bugs were found during this pass and fixed: a saved new item reopened as a blank form after
 process death, and a reminder tap was ignored when Android restored the activity from saved
 state. See the git history.
+
+### Later features (2026-10-25)
+
+Each feature came in its own pull request (mailxee/zCommandCenter#1 to #4). Every build ran with
+`allWarningsAsErrors = true` and no warnings; the unit tests now number 31 and all pass.
+
+| Feature | How it was checked | Result |
+|---|---|---|
+| Upgrades keep data (schema v1 to v2 to v3) | Installed each new build over the previous one with data in place | All items, links and settings kept; new columns start empty or false |
+| Project completion | Ticked a leaf; ticked a parent with an open child (dialog, Complete all); unticked a child; added a child under a completed parent; renamed a completed project | Blocked as designed; Complete all completed the subtree; ancestors reopened; the stored flag survived the form save |
+| Projects outline | Linked tasks shown under their projects; both "Completed" chips; collapsed a project, force-stopped and relaunched; ticked a task in the tree | Collapse survived the restart; chips reset; the task moved to the completed group |
+| Repeating tasks | Set "every 2 days" on a task with a reminder and a project link, ticked it, then unticked and re-ticked the old one | A copy appeared two days later with the reminder moved two days and the tag and link kept; no second copy |
+| Tags and the shared filter | Tagged a task; selected the tag on Tasks, Goals and Projects; selected two tags no item shares | Only matching items shown, parents kept on Projects, empty tabs say so; two tags matched nothing |
+| Fresh install | Backed up the app's data, cleared it, launched, restored the backup | Seed tags and the weekly task appear; the restored data loaded unchanged |
+| Launcher icon | Opened the app drawer after installing | The logo shows inside the launcher's circle with no clipping and no visible box around the artwork |
+
+No crashes appeared in the `crash` logcat buffer during any of these passes.
