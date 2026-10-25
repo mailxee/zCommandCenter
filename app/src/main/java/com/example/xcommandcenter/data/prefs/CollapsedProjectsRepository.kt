@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.map
  * they match nothing, so they are harmless.
  */
 class CollapsedProjectsRepository(private val context: Context) {
-    private val key = stringSetPreferencesKey("collapsed_projects")
+    private val key = stringSetPreferencesKey(KEY)
 
     val collapsed: Flow<Set<Long>> = context.settingsStore.data.map { prefs ->
         prefs[key].orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
@@ -22,5 +22,9 @@ class CollapsedProjectsRepository(private val context: Context) {
             val current = prefs[key].orEmpty()
             prefs[key] = if (collapsed) current + projectId.toString() else current - projectId.toString()
         }
+    }
+
+    companion object {
+        const val KEY = "collapsed_projects"
     }
 }

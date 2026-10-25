@@ -3,7 +3,8 @@
 A personal command center for Android. Seven tabs (Tasks, Goals, Habits, Projects, Notes,
 Books, Quotes) share one local Room database. Any item can be linked to any other item and
 tagged, and one tag filter applies to every tab. Projects form a tree with completion, tasks can
-repeat, and habits track streaks.
+repeat, and habits track streaks. Settings can export everything to an Excel workbook, import
+one back, or delete everything.
 
 - Language: Kotlin · UI: Jetpack Compose + Material 3 · Storage: Room (SQLite), local only
 - minSdk 26, compile/target SDK 37 (the template's values)
@@ -165,8 +166,8 @@ and streaks look current.
 ### 2.8 Tab order (and other UI settings) in DataStore Preferences
 
 **Chosen:** a comma-separated list of tab names under one key. `TabOrder.parse` ignores unknown
-names and appends missing tabs, so adding a tab in a later version can't hide it. Settings
-reorders with up/down buttons. The same preferences file (`SettingsStore.kt`, one DataStore
+names and appends missing tabs, so adding a tab in a later version can't hide it. The default
+is the enum order, with Quotes last (pinned by a test). Settings reorders with up/down buttons. The same preferences file (`SettingsStore.kt`, one DataStore
 instance per process) also holds the set of collapsed projects (§2.11).
 
 | Alternative | Why rejected |
@@ -308,7 +309,42 @@ Android 13+ themed icons show the full-colour logo.
 | Redraw the logo as a vector | Loses the original's shading; the bitmap at five densities is sharp on every screen. |
 | Monochrome layer from the bitmap | A themed icon is a one-colour silhouette; the bitmap's alpha would give a solid square. |
 
-### 2.15 Build configuration
+### 2.15 Excel export and import, and "Delete everything"
+
+**Chosen (confirmed with the user):** Settings has a Data section with three actions.
+- **Export to Excel** writes a `.xlsx` workbook through the system "save" picker (Storage Access
+  Framework, so no storage permission). One sheet per tab in the user's tab order, then
+  Chapters, Habit history, Links and Tags, so the file is a full backup. Each sheet has a bold,
+  frozen header. Values are readable: ISO dates, local "yyyy-MM-dd HH:mm" times, enum labels
+  ("Medium", "Every N days"), weekdays as "Mon, Sat". Links and tags carry the items' titles as
+  read-only context columns.
+- **Import from Excel** replaces all data, after a confirmation. The whole workbook is parsed and
+  checked first (`BackupFormat.fromSheets`); a problem stops the import with a message naming the
+  sheet and row, and the current data stays. Then `BackupDao.replaceAll` deletes and inserts
+  everything in one transaction. Columns are found by header, so reordering them in Excel is fine.
+  A blank ID gets a new id. Excel date serial numbers are accepted. Rows that point at missing
+  items (a link to an unknown task) are skipped and counted. Projects are inserted parents-first
+  for the foreign key, and a completed project with an open child is reopened (§2.11). Alarms are
+  cancelled before and re-registered after; collapsed-project ids are cleared, since they may
+  name other projects now.
+- **Delete everything** (red, with a confirmation) deletes every row in every table, cancels
+  pending reminders and clears all saved settings. Seed data is not re-inserted, so every tab
+  starts empty, with the default tab order.
+
+The workbook is read and written by `Xlsx`, about 250 lines over `java.util.zip` and the JDK's DOM
+parser. Writing uses inline strings, and whole numbers as numeric cells. Reading handles what
+Excel, LibreOffice and Google Sheets save: shared strings, rich text, booleans and gaps. DOCTYPEs
+are refused, so a crafted file can't pull in external entities.
+
+| Alternative | Why rejected |
+|---|---|
+| Apache POI | Several megabytes and many transitive dependencies, some unsuitable for Android, for a few sheets of text. |
+| fastexcel and similar small libraries | The reader side relies on StAX, which Android doesn't ship. |
+| CSV files | One file per table, and no single file to hand to Excel; the user asked for one workbook. |
+| Merge on import | Without stable ids across devices, duplicates can't be detected; the user chose replace. |
+| Re-seed after "Delete everything" | The user wanted a truly empty app. |
+
+### 2.16 Build configuration
 
 - Gradle version catalog, AGP 9.4 with its built-in Kotlin, the Compose compiler plugin, and KSP
   for Room. KSP replaces kapt, which is deprecated and slower.
@@ -365,7 +401,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | File | Purpose |
 |---|---|
 | `XCommandCenterApp.kt` | `Application`: builds the `AppContainer`, creates the notification channel, re-registers pending reminders at start (this also opens and seeds the DB). |
-| `AppContainer.kt` | Hand-written DI container: database, repositories (including tags and the two preference stores), reminder scheduler, app-wide coroutine scope. |
+| `AppContainer.kt` | Hand-written DI container: database, repositories (including tags, backup and the two preference stores), reminder scheduler, app-wide coroutine scope. |
 | `MainActivity.kt` | Single activity: edge-to-edge Compose host, asks for notification permission, opens a task when launched from its reminder. |
 
 ### domain/ (pure Kotlin)
@@ -399,6 +435,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 |---|---|
 | `data/dao/LinkDao.kt` | Insert/delete links; linked items of one item; all links from both ends; picker search. |
 | `data/dao/TaskDao.kt` | Task CRUD, completion (creates a repeating task's next occurrence with its links and tags), pending reminders, transactional delete with links and tags. |
+| `data/dao/BackupDao.kt` | Whole-database snapshot for export; `replaceAll` (import) and `deleteAll`, each one transaction. |
 | `data/dao/TagDao.kt` | Tags in use, all item tags, one item's tags, add (reusing a name) and remove (deleting unused tags). |
 | `data/dao/GoalDao.kt` | Goal CRUD, transactional delete with links and tags. |
 | `data/dao/HabitDao.kt` | Habit CRUD, marks (observe, toggle), transactional delete with links and tags. |
@@ -410,10 +447,13 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 ### data/db/ and data/prefs/
 | File | Purpose |
 |---|---|
+| `data/backup/Xlsx.kt` | Minimal `.xlsx` writer and reader (zip + XML) returning sheets of cell text. |
+| `data/backup/BackupFormat.kt` | Maps all data to and from sheets; validation, id assignment, skipped references. |
+| `data/backup/BackupRepository.kt` | Export to and import from a document `Uri`, delete everything; handles alarms and settings. |
 | `data/db/AppDatabase.kt` | Room database declaration (12 tables, 1 view) and builder with the seed callback. |
 | `data/db/Converters.kt` | `LocalDate` ⇄ epoch day. |
 | `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history, 28 cross-tab links, a repeating task and four tags. |
-| `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below. |
+| `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below; clearing all settings or the collapsed set. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedProjectsRepository.kt` | Which projects are collapsed in the Projects tab. |
 
@@ -454,8 +494,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, project tree, …), the shared tag filter and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
 | `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Projects is a collapsible outline with linked tasks. |
-| `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status. |
-| `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts. |
+| `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status; export, import and delete with a busy flag and result messages. |
+| `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
 | `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; tags; links. |
 | `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; tags; links. |
@@ -479,9 +519,11 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | File | Purpose |
 |---|---|
 | `domain/HabitStatsTest.kt` | Positive/negative streaks, scheduled-only counting, month-end clamping, recent occurrences. |
-| `domain/TabOrderTest.kt` | Parsing defaults, round trip, unknown/missing tabs, moves. |
+| `domain/TabOrderTest.kt` | Default order (Quotes last), parsing, round trip, unknown/missing tabs, moves. |
 | `domain/RecurrenceTest.kt` | Next occurrence for each schedule type, month-end clamping, empty weekly rule, building from columns. |
 | `domain/ProjectTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
+| `data/XlsxTest.kt` | Workbook round trip (escaping, blanks, leading zeros), reading Excel-style shared strings and gaps, column letters. |
+| `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, project consistency, error messages. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 
 Run them with `./gradlew testDebugUnitTest`.
@@ -512,8 +554,8 @@ state. See the git history.
 
 ### Later features (2026-10-25)
 
-Each feature came in its own pull request (mailxee/zCommandCenter#1 to #4). Every build ran with
-`allWarningsAsErrors = true` and no warnings; the unit tests now number 31 and all pass.
+Each feature came in its own pull request (mailxee/zCommandCenter#1 onwards). Every build ran with
+`allWarningsAsErrors = true` and no warnings; the unit tests now number 43 and all pass.
 
 | Feature | How it was checked | Result |
 |---|---|---|
@@ -524,5 +566,8 @@ Each feature came in its own pull request (mailxee/zCommandCenter#1 to #4). Ever
 | Tags and the shared filter | Tagged a task; selected the tag on Tasks, Goals and Projects; selected two tags no item shares | Only matching items shown, parents kept on Projects, empty tabs say so; two tags matched nothing |
 | Fresh install | Backed up the app's data, cleared it, launched, restored the backup | Seed tags and the weekly task appear; the restored data loaded unchanged |
 | Launcher icon | Opened the app drawer after installing | The logo shows inside the launcher's circle with no clipping and no visible box around the artwork |
+| Export to Excel | Exported through the system save dialog, pulled the file and checked it with Python's `zipfile` and an XML parser | "Exported 38 items"; a valid zip, every part well-formed, 11 sheets with row counts matching the database |
+| Delete everything | Confirmed the dialog, then copied the database off the device | Every table empty, settings file cleared, tabs back to the default order |
+| Import from Excel | Imported the exported workbook into the empty app, then compared every table with a copy of the database taken before the delete | "Imported 38 items"; all tables identical (timestamps to the minute), tags and links intact |
 
 No crashes appeared in the `crash` logcat buffer during any of these passes.

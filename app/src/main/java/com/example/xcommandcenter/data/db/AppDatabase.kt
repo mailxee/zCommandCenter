@@ -7,6 +7,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.xcommandcenter.data.dao.BackupDao
 import com.example.xcommandcenter.data.dao.BookDao
 import com.example.xcommandcenter.data.dao.GoalDao
 import com.example.xcommandcenter.data.dao.HabitDao
@@ -61,6 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun quoteDao(): QuoteDao
     abstract fun linkDao(): LinkDao
     abstract fun tagDao(): TagDao
+    abstract fun backupDao(): BackupDao
 
     companion object {
         fun create(context: Context): AppDatabase =

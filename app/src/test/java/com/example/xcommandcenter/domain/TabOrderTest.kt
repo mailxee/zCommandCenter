@@ -10,6 +10,14 @@ class TabOrderTest {
     }
 
     @Test
+    fun `default order ends with Quotes`() {
+        assertEquals(
+            listOf(ItemType.TASK, ItemType.GOAL, ItemType.HABIT, ItemType.PROJECT, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE),
+            TabOrder.default,
+        )
+    }
+
+    @Test
     fun `stored order round trips`() {
         val order = TabOrder.default.reversed()
         assertEquals(order, TabOrder.parse(TabOrder.serialize(order)))
