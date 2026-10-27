@@ -43,6 +43,20 @@ interface LinkDao {
     )
     fun observeAllOwned(): Flow<List<OwnedLink>>
 
+    /** The links of every chapter, owned by the chapter's book (ownerType is BOOK, ownerId the book's id). */
+    @Query(
+        """
+        SELECT 'BOOK' AS ownerType, c.bookId AS ownerId, i.type, i.id, i.title, i.subtitle
+        FROM links l JOIN chapters c ON l.aType = 'CHAPTER' AND l.aId = c.id
+        JOIN item_index i ON i.type = l.bType AND i.id = l.bId
+        UNION ALL
+        SELECT 'BOOK', c.bookId, i.type, i.id, i.title, i.subtitle
+        FROM links l JOIN chapters c ON l.bType = 'CHAPTER' AND l.bId = c.id
+        JOIN item_index i ON i.type = l.aType AND i.id = l.aId
+        """,
+    )
+    fun observeChapterLinksByBook(): Flow<List<OwnedLink>>
+
     @Query(
         """
         SELECT * FROM item_index

@@ -643,6 +643,11 @@ order, the items linked to that chapter, as cards with their usual controls
 (`BookDetailViewModel.chapterLinks`, `LinkedCardsGroup`). Chapters with no links are left out.
 These links are added and removed on the chapter's page, so the cards have no remove button.
 
+A book's card, on the Books tab and wherever it is shown as a linked item, lists in its "Linked:"
+line what its chapters are linked to as well as what the book is, each item once and without
+naming the chapters (`LinkDao.observeChapterLinksByBook`, merged in
+`LinkRepository.observeLinksByOwner`).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

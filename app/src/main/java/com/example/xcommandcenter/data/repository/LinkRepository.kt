@@ -6,16 +6,22 @@ import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 
 class LinkRepository(private val dao: LinkDao) {
 
     fun observeLinked(ref: ItemRef): Flow<List<ItemIndexEntry>> = dao.observeLinked(ref.type, ref.id)
 
-    /** For every item that has links, the items it is linked to. */
+    /**
+     * For every item that has links, the items it is linked to, as cards list them. A book also
+     * lists what its chapters are linked to, each item once and never the book itself.
+     */
     fun observeLinksByOwner(): Flow<Map<ItemRef, List<ItemIndexEntry>>> =
-        dao.observeAllOwned().map { rows ->
-            rows.groupBy({ it.owner }, { it.entry }).mapValues { (_, entries) -> entries.sortedBy { it.title.lowercase() } }
+        combine(dao.observeAllOwned(), dao.observeChapterLinksByBook()) { rows, chapterRows ->
+            (rows + chapterRows)
+                .filter { it.owner != it.entry.ref }
+                .groupBy({ it.owner }, { it.entry })
+                .mapValues { (_, entries) -> entries.distinctBy { it.ref }.sortedBy { it.title.lowercase() } }
         }
 
     suspend fun link(a: ItemRef, b: ItemRef) {
