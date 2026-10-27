@@ -97,12 +97,12 @@ object BackupFormat {
             ),
             ItemType.GOAL to Sheet(
                 ItemType.GOAL.tabLabel,
-                listOf(listOf("ID", "Title", "Strategy", "Created", "Order")) +
-                    data.goals.map { listOf(it.id.toString(), it.title, it.strategy, time(it.createdAt), it.sortOrder.toString()) },
+                listOf(listOf("ID", "Title", "Strategy", "Created", "Order", "Priority")) +
+                    data.goals.map { listOf(it.id.toString(), it.title, it.strategy, time(it.createdAt), it.sortOrder.toString(), it.priority.label) },
             ),
             ItemType.HABIT to Sheet(
                 ItemType.HABIT.tabLabel,
-                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Reminder")) +
+                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Reminder", "Priority")) +
                     data.habits.map {
                         listOf(
                             it.id.toString(), it.name, it.category.label, it.recurrenceType.label,
@@ -110,17 +110,17 @@ object BackupFormat {
                             if (it.recurrenceType == RecurrenceType.MONTHLY) it.dayOfMonth.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_DAYS) it.intervalDays.toString() else "",
                             it.startDate.toString(), it.notes, time(it.createdAt), it.sortOrder.toString(),
-                            it.reminderTime?.format(clock).orEmpty(),
+                            it.reminderTime?.format(clock).orEmpty(), it.priority.label,
                         )
                     },
             ),
             ItemType.PLAN to Sheet(
                 ItemType.PLAN.tabLabel,
-                listOf(listOf("ID", "Title", "Description", "Parent ID", "Completed", "Created", "Order")) +
+                listOf(listOf("ID", "Title", "Description", "Parent ID", "Completed", "Created", "Order", "Priority")) +
                     data.plans.map {
                         listOf(
                             it.id.toString(), it.title, it.description, it.parentId?.toString().orEmpty(), bool(it.completed), time(it.createdAt),
-                            it.sortOrder.toString(),
+                            it.sortOrder.toString(), it.priority.label,
                         )
                     },
             ),
@@ -131,18 +131,20 @@ object BackupFormat {
             ),
             ItemType.BOOK to Sheet(
                 ItemType.BOOK.tabLabel,
-                listOf(listOf("ID", "Title", "Author", "Description", "Read count", "Internalized", "Created", "Order")) +
+                listOf(listOf("ID", "Title", "Author", "Description", "Read count", "Internalized", "Created", "Order", "Priority")) +
                     data.books.map {
                         listOf(
                             it.id.toString(), it.title, it.author, it.description, it.readCount.toString(), bool(it.internalized),
-                            time(it.createdAt), it.sortOrder.toString(),
+                            time(it.createdAt), it.sortOrder.toString(), it.priority.label,
                         )
                     },
             ),
             ItemType.QUOTE to Sheet(
                 ItemType.QUOTE.tabLabel,
-                listOf(listOf("ID", "Text", "Source", "Author", "Created", "Order")) +
-                    data.quotes.map { listOf(it.id.toString(), it.text, it.source, it.author, time(it.createdAt), it.sortOrder.toString()) },
+                listOf(listOf("ID", "Text", "Source", "Author", "Created", "Order", "Priority")) +
+                    data.quotes.map {
+                        listOf(it.id.toString(), it.text, it.source, it.author, time(it.createdAt), it.sortOrder.toString(), it.priority.label)
+                    },
             ),
         )
         val chapters = Sheet(
@@ -235,7 +237,7 @@ object BackupFormat {
         }.withIds("Tasks") { t, id -> t.copy(id = id) }
 
         val goals = sheet(ItemType.GOAL.tabLabel, true)!!.items("Title") { r ->
-            GoalEntity(id = r.id(), title = r.required("Title"), strategy = r.text("Strategy"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order())
+            GoalEntity(id = r.id(), title = r.required("Title"), strategy = r.text("Strategy"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(), priority = r.priority())
         }.withIds("Goals") { g, id -> g.copy(id = id) }
 
         val habits = sheet(ItemType.HABIT.tabLabel, true)!!.items("Name") { r ->
@@ -245,14 +247,14 @@ object BackupFormat {
                 recurrenceType = r.enum("Repeat", RecurrenceType.entries) { it.label } ?: RecurrenceType.DAILY,
                 weekdays = r.weekdays("Weekdays"), dayOfMonth = r.int("Day of month", 1, 1..31), intervalDays = r.int("Every N days", 2, 1..365),
                 startDate = r.date("Start date") ?: LocalDate.now(zone), notes = r.text("Notes"), createdAt = r.dateTime("Created") ?: now,
-                sortOrder = r.order(), reminderMinutes = r.time("Reminder")?.let { it.hour * 60 + it.minute },
+                sortOrder = r.order(), reminderMinutes = r.time("Reminder")?.let { it.hour * 60 + it.minute }, priority = r.priority(),
             ).also { if (it.recurrenceType == RecurrenceType.WEEKLY && it.weekdays == 0) r.fail("A weekly habit needs at least one weekday") }
         }.withIds("Habits") { h, id -> h.copy(id = id) }
 
         val rawPlans = sheet(ItemType.PLAN.tabLabel, true)!!.items("Title") { r ->
             PlanEntity(
                 id = r.id(), title = r.required("Title"), description = r.text("Description"), parentId = r.long("Parent ID"),
-                completed = r.bool("Completed"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
+                completed = r.bool("Completed"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(), priority = r.priority(),
             )
         }.withIds(ItemType.PLAN.tabLabel) { p, id -> p.copy(id = id) }
         val plans = consistentPlans(rawPlans)
@@ -260,7 +262,7 @@ object BackupFormat {
         val notes = sheet(ItemType.NOTE.tabLabel, true)!!.items("Title", "Body") { r ->
             NoteEntity(
                 id = r.id(), title = r.text("Title"), body = r.text("Body"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
-                priority = r.enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM,
+                priority = r.priority(),
             )
         }.withIds("Notes") { n, id -> n.copy(id = id) }
 
@@ -268,14 +270,14 @@ object BackupFormat {
             BookEntity(
                 id = r.id(), title = r.required("Title"), author = r.text("Author"), description = r.text("Description"),
                 createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
-                readCount = r.int("Read count", 0, 0..1_000_000), internalized = r.bool("Internalized"),
+                readCount = r.int("Read count", 0, 0..1_000_000), internalized = r.bool("Internalized"), priority = r.priority(),
             )
         }.withIds("Books") { b, id -> b.copy(id = id) }
 
         val quotes = sheet(ItemType.QUOTE.tabLabel, true)!!.items("Text") { r ->
             QuoteEntity(
                 id = r.id(), text = r.required("Text"), source = r.text("Source"), author = r.text("Author"),
-                createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
+                createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(), priority = r.priority(),
             )
         }.withIds("Quotes") { q, id -> q.copy(id = id) }
 
@@ -426,6 +428,9 @@ object BackupFormat {
             if (v !in range.first..range.last) fail("$column must be between ${range.first} and ${range.last}")
             return v.toInt()
         }
+
+        /** The optional "Priority" column; Medium when blank. */
+        fun priority(): Priority = enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM
 
         /** The optional "Order" column: the item's place in its tab's list. */
         fun order(): Int = int("Order", 0, -1_000_000..1_000_000)

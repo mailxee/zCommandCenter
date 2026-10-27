@@ -177,17 +177,20 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val drag = rememberDragOrder(goals, key = { it.id })
     val rows = drag.rows
-    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active, state = drag.listState) {
+    val view = viewModel.priorityView(ItemType.GOAL)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
+    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+        priorityControls(ItemType.GOAL, view, viewModel)
         itemsIndexed(rows, key = { _, goal -> goal.id }) { index, goal ->
             val ref = ItemRef(ItemType.GOAL, goal.id)
-            ReorderableItem(drag.state, key = goal.id, enabled = reorder) {
+            ReorderableItem(drag.state, key = goal.id, enabled = movable) {
                 ItemCard(
                     ItemType.GOAL,
                     goalCardText(goal),
                     links[ref].orEmpty(),
                     { onOpen(ref) },
                     tags = tagFilter.tagsOf(ref),
-                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.GOAL, goal.id, it) }) {
+                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.GOAL, goal.id, it) }) {
                         viewModel.reorder(ItemType.GOAL, drag.rows.map { it.id })
                     },
                 )
@@ -204,18 +207,21 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val drag = rememberDragOrder(habits, key = { it.habit.id })
     val rows = drag.rows
-    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active, state = drag.listState) {
+    val view = viewModel.priorityView(ItemType.HABIT)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
+    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+        priorityControls(ItemType.HABIT, view, viewModel)
         itemsIndexed(rows, key = { _, summary -> summary.habit.id }) { index, summary ->
             val habit = summary.habit
             val ref = ItemRef(ItemType.HABIT, habit.id)
-            ReorderableItem(drag.state, key = habit.id, enabled = reorder) {
+            ReorderableItem(drag.state, key = habit.id, enabled = movable) {
                 ItemCard(
                     ItemType.HABIT,
                     text = habitCardText(summary),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
-                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.HABIT, habit.id, it) }) {
+                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.HABIT, habit.id, it) }) {
                         viewModel.reorder(ItemType.HABIT, drag.rows.map { it.habit.id })
                     } ?: {
                         if (summary.scheduledToday) {
@@ -245,6 +251,8 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
+    val view = viewModel.priorityView(ItemType.PLAN)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
     // A plan moves among the shown plans with the same parent, taking everything under it along.
     val drag = rememberDragOrder(rows, key = { it.key }) { list, from, to -> ManualOrder.moveBlock(list, { it.depth }, from, to) }
     var dragging by remember { mutableStateOf<PlanEntity?>(null) }
@@ -254,9 +262,10 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
-        filtered = tagFilter.active,
+        filtered = tagFilter.active || view.filtered,
         state = drag.listState,
     ) {
+        priorityControls(ItemType.PLAN, view, viewModel)
         if (completedCount > 0 || completedTaskCount > 0) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -279,7 +288,7 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
         }
         items(shownRows, key = { it.key }) { row ->
             // Only plans with the dragged plan's parent make way for it; task rows never move on their own.
-            val enabled = reorder && row is PlanTreeItem.Plan && dragging.let { it == null || it.parentId == row.plan.parentId }
+            val enabled = movable && row is PlanTreeItem.Plan && dragging.let { it == null || it.parentId == row.plan.parentId }
             ReorderableItem(drag.state, key = row.key, enabled = enabled) {
                 Box(Modifier.padding(start = (row.depth * 20).dp)) {
                     when (row) {
@@ -289,7 +298,7 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                             PlanRow(
                                 row, links, tagFilter, viewModel, onOpen,
                                 dragHandle = dragHandleIf(
-                                    reorder = reorder,
+                                    reorder = movable,
                                     canMoveUp = index > 0,
                                     canMoveDown = index < group.lastIndex,
                                     onMove = { viewModel.move(ItemType.PLAN, row.plan.id, it) },
@@ -382,42 +391,17 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    val sort by viewModel.noteSort.collectAsStateWithLifecycle()
-    val priorities by viewModel.notePriorities.collectAsStateWithLifecycle()
-    // Like tasks, notes can only be moved in their custom order.
-    val movable = reorder && sort == NoteSort.CUSTOM
+    val view = viewModel.priorityView(ItemType.NOTE)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
     val drag = rememberDragOrder(notes, key = { it.id })
     val rows = drag.rows
     ItemList(
         empty = notes.isEmpty(),
         emptyText = "No notes yet.",
-        filtered = tagFilter.active || priorities.isNotEmpty(),
+        filtered = tagFilter.active || view.filtered,
         state = drag.listState,
     ) {
-        item {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                NoteSort.entries.forEachIndexed { index, option ->
-                    SegmentedButton(
-                        selected = sort == option,
-                        onClick = { viewModel.setNoteSort(option) },
-                        shape = SegmentedButtonDefaults.itemShape(index, NoteSort.entries.size),
-                        label = { Text(option.label, maxLines = 1) },
-                    )
-                }
-            }
-        }
-        // Any combination of priorities; none selected shows every note.
-        item {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Priority.entries.forEach { priority ->
-                    FilterChip(
-                        selected = priority in priorities,
-                        onClick = { viewModel.toggleNotePriority(priority) },
-                        label = { Text(priority.label) },
-                    )
-                }
-            }
-        }
+        priorityControls(ItemType.NOTE, view, viewModel)
         itemsIndexed(rows, key = { _, note -> note.id }) { index, note ->
             val ref = ItemRef(ItemType.NOTE, note.id)
             ReorderableItem(drag.state, key = note.id, enabled = movable) {
@@ -444,17 +428,20 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val drag = rememberDragOrder(books, key = { it.book.id })
     val rows = drag.rows
-    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active, state = drag.listState) {
+    val view = viewModel.priorityView(ItemType.BOOK)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
+    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+        priorityControls(ItemType.BOOK, view, viewModel)
         itemsIndexed(rows, key = { _, item -> item.book.id }) { index, item ->
             val ref = ItemRef(ItemType.BOOK, item.book.id)
-            ReorderableItem(drag.state, key = item.book.id, enabled = reorder) {
+            ReorderableItem(drag.state, key = item.book.id, enabled = movable) {
                 ItemCard(
                     ItemType.BOOK,
                     text = bookCardText(item),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
-                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.BOOK, item.book.id, it) }) {
+                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.BOOK, item.book.id, it) }) {
                         viewModel.reorder(ItemType.BOOK, drag.rows.map { it.book.id })
                     },
                 )
@@ -471,19 +458,64 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val drag = rememberDragOrder(quotes, key = { it.id })
     val rows = drag.rows
-    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active, state = drag.listState) {
+    val view = viewModel.priorityView(ItemType.QUOTE)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
+    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+        priorityControls(ItemType.QUOTE, view, viewModel)
         itemsIndexed(rows, key = { _, quote -> quote.id }) { index, quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
-            ReorderableItem(drag.state, key = quote.id, enabled = reorder) {
+            ReorderableItem(drag.state, key = quote.id, enabled = movable) {
                 ItemCard(
                     ItemType.QUOTE,
                     text = quoteCardText(quote),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
-                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {
+                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {
                         viewModel.reorder(ItemType.QUOTE, drag.rows.map { it.id })
                     },
+                )
+            }
+        }
+    }
+}
+
+/** A tab's sort and priority filter, as the tab's controls show them. */
+private data class PriorityView(val sort: PrioritySort, val priorities: Set<Priority>) {
+    val filtered: Boolean get() = priorities.isNotEmpty()
+}
+
+@Composable
+private fun HomeViewModel.priorityView(tab: ItemType): PriorityView {
+    val sorts by prioritySorts.collectAsStateWithLifecycle()
+    val filters by priorityFilters.collectAsStateWithLifecycle()
+    return PriorityView(sorts[tab] ?: PrioritySort.CUSTOM, filters[tab].orEmpty())
+}
+
+/**
+ * The rows at the top of a tab with priorities: the sort (Custom or Priority) and the priority
+ * filter chips, any combination of which can be on; none shows every item.
+ */
+private fun LazyListScope.priorityControls(tab: ItemType, view: PriorityView, viewModel: HomeViewModel) {
+    item {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            PrioritySort.entries.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = view.sort == option,
+                    onClick = { viewModel.setPrioritySort(tab, option) },
+                    shape = SegmentedButtonDefaults.itemShape(index, PrioritySort.entries.size),
+                    label = { Text(option.label, maxLines = 1) },
+                )
+            }
+        }
+    }
+    item {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Priority.entries.forEach { priority ->
+                FilterChip(
+                    selected = priority in view.priorities,
+                    onClick = { viewModel.togglePriority(tab, priority) },
+                    label = { Text(priority.label) },
                 )
             }
         }

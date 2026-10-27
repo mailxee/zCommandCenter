@@ -53,8 +53,9 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
     // 2: habit reminders, note priority and lists, book read count and internalized.
-    version = 2,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    // 3: priority on goals, habits, plans, books and quotes.
+    version = 3,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

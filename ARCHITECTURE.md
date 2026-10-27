@@ -502,6 +502,21 @@ tab.
   switches to it. Both are in memory, like the repeat filter.
 - **Chapters:** the read count can also be cleared from the book page's chapter rows.
 
+### 2.25 Priority on every tab, and tags per tab
+
+- **Priority:** goals, habits, plans, books and quotes have a priority too (schema v3,
+  `AutoMigration(2 → 3)`, Medium for existing items), set on the item's page and shown on its card
+  (critical in red). The Excel sheets gain a Priority column.
+- **Sorting and filtering:** those tabs and Notes share one control pair (`priorityControls`): a sort,
+  Custom or Priority (Critical first, stable, so the custom order holds within a priority), and
+  priority filter chips (any combination; none shows everything). `HomeViewModel` keeps one sort and
+  one filter per tab, in memory. On Plans, sorting orders siblings, so the outline stays a tree, and
+  the filter keeps the plans above a match, as the tag filter does. Items can only be dragged in the
+  custom order; turning on reorder mode switches the current tab to it.
+- **Tag filter bar:** shows only the tags on the current tab's items (on Plans, also those on tasks
+  linked to plans), plus any selected tag, so a selection can always be turned off. The selection
+  still applies to every tab.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -535,7 +550,7 @@ file changed; template files left as they were (backup rules, Gradle wrapper,
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
-| `app/schemas/.../AppDatabase/1.json`, `2.json` (created, generated) | Exported Room schemas: version 1 since the reset in §2.17; v2 adds the columns and table of §2.23 via auto-migration. |
+| `app/schemas/.../AppDatabase/1.json`, `2.json` (created, generated) | Exported Room schemas: version 1 since the reset in §2.17; v2 adds the columns and table of §2.23, v3 the priorities of §2.25, both via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
 | `ARCHITECTURE.md` (created) | This document. |
 

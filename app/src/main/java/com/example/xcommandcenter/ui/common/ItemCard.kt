@@ -76,30 +76,45 @@ fun taskCardText(task: TaskEntity, checklist: ChecklistCount?, showReminder: Boo
     emphasis = task.priority == Priority.CRITICAL && !task.completed,
 )
 
-fun goalCardText(goal: GoalEntity) = CardText(goal.title, listOfNotNull(goal.strategy.ifBlank { null }))
+/** "High priority", the first line of most cards; critical items are also shown in red ([critical]). */
+private fun priorityLine(priority: Priority) = "${priority.label} priority"
+
+private fun critical(priority: Priority, open: Boolean = true) = open && priority == Priority.CRITICAL
+
+fun goalCardText(goal: GoalEntity) = CardText(
+    title = goal.title,
+    lines = listOfNotNull(priorityLine(goal.priority), goal.strategy.ifBlank { null }),
+    emphasis = critical(goal.priority),
+)
 
 fun habitCardText(summary: HabitSummary) = CardText(
     title = summary.habit.name,
     lines = listOf(
+        priorityLine(summary.habit.priority),
         "${summary.habit.category.label} · ${summary.habit.recurrence.describe()}" +
             (summary.habit.reminderTime?.let { " · reminder ${it.display()}" } ?: ""),
         if (summary.positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
         else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
     ),
+    emphasis = critical(summary.habit.priority),
 )
 
 /** [hidden] says what a collapsed plan hides in the Plans outline. */
-fun planCardText(plan: PlanEntity, hidden: String? = null) =
-    CardText(plan.title, listOfNotNull(plan.description.ifBlank { null }, hidden), done = plan.completed)
+fun planCardText(plan: PlanEntity, hidden: String? = null) = CardText(
+    title = plan.title,
+    lines = listOfNotNull(priorityLine(plan.priority), plan.description.ifBlank { null }, hidden),
+    done = plan.completed,
+    emphasis = critical(plan.priority, open = !plan.completed),
+)
 
 /** [listCount] is the number of items in the note's list. */
 fun noteCardText(note: NoteEntity, listCount: Int) = CardText(
     title = note.title.ifBlank { "Untitled" },
     lines = listOfNotNull(
-        "${note.priority.label} priority" + (if (listCount > 0) " · list of ${listCount.items()}" else ""),
+        priorityLine(note.priority) + (if (listCount > 0) " · list of ${listCount.items()}" else ""),
         note.body.ifBlank { null },
     ),
-    emphasis = note.priority == Priority.CRITICAL,
+    emphasis = critical(note.priority),
 )
 
 private fun Int.items(): String = if (this == 1) "1 item" else "$this items"
@@ -107,6 +122,7 @@ private fun Int.items(): String = if (this == 1) "1 item" else "$this items"
 fun bookCardText(item: BookWithProgress) = CardText(
     title = item.book.title,
     lines = listOfNotNull(
+        priorityLine(item.book.priority),
         item.book.author.ifBlank { null },
         "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
         listOfNotNull(
@@ -114,11 +130,16 @@ fun bookCardText(item: BookWithProgress) = CardText(
             "Book internalized".takeIf { item.book.internalized },
         ).joinToString(" · ").ifEmpty { null },
     ),
+    emphasis = critical(item.book.priority),
 )
 
 fun quoteCardText(quote: QuoteEntity): CardText {
     val attribution = listOf(quote.author, quote.source).filter { it.isNotBlank() }.joinToString(", ")
-    return CardText("“${quote.text}”", listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }))
+    return CardText(
+        title = "“${quote.text}”",
+        lines = listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }, priorityLine(quote.priority)),
+        emphasis = critical(quote.priority),
+    )
 }
 
 /** Chapters have no tab of their own; their card names the book they are in. */
