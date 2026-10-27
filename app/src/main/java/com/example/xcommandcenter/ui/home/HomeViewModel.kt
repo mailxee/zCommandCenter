@@ -42,7 +42,7 @@ enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priorit
  */
 enum class PrioritySort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
 
-/** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts. */
+/** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts but the same priority filter. */
 val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE)
 
 enum class RepeatFilter(val label: String) {
@@ -143,6 +143,12 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     val repeatFilter = MutableStateFlow(RepeatFilter.ALL)
 
+    /** Each tab's sort; a tab not in the map uses [PrioritySort.CUSTOM]. */
+    val prioritySorts = MutableStateFlow<Map<ItemType, PrioritySort>>(emptyMap())
+
+    /** Each tab's priority filter, Tasks included: the priorities to show; empty or missing shows every item. */
+    val priorityFilters = MutableStateFlow<Map<ItemType, Set<Priority>>>(emptyMap())
+
     /** Whether the Tasks tab lists completed tasks; kept across launches. */
     val showCompletedTasks: StateFlow<Boolean> = taskSortRepo.showCompleted.stateIn(true)
 
@@ -151,7 +157,13 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     /** Open tasks first, then by the chosen key; Critical is the highest priority. */
     val tasks: StateFlow<List<TaskEntity>> =
-        combine(tasksRepo.observeAll(), taskSort, combine(repeatFilter, showCompletedTasks, ::Pair), tagFilter) { tasks, sort, (repeat, showCompleted), tags ->
+        combine(
+            tasksRepo.observeAll(),
+            taskSort,
+            combine(repeatFilter, showCompletedTasks, ::Pair),
+            tagFilter,
+            priorityFilters.map { it[ItemType.TASK].orEmpty() },
+        ) { tasks, sort, (repeat, showCompleted), tags, priorities ->
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -159,15 +171,13 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 TaskSort.PRIORITY -> byPriority.then(byDue)
                 TaskSort.CUSTOM -> compareBy { it.sortOrder }
             }
-            tasks.filter { (showCompleted || !it.completed) && repeat.matches(it) && tags.matches(ItemRef(ItemType.TASK, it.id)) }
+            tasks.filter {
+                (showCompleted || !it.completed) && repeat.matches(it) &&
+                    (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.TASK, it.id))
+            }
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
 
-    /** Each tab's sort; a tab not in the map uses [PrioritySort.CUSTOM]. */
-    val prioritySorts = MutableStateFlow<Map<ItemType, PrioritySort>>(emptyMap())
-
-    /** Each tab's priority filter: the priorities to show; empty or missing shows every item. */
-    val priorityFilters = MutableStateFlow<Map<ItemType, Set<Priority>>>(emptyMap())
 
     val goals: StateFlow<List<GoalEntity>> = goalsRepo.observeAll().sortedAndFiltered(ItemType.GOAL, { it.id }, { it.priority })
 
