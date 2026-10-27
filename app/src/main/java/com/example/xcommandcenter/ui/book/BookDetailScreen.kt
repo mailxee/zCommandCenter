@@ -9,32 +9,32 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
+import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
+import sh.calvin.reorderable.ReorderableColumn
 
 @Composable
 fun BookDetailScreen(
@@ -84,17 +84,37 @@ fun BookDetailScreen(
         } else {
             Card(Modifier.fillMaxWidth()) {
                 if (chapters.isEmpty()) Text("No chapters yet.", modifier = Modifier.padding(16.dp))
-                chapters.forEachIndexed { index, chapter ->
-                    if (index > 0) HorizontalDivider()
-                    ChapterRow(
-                        chapter = chapter,
-                        isFirst = index == 0,
-                        isLast = index == chapters.lastIndex,
-                        onOpen = { onOpen(ItemRef(ItemType.CHAPTER, chapter.id)) },
-                        onRead = { viewModel.addRead(chapter.id) },
-                        onInternalized = { viewModel.setInternalized(chapter.id, it) },
-                        onMove = { viewModel.moveChapter(chapter.id, it) },
-                    )
+                // A local copy follows the drag; it is replaced when the stored order changes.
+                var ordered by remember(chapters) { mutableStateOf(chapters) }
+                ReorderableColumn(
+                    list = ordered,
+                    onSettle = { from, to ->
+                        val moved = ordered[from]
+                        ordered = ordered.toMutableList().apply { add(to, removeAt(from)) }
+                        viewModel.moveChapter(moved.id, to - from)
+                    },
+                ) { index, chapter, _ ->
+                    key(chapter.id) {
+                        ReorderableItem {
+                            Column {
+                                if (index > 0) HorizontalDivider()
+                                ChapterRow(
+                                    chapter = chapter,
+                                    number = index + 1,
+                                    onOpen = { onOpen(ItemRef(ItemType.CHAPTER, chapter.id)) },
+                                    onRead = { viewModel.addRead(chapter.id) },
+                                    onInternalized = { viewModel.setInternalized(chapter.id, it) },
+                                    dragHandle = {
+                                        DragHandle(
+                                            Modifier.draggableHandle(),
+                                            onMoveUp = if (index > 0) ({ viewModel.moveChapter(chapter.id, -1) }) else null,
+                                            onMoveDown = if (index < ordered.lastIndex) ({ viewModel.moveChapter(chapter.id, 1) }) else null,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
                 TextButton(onClick = { addingChapter = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
                     Text("Add chapter")
@@ -128,16 +148,15 @@ fun BookDetailScreen(
 @Composable
 private fun ChapterRow(
     chapter: ChapterEntity,
-    isFirst: Boolean,
-    isLast: Boolean,
+    number: Int,
     onOpen: () -> Unit,
     onRead: () -> Unit,
     onInternalized: (Boolean) -> Unit,
-    onMove: (Int) -> Unit,
+    dragHandle: @Composable () -> Unit,
 ) {
     Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp)) {
         Text(
-            "${chapter.position + 1}. ${chapter.title}",
+            "$number. ${chapter.title}",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         )
@@ -146,12 +165,7 @@ private fun ChapterRow(
             TextButton(onClick = onRead) { Text("+1") }
             Checkbox(checked = chapter.internalized, onCheckedChange = onInternalized)
             Text("Internalized", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = { onMove(-1) }, enabled = !isFirst) {
-                Icon(painterResource(R.drawable.ic_arrow_up), contentDescription = "Move up")
-            }
-            IconButton(onClick = { onMove(1) }, enabled = !isLast) {
-                Icon(painterResource(R.drawable.ic_arrow_down), contentDescription = "Move down")
-            }
+            dragHandle()
         }
     }
 }

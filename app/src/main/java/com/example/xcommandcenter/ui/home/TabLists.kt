@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -25,7 +27,11 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -37,17 +43,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
+import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.display
 import com.example.xcommandcenter.ui.common.label
 import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import java.time.Instant
 import java.time.ZoneId
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.ReorderableLazyListState
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
 fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
@@ -60,8 +73,18 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     // Tasks can only be moved in the custom order; in the others their place follows from their fields.
     val movable = reorder && sort == TaskSort.CUSTOM
+    val drag = rememberDragOrder(tasks, key = { it.id })
+    // Open and completed tasks are moved separately, as the list keeps them apart: while one is
+    // dragged, only tasks in its group can make way for it.
+    var draggingCompleted by remember { mutableStateOf<Boolean?>(null) }
     // Either filter can empty the list; then say so instead of "No tasks yet".
-    ItemList(empty = tasks.isEmpty(), emptyText = "No tasks yet.", filtered = tagFilter.active || repeat != RepeatFilter.ALL) {
+    val rows = drag.rows
+    ItemList(
+        empty = tasks.isEmpty(),
+        emptyText = "No tasks yet.",
+        filtered = tagFilter.active || repeat != RepeatFilter.ALL,
+        state = drag.listState,
+    ) {
         item {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 TaskSort.entries.forEachIndexed { index, option ->
@@ -86,36 +109,37 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
-        itemsIndexed(tasks, key = { _, task -> task.id }) { index, task ->
+        itemsIndexed(rows, key = { _, task -> task.id }) { index, task ->
             val ref = ItemRef(ItemType.TASK, task.id)
-            ItemCard(
-                title = task.title,
-                lines = listOfNotNull(
-                    "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
-                    task.recurrence?.let { "Repeats: ${it.describe()}" },
-                    checklistLine(checklists[task.id]),
-                    task.reminderAt?.takeIf { !task.completed && it > System.currentTimeMillis() }
-                        ?.let { "Reminder ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().display()}" },
-                ),
-                links = links[ref].orEmpty(),
-                tags = tagFilter.tagsOf(ref),
-                onClick = { onOpen(ref) },
-                done = task.completed,
-                emphasis = task.priority == Priority.CRITICAL && !task.completed,
-                leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
-                // Open and completed tasks are moved separately, as the list keeps them apart.
-                trailing = if (movable) {
-                    {
-                        MoveButtons(
-                            canMoveUp = tasks.getOrNull(index - 1)?.completed == task.completed,
-                            canMoveDown = tasks.getOrNull(index + 1)?.completed == task.completed,
-                            onMove = { viewModel.move(ItemType.TASK, task.id, it) },
-                        )
-                    }
-                } else {
-                    null
-                },
-            )
+            ReorderableItem(drag.state, key = task.id, enabled = movable && draggingCompleted.let { it == null || it == task.completed }) {
+                ItemCard(
+                    title = task.title,
+                    lines = listOfNotNull(
+                        "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
+                        task.recurrence?.let { "Repeats: ${it.describe()}" },
+                        checklistLine(checklists[task.id]),
+                        task.reminderAt?.takeIf { !task.completed && it > System.currentTimeMillis() }
+                            ?.let { "Reminder ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().display()}" },
+                    ),
+                    links = links[ref].orEmpty(),
+                    tags = tagFilter.tagsOf(ref),
+                    onClick = { onOpen(ref) },
+                    done = task.completed,
+                    emphasis = task.priority == Priority.CRITICAL && !task.completed,
+                    leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
+                    trailing = dragHandleIf(
+                        reorder = movable,
+                        canMoveUp = rows.getOrNull(index - 1)?.completed == task.completed,
+                        canMoveDown = rows.getOrNull(index + 1)?.completed == task.completed,
+                        onMove = { viewModel.move(ItemType.TASK, task.id, it) },
+                        onDragStarted = { draggingCompleted = task.completed },
+                        onDrop = {
+                            draggingCompleted = null
+                            viewModel.reorder(ItemType.TASK, drag.rows.map { it.id })
+                        },
+                    ),
+                )
+            }
         }
     }
 }
@@ -126,17 +150,23 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active) {
-        itemsIndexed(goals, key = { _, goal -> goal.id }) { index, goal ->
+    val drag = rememberDragOrder(goals, key = { it.id })
+    val rows = drag.rows
+    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active, state = drag.listState) {
+        itemsIndexed(rows, key = { _, goal -> goal.id }) { index, goal ->
             val ref = ItemRef(ItemType.GOAL, goal.id)
-            ItemCard(
-                goal.title,
-                listOfNotNull(goal.strategy.ifBlank { null }),
-                links[ref].orEmpty(),
-                { onOpen(ref) },
-                tags = tagFilter.tagsOf(ref),
-                trailing = moveButtonsIf(reorder, index, goals.size) { viewModel.move(ItemType.GOAL, goal.id, it) },
-            )
+            ReorderableItem(drag.state, key = goal.id, enabled = reorder) {
+                ItemCard(
+                    goal.title,
+                    listOfNotNull(goal.strategy.ifBlank { null }),
+                    links[ref].orEmpty(),
+                    { onOpen(ref) },
+                    tags = tagFilter.tagsOf(ref),
+                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.GOAL, goal.id, it) }) {
+                        viewModel.reorder(ItemType.GOAL, drag.rows.map { it.id })
+                    },
+                )
+            }
         }
     }
 }
@@ -147,31 +177,37 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active) {
-        itemsIndexed(habits, key = { _, summary -> summary.habit.id }) { index, summary ->
+    val drag = rememberDragOrder(habits, key = { it.habit.id })
+    val rows = drag.rows
+    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active, state = drag.listState) {
+        itemsIndexed(rows, key = { _, summary -> summary.habit.id }) { index, summary ->
             val habit = summary.habit
             val ref = ItemRef(ItemType.HABIT, habit.id)
             val positive = habit.category == HabitCategory.POSITIVE
-            ItemCard(
-                title = habit.name,
-                lines = listOf(
-                    "${habit.category.label} · ${habit.recurrence.describe()}",
-                    if (positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
-                    else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
-                ),
-                links = links[ref].orEmpty(),
-                tags = tagFilter.tagsOf(ref),
-                onClick = { onOpen(ref) },
-                trailing = moveButtonsIf(reorder, index, habits.size) { viewModel.move(ItemType.HABIT, habit.id, it) } ?: {
-                    if (summary.scheduledToday) {
-                        FilterChip(
-                            selected = summary.markedToday,
-                            onClick = { viewModel.toggleHabitToday(habit.id) },
-                            label = { Text(if (positive) "Done today" else "Missed today") },
-                        )
-                    }
-                },
-            )
+            ReorderableItem(drag.state, key = habit.id, enabled = reorder) {
+                ItemCard(
+                    title = habit.name,
+                    lines = listOf(
+                        "${habit.category.label} · ${habit.recurrence.describe()}",
+                        if (positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
+                        else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
+                    ),
+                    links = links[ref].orEmpty(),
+                    tags = tagFilter.tagsOf(ref),
+                    onClick = { onOpen(ref) },
+                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.HABIT, habit.id, it) }) {
+                        viewModel.reorder(ItemType.HABIT, drag.rows.map { it.habit.id })
+                    } ?: {
+                        if (summary.scheduledToday) {
+                            FilterChip(
+                                selected = summary.markedToday,
+                                onClick = { viewModel.toggleHabitToday(habit.id) },
+                                label = { Text(if (positive) "Done today" else "Missed today") },
+                            )
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -189,12 +225,17 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
-    // A plan moves among the shown plans with the same parent.
-    val siblings = rows.filterIsInstance<PlanTreeItem.Plan>().groupBy({ it.plan.parentId }, { it.plan.id })
+    // A plan moves among the shown plans with the same parent, taking everything under it along.
+    val drag = rememberDragOrder(rows, key = { it.key }) { list, from, to -> ManualOrder.moveBlock(list, { it.depth }, from, to) }
+    var dragging by remember { mutableStateOf<PlanEntity?>(null) }
+    // While a plan is dragged, the rows under it are hidden, so only the plan's own row moves on screen.
+    val shownRows = dragging?.let { plan -> withoutRowsUnder(drag.rows, plan.id) } ?: drag.rows
+    val siblings = shownRows.filterIsInstance<PlanTreeItem.Plan>().groupBy({ it.plan.parentId }, { it.plan.id })
     ItemList(
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
         filtered = tagFilter.active,
+        state = drag.listState,
     ) {
         if (completedCount > 0 || completedTaskCount > 0) {
             item {
@@ -216,14 +257,36 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
-        items(rows, key = { it.key }) { row ->
-            Box(Modifier.padding(start = (row.depth * 20).dp)) {
-                when (row) {
-                    is PlanTreeItem.Plan -> {
-                        val group = siblings[row.plan.parentId].orEmpty()
-                        PlanRow(row, links, tagFilter, viewModel, onOpen, if (reorder) group.indexOf(row.plan.id) to group.size else null)
+        items(shownRows, key = { it.key }) { row ->
+            // Only plans with the dragged plan's parent make way for it; task rows never move on their own.
+            val enabled = reorder && row is PlanTreeItem.Plan && dragging.let { it == null || it.parentId == row.plan.parentId }
+            ReorderableItem(drag.state, key = row.key, enabled = enabled) {
+                Box(Modifier.padding(start = (row.depth * 20).dp)) {
+                    when (row) {
+                        is PlanTreeItem.Plan -> {
+                            val group = siblings[row.plan.parentId].orEmpty()
+                            val index = group.indexOf(row.plan.id)
+                            PlanRow(
+                                row, links, tagFilter, viewModel, onOpen,
+                                dragHandle = dragHandleIf(
+                                    reorder = reorder,
+                                    canMoveUp = index > 0,
+                                    canMoveDown = index < group.lastIndex,
+                                    onMove = { viewModel.move(ItemType.PLAN, row.plan.id, it) },
+                                    onDragStarted = { dragging = row.plan },
+                                    onDrop = {
+                                        val parentId = row.plan.parentId
+                                        dragging = null
+                                        viewModel.reorder(
+                                            ItemType.PLAN,
+                                            drag.rows.filterIsInstance<PlanTreeItem.Plan>().filter { it.plan.parentId == parentId }.map { it.plan.id },
+                                        )
+                                    },
+                                ),
+                            )
+                        }
+                        is PlanTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen)
                     }
-                    is PlanTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen)
                 }
             }
         }
@@ -237,7 +300,7 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     }
 }
 
-/** @param position the plan's index among its shown siblings and their count, while reordering. */
+/** @param dragHandle shown instead of the collapse button while reordering. */
 @Composable
 private fun PlanRow(
     row: PlanTreeItem.Plan,
@@ -245,7 +308,7 @@ private fun PlanRow(
     tagFilter: TagFilter,
     viewModel: HomeViewModel,
     onOpen: (ItemRef) -> Unit,
-    position: Pair<Int, Int>?,
+    dragHandle: (@Composable () -> Unit)?,
 ) {
     val plan = row.plan
     val ref = ItemRef(ItemType.PLAN, plan.id)
@@ -268,7 +331,7 @@ private fun PlanRow(
         leading = {
             Checkbox(checked = plan.completed, onCheckedChange = { viewModel.setPlanCompleted(plan, it) })
         },
-        trailing = position?.let { (index, count) -> moveButtonsIf(true, index, count) { viewModel.move(ItemType.PLAN, plan.id, it) } } ?: {
+        trailing = dragHandle ?: {
             if (row.hasChildren) {
                 IconButton(onClick = { viewModel.setPlanCollapsed(plan.id, !row.collapsed) }) {
                     Icon(
@@ -308,17 +371,23 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    ItemList(empty = notes.isEmpty(), emptyText = "No notes yet.", filtered = tagFilter.active) {
-        itemsIndexed(notes, key = { _, note -> note.id }) { index, note ->
+    val drag = rememberDragOrder(notes, key = { it.id })
+    val rows = drag.rows
+    ItemList(empty = notes.isEmpty(), emptyText = "No notes yet.", filtered = tagFilter.active, state = drag.listState) {
+        itemsIndexed(rows, key = { _, note -> note.id }) { index, note ->
             val ref = ItemRef(ItemType.NOTE, note.id)
-            ItemCard(
-                title = note.title.ifBlank { "Untitled" },
-                lines = listOfNotNull(note.body.ifBlank { null }),
-                links = links[ref].orEmpty(),
-                tags = tagFilter.tagsOf(ref),
-                onClick = { onOpen(ref) },
-                trailing = moveButtonsIf(reorder, index, notes.size) { viewModel.move(ItemType.NOTE, note.id, it) },
-            )
+            ReorderableItem(drag.state, key = note.id, enabled = reorder) {
+                ItemCard(
+                    title = note.title.ifBlank { "Untitled" },
+                    lines = listOfNotNull(note.body.ifBlank { null }),
+                    links = links[ref].orEmpty(),
+                    tags = tagFilter.tagsOf(ref),
+                    onClick = { onOpen(ref) },
+                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.NOTE, note.id, it) }) {
+                        viewModel.reorder(ItemType.NOTE, drag.rows.map { it.id })
+                    },
+                )
+            }
         }
     }
 }
@@ -329,20 +398,26 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active) {
-        itemsIndexed(books, key = { _, item -> item.book.id }) { index, item ->
+    val drag = rememberDragOrder(books, key = { it.book.id })
+    val rows = drag.rows
+    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active, state = drag.listState) {
+        itemsIndexed(rows, key = { _, item -> item.book.id }) { index, item ->
             val ref = ItemRef(ItemType.BOOK, item.book.id)
-            ItemCard(
-                title = item.book.title,
-                lines = listOfNotNull(
-                    item.book.author.ifBlank { null },
-                    "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
-                ),
-                links = links[ref].orEmpty(),
-                tags = tagFilter.tagsOf(ref),
-                onClick = { onOpen(ref) },
-                trailing = moveButtonsIf(reorder, index, books.size) { viewModel.move(ItemType.BOOK, item.book.id, it) },
-            )
+            ReorderableItem(drag.state, key = item.book.id, enabled = reorder) {
+                ItemCard(
+                    title = item.book.title,
+                    lines = listOfNotNull(
+                        item.book.author.ifBlank { null },
+                        "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
+                    ),
+                    links = links[ref].orEmpty(),
+                    tags = tagFilter.tagsOf(ref),
+                    onClick = { onOpen(ref) },
+                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.BOOK, item.book.id, it) }) {
+                        viewModel.reorder(ItemType.BOOK, drag.rows.map { it.book.id })
+                    },
+                )
+            }
         }
     }
 }
@@ -353,26 +428,39 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active) {
-        itemsIndexed(quotes, key = { _, quote -> quote.id }) { index, quote ->
+    val drag = rememberDragOrder(quotes, key = { it.id })
+    val rows = drag.rows
+    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active, state = drag.listState) {
+        itemsIndexed(rows, key = { _, quote -> quote.id }) { index, quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
             val attribution = listOf(quote.author, quote.source).filter { it.isNotBlank() }.joinToString(", ")
-            ItemCard(
-                title = "“${quote.text}”",
-                lines = listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }),
-                links = links[ref].orEmpty(),
-                tags = tagFilter.tagsOf(ref),
-                onClick = { onOpen(ref) },
-                italicTitle = true,
-                trailing = moveButtonsIf(reorder, index, quotes.size) { viewModel.move(ItemType.QUOTE, quote.id, it) },
-            )
+            ReorderableItem(drag.state, key = quote.id, enabled = reorder) {
+                ItemCard(
+                    title = "“${quote.text}”",
+                    lines = listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }),
+                    links = links[ref].orEmpty(),
+                    tags = tagFilter.tagsOf(ref),
+                    onClick = { onOpen(ref) },
+                    italicTitle = true,
+                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {
+                        viewModel.reorder(ItemType.QUOTE, drag.rows.map { it.id })
+                    },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ItemList(empty: Boolean, emptyText: String, filtered: Boolean = false, content: LazyListScope.() -> Unit) {
+private fun ItemList(
+    empty: Boolean,
+    emptyText: String,
+    filtered: Boolean = false,
+    state: LazyListState = rememberLazyListState(),
+    content: LazyListScope.() -> Unit,
+) {
     LazyColumn(
+        state = state,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -457,26 +545,74 @@ private fun ItemCard(
     }
 }
 
-/** Up and down buttons for a row while reordering; [onMove] gets -1 for up and +1 for down. */
-@Composable
-private fun MoveButtons(canMoveUp: Boolean, canMoveDown: Boolean, onMove: (Int) -> Unit) {
-    Row {
-        IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) {
-            Icon(painterResource(R.drawable.ic_arrow_up), contentDescription = "Move up")
-        }
-        IconButton(onClick = { onMove(1) }, enabled = canMoveDown) {
-            Icon(painterResource(R.drawable.ic_arrow_down), contentDescription = "Move down")
-        }
-    }
+/**
+ * A tab's rows as they can be dragged: [rows] is a local copy of the stored rows that follows the
+ * finger during a drag, and is replaced whenever the stored rows change (after a drop is saved).
+ */
+private class DragOrder<T>(val listState: LazyListState, val state: ReorderableLazyListState, private val local: State<List<T>>) {
+    val rows: List<T> get() = local.value
 }
 
-/** [MoveButtons] for row [index] of [count] while [reorder] is on, otherwise null (the row's usual trailing content). */
-private fun moveButtonsIf(reorder: Boolean, index: Int, count: Int, onMove: (Int) -> Unit): (@Composable () -> Unit)? =
+/** [move] reorders the local rows when the dragged row passes another: from and to are indices in it. */
+@Composable
+private fun <T> rememberDragOrder(
+    items: List<T>,
+    key: (T) -> Any,
+    move: (List<T>, Int, Int) -> List<T> = { list, from, to -> list.toMutableList().apply { add(to, removeAt(from)) } },
+): DragOrder<T> {
+    val listState = rememberLazyListState()
+    val local = remember(items) { mutableStateOf(items) }
+    val state = rememberReorderableLazyListState(listState) { from, to ->
+        val list = local.value
+        val fromIndex = list.indexOfFirst { key(it) == from.key }
+        val toIndex = list.indexOfFirst { key(it) == to.key }
+        if (fromIndex >= 0 && toIndex >= 0) local.value = move(list, fromIndex, toIndex)
+    }
+    return DragOrder(listState, state, local)
+}
+
+/**
+ * While [reorder] is on, a drag handle for the row; otherwise null, so the row shows its usual
+ * trailing content. [onDrop] saves the order when a drag ends; [onMove] moves the row one place
+ * (-1 up, +1 down) for accessibility services.
+ */
+private fun ReorderableCollectionItemScope.dragHandleIf(
+    reorder: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMove: (Int) -> Unit,
+    onDragStarted: () -> Unit = {},
+    onDrop: () -> Unit,
+): (@Composable () -> Unit)? =
     if (reorder) {
-        { MoveButtons(canMoveUp = index > 0, canMoveDown = index < count - 1, onMove = onMove) }
+        {
+            DragHandle(
+                Modifier.draggableHandle(onDragStarted = { onDragStarted() }, onDragStopped = onDrop),
+                onMoveUp = if (canMoveUp) ({ onMove(-1) }) else null,
+                onMoveDown = if (canMoveDown) ({ onMove(1) }) else null,
+            )
+        }
     } else {
         null
     }
+
+/** [dragHandleIf] for row [index] of [count] in a plain list. */
+private fun ReorderableCollectionItemScope.dragHandleIf(
+    reorder: Boolean,
+    index: Int,
+    count: Int,
+    onMove: (Int) -> Unit,
+    onDrop: () -> Unit,
+): (@Composable () -> Unit)? = dragHandleIf(reorder, index > 0, index < count - 1, onMove, onDrop = onDrop)
+
+/** [rows] without the rows under plan [planId] (its tasks and subplans, at any depth). */
+private fun withoutRowsUnder(rows: List<PlanTreeItem>, planId: Long): List<PlanTreeItem> {
+    val start = rows.indexOfFirst { it is PlanTreeItem.Plan && it.plan.id == planId }
+    if (start < 0) return rows
+    var end = start + 1
+    while (end < rows.size && rows[end].depth > rows[start].depth) end++
+    return rows.subList(0, start + 1) + rows.subList(end, rows.size)
+}
 
 private fun checklistLine(count: ChecklistCount?): String? = count?.let { "Checklist ${it.done}/${it.total}" }
 

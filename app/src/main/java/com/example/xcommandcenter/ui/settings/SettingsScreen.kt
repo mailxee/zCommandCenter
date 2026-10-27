@@ -34,6 +34,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,10 +47,13 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
+import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.reminder.Notifications
 import com.example.xcommandcenter.ui.AppViewModelProvider
+import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.clearListItemColors
+import sh.calvin.reorderable.ReorderableColumn
 
 @Composable
 fun SettingsScreen(
@@ -106,26 +110,35 @@ fun SettingsScreen(
         ) {
             SectionTitle("Tab order")
             Text(
-                "Move tabs up or down. The order is saved and used on the main screen.",
+                "Drag tabs by their handle to change the order. It is saved and used on the main screen.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Card(Modifier.fillMaxWidth()) {
-                order.forEachIndexed { index, tab ->
-                    ListItem(
-                        colors = clearListItemColors(),
-                        headlineContent = { Text(tab.tabLabel) },
-                        leadingContent = { Text("${index + 1}") },
-                        trailingContent = {
-                            Row {
-                                IconButton(onClick = { viewModel.move(index, index - 1) }, enabled = index > 0) {
-                                    Icon(painterResource(R.drawable.ic_arrow_up), contentDescription = "Move ${tab.tabLabel} up")
-                                }
-                                IconButton(onClick = { viewModel.move(index, index + 1) }, enabled = index < order.lastIndex) {
-                                    Icon(painterResource(R.drawable.ic_arrow_down), contentDescription = "Move ${tab.tabLabel} down")
-                                }
-                            }
-                        },
-                    )
+                // A local copy follows the drag; it is replaced when the stored order changes.
+                var tabs by remember(order) { mutableStateOf(order) }
+                ReorderableColumn(
+                    list = tabs,
+                    onSettle = { from, to ->
+                        tabs = TabOrder.move(tabs, from, to)
+                        viewModel.move(from, to)
+                    },
+                ) { index, tab, _ ->
+                    key(tab) {
+                        ReorderableItem {
+                            ListItem(
+                                colors = clearListItemColors(),
+                                headlineContent = { Text(tab.tabLabel) },
+                                leadingContent = { Text("${index + 1}") },
+                                trailingContent = {
+                                    DragHandle(
+                                        Modifier.draggableHandle(),
+                                        onMoveUp = if (index > 0) ({ viewModel.move(index, index - 1) }) else null,
+                                        onMoveDown = if (index < tabs.lastIndex) ({ viewModel.move(index, index + 1) }) else null,
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
             }
             TextButton(onClick = viewModel::reset) { Text("Reset to default order") }

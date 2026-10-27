@@ -50,8 +50,8 @@ class SettingsViewModel(
 
     fun canScheduleExactReminders(): Boolean = reminderScheduler.canScheduleExact()
 
-    /** Suggested name for an export, e.g. "xCommandCenter-2026-10-25.xlsx". */
-    fun exportFileName(): String = "xCommandCenter-${LocalDate.now()}.xlsx"
+    /** Suggested name for an export, e.g. "ManageEverything-2026-10-25.xlsx". */
+    fun exportFileName(): String = "ManageEverything-${LocalDate.now()}.xlsx"
 
     fun export(uri: Uri) = run("Export failed") {
         val count = backup.export(uri)

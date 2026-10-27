@@ -62,7 +62,7 @@ internal object SeedData {
             "strategy" to "Three runs a week, one long run on Sundays, add 10% distance per week.")
         row("goals", "id" to 2L, "title" to "Read 24 books this year",
             "strategy" to "Twenty pages every day; always have the next book ready.")
-        row("goals", "id" to 3L, "title" to "Ship xCommandCenter v1",
+        row("goals", "id" to 3L, "title" to "Ship Manage Everything v1",
             "strategy" to "Data layer first, then screens, then polish. Weekly demo to myself.")
         row("goals", "id" to 4L, "title" to "Calm, consistent mornings",
             "strategy" to "Same wake-up time, no phone for the first hour, plan the day on paper.")
@@ -70,7 +70,7 @@ internal object SeedData {
             "strategy" to "Short daily practice plus one conversation class per week.")
 
         // Plans: two trees; one finished subplan shows completion.
-        row("plans", "id" to 1L, "title" to "xCommandCenter app", "description" to "Personal command center for Android.", "parentId" to null)
+        row("plans", "id" to 1L, "title" to "Manage Everything app", "description" to "Personal command center for Android.", "parentId" to null)
         row("plans", "id" to 2L, "title" to "Data layer", "description" to "Room entities, DAOs and repositories.", "parentId" to 1L,
             "completed" to true)
         row("plans", "id" to 3L, "title" to "UI polish", "description" to "Make every tab pleasant to use.", "parentId" to 1L)

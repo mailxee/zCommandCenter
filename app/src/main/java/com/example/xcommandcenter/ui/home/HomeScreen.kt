@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -53,7 +54,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (reorder) "Reorder" else "xCommandCenter") },
+                title = { Text(if (reorder) "Reorder" else stringResource(R.string.app_name)) },
                 actions = {
                     if (reorder) {
                         IconButton(onClick = { viewModel.setReorderMode(false) }) {
