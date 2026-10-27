@@ -560,6 +560,12 @@ so a task due on a Wednesday, every 2 weeks on Monday and Friday, comes back tha
 Monday and Friday two weeks on. It uses the weekday and `intervalDays` columns and adds an
 "Every N weeks" backup column.
 
+### 2.29 Multi-line boxes start at one line
+
+The longer text boxes (a task's, plan's or book's description, a goal's strategy, a habit's notes,
+a note's body, a quote's text) set no `minLines`, so they start one line high and grow as the text
+wraps or gains lines.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
