@@ -38,6 +38,19 @@ class RecurrenceTest {
     }
 
     @Test
+    fun `every N months keeps its day of month`() {
+        val quarterly = Recurrence.EveryNMonths(3, 31)
+        // From Jan 31: Apr 30 (April is short), then Jul 31, not Jul 30.
+        assertEquals(LocalDate.of(2026, 4, 30), quarterly.nextAfter(LocalDate.of(2026, 1, 31)))
+        assertEquals(LocalDate.of(2026, 7, 31), quarterly.nextAfter(LocalDate.of(2026, 4, 30)))
+        // A day earlier in the month than the due date falls N months later.
+        assertEquals(LocalDate.of(2027, 1, 5), Recurrence.EveryNMonths(3, 5).nextAfter(LocalDate.of(2026, 10, 20)))
+        // Longer than a year is still found.
+        assertEquals(LocalDate.of(2028, 10, 20), Recurrence.EveryNMonths(24, 20).nextAfter(LocalDate.of(2026, 10, 20)))
+        assertEquals(Recurrence.EveryNMonths(6, 15), Recurrence.of(RecurrenceType.EVERY_N_MONTHS, 0, 15, 6))
+    }
+
+    @Test
     fun `weekly with no days has no next occurrence`() {
         assertNull(Recurrence.Weekly(emptySet()).nextAfter(wednesday))
     }
