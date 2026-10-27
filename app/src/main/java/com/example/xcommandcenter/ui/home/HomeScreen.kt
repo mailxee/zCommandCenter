@@ -48,12 +48,28 @@ fun HomeScreen(
     // that order loads a moment after the first frame.
     var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = order.firstOrNull { it.name == selectedName } ?: order.first()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("xCommandCenter") },
+                title = { Text(if (reorder) "Reorder" else "xCommandCenter") },
                 actions = {
+                    if (reorder) {
+                        IconButton(onClick = { viewModel.setReorderMode(false) }) {
+                            Icon(painterResource(R.drawable.ic_check), contentDescription = "Done reordering")
+                        }
+                    } else {
+                        IconButton(
+                            onClick = {
+                                viewModel.setReorderMode(true)
+                                // Tasks can only be moved in their custom order.
+                                if (selected == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
+                            },
+                        ) {
+                            Icon(painterResource(R.drawable.ic_reorder), contentDescription = "Reorder")
+                        }
+                    }
                     IconButton(onClick = onSettings) {
                         Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings")
                     }
@@ -71,7 +87,10 @@ fun HomeScreen(
                 order.forEach { tab ->
                     Tab(
                         selected = tab == selected,
-                        onClick = { selectedName = tab.name },
+                        onClick = {
+                            selectedName = tab.name
+                            if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
+                        },
                         text = { Text(tab.tabLabel) },
                     )
                 }
@@ -81,7 +100,7 @@ fun HomeScreen(
                 ItemType.TASK -> TasksTab(viewModel, onOpen)
                 ItemType.GOAL -> GoalsTab(viewModel, onOpen)
                 ItemType.HABIT -> HabitsTab(viewModel, onOpen)
-                ItemType.PROJECT -> ProjectsTab(viewModel, onOpen)
+                ItemType.PLAN -> PlansTab(viewModel, onOpen)
                 ItemType.NOTE -> NotesTab(viewModel, onOpen)
                 ItemType.BOOK -> BooksTab(viewModel, onOpen)
                 ItemType.QUOTE -> QuotesTab(viewModel, onOpen)

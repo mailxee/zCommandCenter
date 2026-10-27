@@ -10,11 +10,24 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface QuoteDao {
-    @Query("SELECT * FROM quotes ORDER BY createdAt DESC")
+    @Query("SELECT * FROM quotes ORDER BY sortOrder, createdAt DESC")
     fun observeAll(): Flow<List<QuoteEntity>>
 
     @Query("SELECT * FROM quotes WHERE id = :id")
     suspend fun get(id: Long): QuoteEntity?
+
+    /** The sortOrder for a new item: ahead of every other one, as this tab lists newest first. */
+    @Query("SELECT COALESCE(MIN(sortOrder) - 1, 0) FROM quotes")
+    suspend fun newSortOrder(): Int
+
+    @Query("UPDATE quotes SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
+    /** Stores [ids] as the new order, first to last. */
+    @Transaction
+    suspend fun reorder(ids: List<Long>) {
+        ids.forEachIndexed { index, id -> setSortOrder(id, index) }
+    }
 
     @Insert
     suspend fun insert(quote: QuoteEntity): Long

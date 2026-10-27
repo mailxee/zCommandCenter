@@ -8,12 +8,12 @@ import androidx.datastore.preferences.preferencesDataStore
 /** The app's one preferences file; DataStore allows a single instance per file per process. */
 internal val Context.settingsStore by preferencesDataStore(name = "settings")
 
-/** Forgets every saved setting (tab order, collapsed projects); used by "Delete everything". */
+/** Forgets every saved setting (tab order, task sort, collapsed plans); used by "Delete everything". */
 suspend fun clearSettings(context: Context) {
     context.settingsStore.edit { it.clear() }
 }
 
-/** Forgets which projects are collapsed; ids from before an import may now name other projects. */
-suspend fun clearCollapsedProjects(context: Context) {
-    context.settingsStore.edit { it.remove(stringSetPreferencesKey(CollapsedProjectsRepository.KEY)) }
+/** Forgets which plans are collapsed; ids from before an import may now name other plans. */
+suspend fun clearCollapsedPlans(context: Context) {
+    context.settingsStore.edit { it.remove(stringSetPreferencesKey(CollapsedPlansRepository.KEY)) }
 }

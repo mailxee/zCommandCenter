@@ -18,7 +18,7 @@ interface BookDao {
         SELECT b.*,
             (SELECT COUNT(*) FROM chapters c WHERE c.bookId = b.id) AS chapterCount,
             (SELECT COUNT(*) FROM chapters c WHERE c.bookId = b.id AND c.internalized) AS internalizedCount
-        FROM books b ORDER BY b.title COLLATE NOCASE
+        FROM books b ORDER BY b.sortOrder, b.title COLLATE NOCASE
         """,
     )
     fun observeAllWithProgress(): Flow<List<BookWithProgress>>
@@ -28,6 +28,19 @@ interface BookDao {
 
     @Query("SELECT * FROM books WHERE id = :id")
     fun observe(id: Long): Flow<BookEntity?>
+
+    /** The sortOrder for a new item: after every other one. */
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM books")
+    suspend fun newSortOrder(): Int
+
+    @Query("UPDATE books SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
+    /** Stores [ids] as the new order, first to last. */
+    @Transaction
+    suspend fun reorder(ids: List<Long>) {
+        ids.forEachIndexed { index, id -> setSortOrder(id, index) }
+    }
 
     @Insert
     suspend fun insert(book: BookEntity): Long

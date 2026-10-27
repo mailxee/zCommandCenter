@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.example.xcommandcenter.data.dao.BackupDao
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
-import com.example.xcommandcenter.data.prefs.clearCollapsedProjects
+import com.example.xcommandcenter.data.prefs.clearCollapsedPlans
 import com.example.xcommandcenter.data.prefs.clearSettings
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.reminder.ReminderScheduler
@@ -48,7 +48,7 @@ class BackupRepository(
         val result = BackupFormat.fromSheets(sheets)
         cancelAllReminders()
         dao.replaceAll(result.data)
-        clearCollapsedProjects(context)
+        clearCollapsedPlans(context)
         tasks.rescheduleAllReminders()
         result
     }

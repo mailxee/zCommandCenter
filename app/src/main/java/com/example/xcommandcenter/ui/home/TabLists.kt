@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
+import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
@@ -43,7 +45,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.display
 import com.example.xcommandcenter.ui.common.label
-import com.example.xcommandcenter.ui.project.CompleteProjectDialog
+import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import java.time.Instant
 import java.time.ZoneId
 
@@ -54,6 +56,10 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val repeat by viewModel.repeatFilter.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val checklists by viewModel.checklistCounts.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    // Tasks can only be moved in the custom order; in the others their place follows from their fields.
+    val movable = reorder && sort == TaskSort.CUSTOM
     // Either filter can empty the list; then say so instead of "No tasks yet".
     ItemList(empty = tasks.isEmpty(), emptyText = "No tasks yet.", filtered = tagFilter.active || repeat != RepeatFilter.ALL) {
         item {
@@ -63,7 +69,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                         selected = sort == option,
                         onClick = { viewModel.setTaskSort(option) },
                         shape = SegmentedButtonDefaults.itemShape(index, TaskSort.entries.size),
-                        label = { Text("Sort: ${option.label}") },
+                        label = { Text(option.label, maxLines = 1) },
                     )
                 }
             }
@@ -80,13 +86,14 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
-        items(tasks, key = { it.id }) { task ->
+        itemsIndexed(tasks, key = { _, task -> task.id }) { index, task ->
             val ref = ItemRef(ItemType.TASK, task.id)
             ItemCard(
                 title = task.title,
                 lines = listOfNotNull(
                     "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
                     task.recurrence?.let { "Repeats: ${it.describe()}" },
+                    checklistLine(checklists[task.id]),
                     task.reminderAt?.takeIf { !task.completed && it > System.currentTimeMillis() }
                         ?.let { "Reminder ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().display()}" },
                 ),
@@ -96,6 +103,18 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 done = task.completed,
                 emphasis = task.priority == Priority.CRITICAL && !task.completed,
                 leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
+                // Open and completed tasks are moved separately, as the list keeps them apart.
+                trailing = if (movable) {
+                    {
+                        MoveButtons(
+                            canMoveUp = tasks.getOrNull(index - 1)?.completed == task.completed,
+                            canMoveDown = tasks.getOrNull(index + 1)?.completed == task.completed,
+                            onMove = { viewModel.move(ItemType.TASK, task.id, it) },
+                        )
+                    }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -106,10 +125,18 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val goals by viewModel.goals.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active) {
-        items(goals, key = { it.id }) { goal ->
+        itemsIndexed(goals, key = { _, goal -> goal.id }) { index, goal ->
             val ref = ItemRef(ItemType.GOAL, goal.id)
-            ItemCard(goal.title, listOfNotNull(goal.strategy.ifBlank { null }), links[ref].orEmpty(), { onOpen(ref) }, tags = tagFilter.tagsOf(ref))
+            ItemCard(
+                goal.title,
+                listOfNotNull(goal.strategy.ifBlank { null }),
+                links[ref].orEmpty(),
+                { onOpen(ref) },
+                tags = tagFilter.tagsOf(ref),
+                trailing = moveButtonsIf(reorder, index, goals.size) { viewModel.move(ItemType.GOAL, goal.id, it) },
+            )
         }
     }
 }
@@ -119,8 +146,9 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val habits by viewModel.habits.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active) {
-        items(habits, key = { it.habit.id }) { summary ->
+        itemsIndexed(habits, key = { _, summary -> summary.habit.id }) { index, summary ->
             val habit = summary.habit
             val ref = ItemRef(ItemType.HABIT, habit.id)
             val positive = habit.category == HabitCategory.POSITIVE
@@ -134,7 +162,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 links = links[ref].orEmpty(),
                 tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
-                trailing = {
+                trailing = moveButtonsIf(reorder, index, habits.size) { viewModel.move(ItemType.HABIT, habit.id, it) } ?: {
                     if (summary.scheduledToday) {
                         FilterChip(
                             selected = summary.markedToday,
@@ -149,19 +177,23 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
-    val rows by viewModel.projectTree.collectAsStateWithLifecycle()
+fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+    val rows by viewModel.planTree.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    val showCompleted by viewModel.showCompletedProjects.collectAsStateWithLifecycle()
-    val completedCount by viewModel.completedProjectCount.collectAsStateWithLifecycle()
-    val showCompletedTasks by viewModel.showCompletedProjectTasks.collectAsStateWithLifecycle()
-    val completedTaskCount by viewModel.completedProjectTaskCount.collectAsStateWithLifecycle()
+    val showCompleted by viewModel.showCompletedPlans.collectAsStateWithLifecycle()
+    val completedCount by viewModel.completedPlanCount.collectAsStateWithLifecycle()
+    val showCompletedTasks by viewModel.showCompletedPlanTasks.collectAsStateWithLifecycle()
+    val completedTaskCount by viewModel.completedPlanTaskCount.collectAsStateWithLifecycle()
     val blocked by viewModel.blockedCompletion.collectAsStateWithLifecycle()
+    val checklists by viewModel.checklistCounts.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
+    // A plan moves among the shown plans with the same parent.
+    val siblings = rows.filterIsInstance<PlanTreeItem.Plan>().groupBy({ it.plan.parentId }, { it.plan.id })
     ItemList(
         empty = rows.isEmpty(),
-        emptyText = if (allHidden) "All projects are completed." else "No projects yet.",
+        emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
         filtered = tagFilter.active,
     ) {
         if (completedCount > 0 || completedTaskCount > 0) {
@@ -170,14 +202,14 @@ fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     if (completedCount > 0) {
                         FilterChip(
                             selected = showCompleted,
-                            onClick = { viewModel.setShowCompletedProjects(!showCompleted) },
-                            label = { Text("Completed projects ($completedCount)") },
+                            onClick = { viewModel.setShowCompletedPlans(!showCompleted) },
+                            label = { Text("Completed plans ($completedCount)") },
                         )
                     }
                     if (completedTaskCount > 0) {
                         FilterChip(
                             selected = showCompletedTasks,
-                            onClick = { viewModel.setShowCompletedProjectTasks(!showCompletedTasks) },
+                            onClick = { viewModel.setShowCompletedPlanTasks(!showCompletedTasks) },
                             label = { Text("Completed tasks ($completedTaskCount)") },
                         )
                     }
@@ -187,53 +219,58 @@ fun ProjectsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
         items(rows, key = { it.key }) { row ->
             Box(Modifier.padding(start = (row.depth * 20).dp)) {
                 when (row) {
-                    is ProjectTreeItem.Project -> ProjectRow(row, links, tagFilter, viewModel, onOpen)
-                    is ProjectTreeItem.Task -> ProjectTaskRow(row.task, tagFilter, viewModel, onOpen)
+                    is PlanTreeItem.Plan -> {
+                        val group = siblings[row.plan.parentId].orEmpty()
+                        PlanRow(row, links, tagFilter, viewModel, onOpen, if (reorder) group.indexOf(row.plan.id) to group.size else null)
+                    }
+                    is PlanTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen)
                 }
             }
         }
     }
     blocked?.let {
-        CompleteProjectDialog(
+        CompletePlanDialog(
             blocked = it,
-            onCompleteAll = { viewModel.completeWithSubprojects(it.projectId) },
+            onCompleteAll = { viewModel.completeWithSubplans(it.planId) },
             onDismiss = viewModel::dismissBlockedCompletion,
         )
     }
 }
 
+/** @param position the plan's index among its shown siblings and their count, while reordering. */
 @Composable
-private fun ProjectRow(
-    row: ProjectTreeItem.Project,
+private fun PlanRow(
+    row: PlanTreeItem.Plan,
     links: Map<ItemRef, List<ItemIndexEntry>>,
     tagFilter: TagFilter,
     viewModel: HomeViewModel,
     onOpen: (ItemRef) -> Unit,
+    position: Pair<Int, Int>?,
 ) {
-    val project = row.project
-    val ref = ItemRef(ItemType.PROJECT, project.id)
-    // Linked tasks are rows of their own below the project, so the "Linked:" line leaves them out.
+    val plan = row.plan
+    val ref = ItemRef(ItemType.PLAN, plan.id)
+    // Linked tasks are rows of their own below the plan, so the "Linked:" line leaves them out.
     val otherLinks = links[ref].orEmpty().filter { it.type != ItemType.TASK }
     val hidden = listOfNotNull(
-        row.subprojectCount.takeIf { it > 0 }?.let { if (it == 1) "1 subproject" else "$it subprojects" },
+        row.subplanCount.takeIf { it > 0 }?.let { if (it == 1) "1 subplan" else "$it subplans" },
         row.taskCount.takeIf { it > 0 }?.let { if (it == 1) "1 task" else "$it tasks" },
     )
     ItemCard(
-        title = project.title,
+        title = plan.title,
         lines = listOfNotNull(
-            project.description.ifBlank { null },
+            plan.description.ifBlank { null },
             hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden"),
         ),
         links = otherLinks,
         tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
-        done = project.completed,
+        done = plan.completed,
         leading = {
-            Checkbox(checked = project.completed, onCheckedChange = { viewModel.setProjectCompleted(project, it) })
+            Checkbox(checked = plan.completed, onCheckedChange = { viewModel.setPlanCompleted(plan, it) })
         },
-        trailing = {
+        trailing = position?.let { (index, count) -> moveButtonsIf(true, index, count) { viewModel.move(ItemType.PLAN, plan.id, it) } } ?: {
             if (row.hasChildren) {
-                IconButton(onClick = { viewModel.setProjectCollapsed(project.id, !row.collapsed) }) {
+                IconButton(onClick = { viewModel.setPlanCollapsed(plan.id, !row.collapsed) }) {
                     Icon(
                         painterResource(if (row.collapsed) R.drawable.ic_expand_more else R.drawable.ic_expand_less),
                         contentDescription = if (row.collapsed) "Expand" else "Collapse",
@@ -244,15 +281,16 @@ private fun ProjectRow(
     )
 }
 
-/** A task linked to the project above it; outlined so it reads differently from a project. */
+/** A task linked to the plan above it; outlined so it reads differently from a plan. */
 @Composable
-private fun ProjectTaskRow(task: TaskEntity, tagFilter: TagFilter, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: ChecklistCount?, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val ref = ItemRef(ItemType.TASK, task.id)
     ItemCard(
         title = task.title,
         lines = listOfNotNull(
             "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
             task.recurrence?.let { "Repeats: ${it.describe()}" },
+            checklistLine(checklist),
         ),
         links = emptyList(),
         tags = tagFilter.tagsOf(ref),
@@ -269,8 +307,9 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     ItemList(empty = notes.isEmpty(), emptyText = "No notes yet.", filtered = tagFilter.active) {
-        items(notes, key = { it.id }) { note ->
+        itemsIndexed(notes, key = { _, note -> note.id }) { index, note ->
             val ref = ItemRef(ItemType.NOTE, note.id)
             ItemCard(
                 title = note.title.ifBlank { "Untitled" },
@@ -278,6 +317,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 links = links[ref].orEmpty(),
                 tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
+                trailing = moveButtonsIf(reorder, index, notes.size) { viewModel.move(ItemType.NOTE, note.id, it) },
             )
         }
     }
@@ -288,8 +328,9 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val books by viewModel.books.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active) {
-        items(books, key = { it.book.id }) { item ->
+        itemsIndexed(books, key = { _, item -> item.book.id }) { index, item ->
             val ref = ItemRef(ItemType.BOOK, item.book.id)
             ItemCard(
                 title = item.book.title,
@@ -300,6 +341,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 links = links[ref].orEmpty(),
                 tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
+                trailing = moveButtonsIf(reorder, index, books.size) { viewModel.move(ItemType.BOOK, item.book.id, it) },
             )
         }
     }
@@ -310,8 +352,9 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val quotes by viewModel.quotes.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active) {
-        items(quotes, key = { it.id }) { quote ->
+        itemsIndexed(quotes, key = { _, quote -> quote.id }) { index, quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
             val attribution = listOf(quote.author, quote.source).filter { it.isNotBlank() }.joinToString(", ")
             ItemCard(
@@ -321,6 +364,7 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 tags = tagFilter.tagsOf(ref),
                 onClick = { onOpen(ref) },
                 italicTitle = true,
+                trailing = moveButtonsIf(reorder, index, quotes.size) { viewModel.move(ItemType.QUOTE, quote.id, it) },
             )
         }
     }
@@ -412,6 +456,29 @@ private fun ItemCard(
         Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
+
+/** Up and down buttons for a row while reordering; [onMove] gets -1 for up and +1 for down. */
+@Composable
+private fun MoveButtons(canMoveUp: Boolean, canMoveDown: Boolean, onMove: (Int) -> Unit) {
+    Row {
+        IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) {
+            Icon(painterResource(R.drawable.ic_arrow_up), contentDescription = "Move up")
+        }
+        IconButton(onClick = { onMove(1) }, enabled = canMoveDown) {
+            Icon(painterResource(R.drawable.ic_arrow_down), contentDescription = "Move down")
+        }
+    }
+}
+
+/** [MoveButtons] for row [index] of [count] while [reorder] is on, otherwise null (the row's usual trailing content). */
+private fun moveButtonsIf(reorder: Boolean, index: Int, count: Int, onMove: (Int) -> Unit): (@Composable () -> Unit)? =
+    if (reorder) {
+        { MoveButtons(canMoveUp = index > 0, canMoveDown = index < count - 1, onMove = onMove) }
+    } else {
+        null
+    }
+
+private fun checklistLine(count: ChecklistCount?): String? = count?.let { "Checklist ${it.done}/${it.total}" }
 
 fun times(count: Int): String = if (count == 1) "once" else "$count times"
 

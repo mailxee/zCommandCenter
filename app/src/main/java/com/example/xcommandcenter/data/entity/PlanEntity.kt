@@ -6,12 +6,12 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/** Projects form a tree through [parentId]; null means a top-level project. */
+/** Plans form a tree through [parentId]; null means a top-level plan. [sortOrder] orders siblings. */
 @Entity(
-    tableName = "projects",
+    tableName = "plans",
     foreignKeys = [
         ForeignKey(
-            entity = ProjectEntity::class,
+            entity = PlanEntity::class,
             parentColumns = ["id"],
             childColumns = ["parentId"],
             onDelete = ForeignKey.SET_NULL,
@@ -19,12 +19,14 @@ import androidx.room.PrimaryKey
     ],
     indices = [Index("parentId")],
 )
-data class ProjectEntity(
+data class PlanEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val description: String = "",
     val parentId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    /** Only true when every project below this one is completed too (enforced by [com.example.xcommandcenter.data.dao.ProjectDao]). */
+    /** Only true when every plan below this one is completed too (enforced by [com.example.xcommandcenter.data.dao.PlanDao]). */
     @ColumnInfo(defaultValue = "0") val completed: Boolean = false,
+    /** Position in the tab's list, lowest first; ties keep the tab's default order. Set by reordering. */
+    @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
 )

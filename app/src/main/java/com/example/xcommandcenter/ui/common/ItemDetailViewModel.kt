@@ -26,7 +26,8 @@ import kotlinx.coroutines.launch
 /**
  * Shared behavior of every detail screen: which item is shown, its linked items and tags, linking
  * and tagging, and one-shot messages. An id of 0 means "new item, not saved yet"; links can be
- * added once it has been saved and has a real id.
+ * added once it has been saved and has a real id. Saving closes the screen, back to where it was
+ * opened from.
  */
 abstract class ItemDetailViewModel(
     private val savedStateHandle: SavedStateHandle,
@@ -65,7 +66,7 @@ abstract class ItemDetailViewModel(
     var message by mutableStateOf<String?>(null)
         protected set
 
-    /** Set after a delete (or when the item no longer exists); the screen then navigates back. */
+    /** Set after a save or a delete (or when the item no longer exists); the screen then navigates back. */
     var closed by mutableStateOf(false)
         protected set
 
@@ -84,11 +85,11 @@ abstract class ItemDetailViewModel(
         viewModelScope.launch { links.unlink(ref, target) }
     }
 
-    protected fun onSaved(id: Long, note: String = "Saved") {
+    protected fun onSaved(id: Long) {
         _itemId.value = id
-        // A new item now exists; if the process dies, the restored screen must reopen it, not a blank form.
+        // A new item now exists; if the process dies before the screen closes, the restored screen must reopen it, not a blank form.
         savedStateHandle[Routes.ARG_ID] = id
-        message = note
+        closed = true
     }
 
     protected fun onMissing() {

@@ -10,7 +10,7 @@ enum class ItemType(val tabLabel: String, val singular: String, val isTab: Boole
     TASK("Tasks", "Task"),
     GOAL("Goals", "Goal"),
     HABIT("Habits", "Habit"),
-    PROJECT("Projects", "Project"),
+    PLAN("Plans", "Plan"),
     NOTE("Notes", "Note"),
     BOOK("Books", "Book"),
     QUOTE("Quotes", "Quote"),

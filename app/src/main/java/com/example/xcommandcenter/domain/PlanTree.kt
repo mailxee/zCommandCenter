@@ -1,7 +1,7 @@
 package com.example.xcommandcenter.domain
 
 /** Tree helpers over any list of nodes that know their own id and their parent's id. */
-object ProjectTree {
+object PlanTree {
 
     data class Row<T>(val node: T, val depth: Int)
 

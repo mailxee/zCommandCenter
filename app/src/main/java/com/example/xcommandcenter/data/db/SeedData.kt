@@ -13,7 +13,7 @@ import com.example.xcommandcenter.domain.ItemType.CHAPTER
 import com.example.xcommandcenter.domain.ItemType.GOAL
 import com.example.xcommandcenter.domain.ItemType.HABIT
 import com.example.xcommandcenter.domain.ItemType.NOTE
-import com.example.xcommandcenter.domain.ItemType.PROJECT
+import com.example.xcommandcenter.domain.ItemType.PLAN
 import com.example.xcommandcenter.domain.ItemType.QUOTE
 import com.example.xcommandcenter.domain.ItemType.TASK
 import com.example.xcommandcenter.domain.Priority
@@ -69,13 +69,13 @@ internal object SeedData {
         row("goals", "id" to 5L, "title" to "Spanish to B1 level",
             "strategy" to "Short daily practice plus one conversation class per week.")
 
-        // Projects: two trees; one finished subproject shows completion.
-        row("projects", "id" to 1L, "title" to "xCommandCenter app", "description" to "Personal command center for Android.", "parentId" to null)
-        row("projects", "id" to 2L, "title" to "Data layer", "description" to "Room entities, DAOs and repositories.", "parentId" to 1L,
+        // Plans: two trees; one finished subplan shows completion.
+        row("plans", "id" to 1L, "title" to "xCommandCenter app", "description" to "Personal command center for Android.", "parentId" to null)
+        row("plans", "id" to 2L, "title" to "Data layer", "description" to "Room entities, DAOs and repositories.", "parentId" to 1L,
             "completed" to true)
-        row("projects", "id" to 3L, "title" to "UI polish", "description" to "Make every tab pleasant to use.", "parentId" to 1L)
-        row("projects", "id" to 4L, "title" to "Home renovation", "description" to "Small improvements around the flat.", "parentId" to null)
-        row("projects", "id" to 5L, "title" to "Paint the bedroom", "description" to "Pick a color, buy paint, paint on a weekend.", "parentId" to 4L)
+        row("plans", "id" to 3L, "title" to "UI polish", "description" to "Make every tab pleasant to use.", "parentId" to 1L)
+        row("plans", "id" to 4L, "title" to "Home renovation", "description" to "Small improvements around the flat.", "parentId" to null)
+        row("plans", "id" to 5L, "title" to "Paint the bedroom", "description" to "Pick a color, buy paint, paint on a weekend.", "parentId" to 4L)
 
         // Tasks
         val reminder = today.plusDays(1).atTime(LocalTime.of(9, 0)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -102,7 +102,7 @@ internal object SeedData {
                 Recurrence.Weekly(setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)), "Easy pace, 5 km."),
             SeedHabit(2, "Read 20 pages", HabitCategory.POSITIVE, Recurrence.Daily, "Before bed, paper book."),
             SeedHabit(3, "Floss", HabitCategory.NEGATIVE, Recurrence.Daily, "Almost automatic; only mark the nights I skip."),
-            SeedHabit(4, "Monthly review", HabitCategory.POSITIVE, Recurrence.Monthly(1), "Review goals and projects on the 1st."),
+            SeedHabit(4, "Monthly review", HabitCategory.POSITIVE, Recurrence.Monthly(1), "Review goals and plans on the 1st."),
             SeedHabit(5, "Spanish practice", HabitCategory.NEGATIVE, Recurrence.EveryNDays(2), "Mark only the sessions I miss."),
         )
         for (habit in habits) {
@@ -169,23 +169,23 @@ internal object SeedData {
 
         // Links. Chapter 3 is "How to Build Better Habits in 4 Simple Steps".
         listOf(
-            TASK to 1L to (PROJECT to 2L),
-            TASK to 2L to (PROJECT to 3L),
+            TASK to 1L to (PLAN to 2L),
+            TASK to 2L to (PLAN to 3L),
             TASK to 3L to (BOOK to 1L),
             TASK to 3L to (CHAPTER to 3L),
-            TASK to 4L to (PROJECT to 5L),
+            TASK to 4L to (PLAN to 5L),
             TASK to 5L to (GOAL to 1L),
             HABIT to 1L to (GOAL to 1L),
             HABIT to 2L to (GOAL to 2L),
             HABIT to 3L to (NOTE to 2L),
             HABIT to 4L to (GOAL to 4L),
             HABIT to 5L to (GOAL to 5L),
-            PROJECT to 1L to (GOAL to 3L),
-            NOTE to 1L to (PROJECT to 1L),
+            PLAN to 1L to (GOAL to 3L),
+            NOTE to 1L to (PLAN to 1L),
             NOTE to 1L to (NOTE to 2L),
             NOTE to 3L to (GOAL to 1L),
             NOTE to 3L to (BOOK to 4L),
-            NOTE to 4L to (PROJECT to 5L),
+            NOTE to 4L to (PLAN to 5L),
             NOTE to 5L to (BOOK to 2L),
             BOOK to 2L to (GOAL to 2L),
             QUOTE to 1L to (BOOK to 1L),
@@ -194,9 +194,9 @@ internal object SeedData {
             QUOTE to 2L to (NOTE to 5L),
             QUOTE to 3L to (BOOK to 5L),
             QUOTE to 4L to (BOOK to 3L),
-            QUOTE to 4L to (PROJECT to 1L),
-            QUOTE to 5L to (PROJECT to 1L),
-            TASK to 6L to (PROJECT to 4L),
+            QUOTE to 4L to (PLAN to 1L),
+            QUOTE to 5L to (PLAN to 1L),
+            TASK to 6L to (PLAN to 4L),
         ).forEach { (from, to) -> link(db, from, to, created()) }
 
         // Tags (no createdAt column, so not through row()).
@@ -204,8 +204,8 @@ internal object SeedData {
             db.insert("tags", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply { put("id", id); put("name", name) })
         }
         listOf(
-            TASK to 1L to 1L, TASK to 2L to 1L, PROJECT to 1L to 1L, GOAL to 3L to 1L,
-            TASK to 4L to 2L, TASK to 6L to 2L, PROJECT to 4L to 2L, PROJECT to 5L to 2L,
+            TASK to 1L to 1L, TASK to 2L to 1L, PLAN to 1L to 1L, GOAL to 3L to 1L,
+            TASK to 4L to 2L, TASK to 6L to 2L, PLAN to 4L to 2L, PLAN to 5L to 2L,
             TASK to 5L to 3L, HABIT to 1L to 3L, GOAL to 1L to 3L,
             TASK to 3L to 4L, BOOK to 1L to 4L, BOOK to 2L to 4L, HABIT to 2L to 4L, GOAL to 2L to 4L,
         ).forEach { (item, tagId) ->

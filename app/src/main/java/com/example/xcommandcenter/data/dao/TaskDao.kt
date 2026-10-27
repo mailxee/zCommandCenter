@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.example.xcommandcenter.data.entity.ChecklistCount
+import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
@@ -29,6 +31,19 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE completed = 0 AND reminderAt > :now")
     suspend fun pendingReminders(now: Long): List<TaskEntity>
+
+    /** The sortOrder for a new item: after every other one. */
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM tasks")
+    suspend fun newSortOrder(): Int
+
+    @Query("UPDATE tasks SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
+    /** Stores [ids] as the new order, first to last. */
+    @Transaction
+    suspend fun reorder(ids: List<Long>) {
+        ids.forEachIndexed { index, id -> setSortOrder(id, index) }
+    }
 
     @Insert
     suspend fun insert(task: TaskEntity): Long
@@ -60,10 +75,30 @@ interface TaskDao {
     @Query("DELETE FROM item_tags WHERE type = 'TASK' AND itemId = :id")
     suspend fun deleteTags(id: Long)
 
+    @Query("SELECT * FROM checklist_items WHERE taskId = :taskId ORDER BY position")
+    suspend fun checklist(taskId: Long): List<ChecklistItemEntity>
+
+    @Query("SELECT taskId, COUNT(*) AS total, SUM(done) AS done FROM checklist_items GROUP BY taskId")
+    fun observeChecklistCounts(): Flow<List<ChecklistCount>>
+
+    @Insert
+    suspend fun insertChecklist(items: List<ChecklistItemEntity>)
+
+    @Query("DELETE FROM checklist_items WHERE taskId = :taskId")
+    suspend fun deleteChecklist(taskId: Long)
+
+    /** Makes [items] the task's whole checklist, numbered 0..n-1 in the given order. */
+    @Transaction
+    suspend fun replaceChecklist(taskId: Long, items: List<ChecklistItemEntity>) {
+        deleteChecklist(taskId)
+        insertChecklist(items.mapIndexed { index, item -> item.copy(id = 0, taskId = taskId, position = index) })
+    }
+
     /**
      * Marks the task completed. A repeating task also gets its next occurrence, once: a copy due
      * on the next scheduled date after this one's due date (today if it has none), with the
-     * reminder moved by the same number of days, and the same links and tags. The completed
+     * reminder moved by the same number of days, the same links and tags, and the same checklist
+     * with every item unticked. The completed
      * task stays as history. Returns the new task's id, or null if none was created.
      */
     @Transaction
@@ -90,9 +125,11 @@ interface TaskDao {
             },
         )
         copyTags(id, newId)
+        insertChecklist(checklist(id).map { it.copy(id = 0, taskId = newId, done = false) })
         return newId
     }
 
+    /** The checklist goes with the task through the foreign key's ON DELETE CASCADE. */
     @Transaction
     suspend fun delete(id: Long) {
         deleteLinks(id)

@@ -3,14 +3,15 @@ package com.example.xcommandcenter
 import android.content.Context
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
-import com.example.xcommandcenter.data.prefs.CollapsedProjectsRepository
+import com.example.xcommandcenter.data.prefs.CollapsedPlansRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
+import com.example.xcommandcenter.data.prefs.TaskSortRepository
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
-import com.example.xcommandcenter.data.repository.ProjectRepository
+import com.example.xcommandcenter.data.repository.PlanRepository
 import com.example.xcommandcenter.data.repository.QuoteRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
@@ -27,13 +28,14 @@ class AppContainer(context: Context) {
 
     val reminderScheduler = ReminderScheduler(context)
     val tabOrderRepository = TabOrderRepository(context)
-    val collapsedProjectsRepository = CollapsedProjectsRepository(context)
+    val taskSortRepository = TaskSortRepository(context)
+    val collapsedPlansRepository = CollapsedPlansRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
     val tagRepository = TagRepository(database.tagDao())
     val taskRepository = TaskRepository(database.taskDao(), reminderScheduler)
     val goalRepository = GoalRepository(database.goalDao())
     val habitRepository = HabitRepository(database.habitDao())
-    val projectRepository = ProjectRepository(database.projectDao())
+    val planRepository = PlanRepository(database.planDao())
     val noteRepository = NoteRepository(database.noteDao())
     val bookRepository = BookRepository(database.bookDao())
     val quoteRepository = QuoteRepository(database.quoteDao())

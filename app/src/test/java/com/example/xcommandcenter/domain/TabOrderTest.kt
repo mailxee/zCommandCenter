@@ -12,7 +12,7 @@ class TabOrderTest {
     @Test
     fun `default order ends with Quotes`() {
         assertEquals(
-            listOf(ItemType.TASK, ItemType.GOAL, ItemType.HABIT, ItemType.PROJECT, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE),
+            listOf(ItemType.TASK, ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE),
             TabOrder.default,
         )
     }

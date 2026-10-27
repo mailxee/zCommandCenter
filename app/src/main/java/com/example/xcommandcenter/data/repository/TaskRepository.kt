@@ -1,9 +1,12 @@
 package com.example.xcommandcenter.data.repository
 
 import com.example.xcommandcenter.data.dao.TaskDao
+import com.example.xcommandcenter.data.entity.ChecklistCount
+import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.reminder.ReminderScheduler
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /** Owns tasks and keeps their alarms in step with what is stored. */
 class TaskRepository(
@@ -14,16 +17,30 @@ class TaskRepository(
 
     suspend fun get(id: Long): TaskEntity? = dao.get(id)
 
+    suspend fun checklist(taskId: Long): List<ChecklistItemEntity> = dao.checklist(taskId)
+
+    /** Checklist progress per task id. */
+    fun observeChecklistCounts(): Flow<Map<Long, ChecklistCount>> =
+        dao.observeChecklistCounts().map { counts -> counts.associateBy { it.taskId } }
+
+    suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
+
     /**
-     * Inserts when [TaskEntity.id] is 0, otherwise updates. A change to `completed` goes through
-     * [setCompleted], so completing a repeating task from its form also creates the next one.
-     * Returns the task's id.
+     * Inserts when [TaskEntity.id] is 0, otherwise updates, and stores [checklist] as the task's
+     * checklist. A change to `completed` goes through [setCompleted], so completing a repeating
+     * task from its form also creates the next one (after the checklist is written, so the next
+     * one gets a copy). Returns the task's id.
      */
-    suspend fun save(task: TaskEntity): Long {
+    suspend fun save(task: TaskEntity, checklist: List<ChecklistItemEntity>): Long {
         val stored = if (task.id == 0L) null else dao.get(task.id)
         val wasCompleted = stored?.completed ?: false
-        val toWrite = task.copy(completed = wasCompleted, nextCreated = stored?.nextCreated ?: false)
+        val toWrite = task.copy(
+            completed = wasCompleted,
+            nextCreated = stored?.nextCreated ?: false,
+            sortOrder = stored?.sortOrder ?: dao.newSortOrder(),
+        )
         val id = if (task.id == 0L) dao.insert(toWrite) else task.id.also { dao.update(toWrite) }
+        dao.replaceChecklist(id, checklist)
         if (task.completed != wasCompleted) setCompleted(id, task.completed) else dao.get(id)?.let(::syncReminder)
         return id
     }

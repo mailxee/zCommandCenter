@@ -1,13 +1,13 @@
-package com.example.xcommandcenter.ui.project
+package com.example.xcommandcenter.ui.plan
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.example.xcommandcenter.data.entity.ProjectEntity
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
-import com.example.xcommandcenter.data.repository.ProjectRepository
+import com.example.xcommandcenter.data.repository.PlanRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
@@ -17,37 +17,37 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class ProjectDetailViewModel(
+class PlanDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    private val repository: ProjectRepository,
+    private val repository: PlanRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.PROJECT, links, tags) {
+) : ItemDetailViewModel(savedStateHandle, ItemType.PLAN, links, tags) {
 
-    var project by mutableStateOf(
-        ProjectEntity(title = "", parentId = savedStateHandle.get<Long>(Routes.ARG_PARENT)?.takeIf { it != 0L }),
+    var plan by mutableStateOf(
+        PlanEntity(title = "", parentId = savedStateHandle.get<Long>(Routes.ARG_PARENT)?.takeIf { it != 0L }),
     )
         private set
 
-    /** All projects, for the parent picker and the children list. */
-    val allProjects: StateFlow<List<ProjectEntity>> = repository.observeAll()
+    /** All plans, for the parent picker and the children list. */
+    val allPlans: StateFlow<List<PlanEntity>> = repository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         val id = itemId.value
-        if (id != 0L) viewModelScope.launch { project = repository.get(id) ?: return@launch onMissing() }
+        if (id != 0L) viewModelScope.launch { plan = repository.get(id) ?: return@launch onMissing() }
     }
 
-    fun update(transform: (ProjectEntity) -> ProjectEntity) {
-        project = transform(project)
+    fun update(transform: (PlanEntity) -> PlanEntity) {
+        plan = transform(plan)
     }
 
     fun save() {
-        if (project.title.isBlank()) {
+        if (plan.title.isBlank()) {
             message = "A title is required"
             return
         }
-        val toSave = project.copy(id = itemId.value, title = project.title.trim())
+        val toSave = plan.copy(id = itemId.value, title = plan.title.trim())
         viewModelScope.launch {
             try {
                 onSaved(repository.save(toSave))
@@ -57,7 +57,7 @@ class ProjectDetailViewModel(
         }
     }
 
-    /** Set when ticking "Completed" was refused because of open subprojects. */
+    /** Set when ticking "Completed" was refused because of open subplans. */
     var blockedCompletion by mutableStateOf<BlockedCompletion?>(null)
         private set
 
@@ -67,17 +67,17 @@ class ProjectDetailViewModel(
         viewModelScope.launch {
             if (completed) {
                 val open = repository.complete(id)
-                if (open > 0) blockedCompletion = BlockedCompletion(id, project.title, open)
+                if (open > 0) blockedCompletion = BlockedCompletion(id, plan.title, open)
             } else {
                 repository.reopen(id)
             }
         }
     }
 
-    fun completeWithSubprojects() {
-        val id = blockedCompletion?.projectId ?: return
+    fun completeWithSubplans() {
+        val id = blockedCompletion?.planId ?: return
         blockedCompletion = null
-        viewModelScope.launch { repository.completeWithSubprojects(id) }
+        viewModelScope.launch { repository.completeWithSubplans(id) }
     }
 
     fun dismissBlockedCompletion() {

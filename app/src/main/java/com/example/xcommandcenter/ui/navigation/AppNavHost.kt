@@ -16,7 +16,7 @@ import com.example.xcommandcenter.ui.goal.GoalDetailScreen
 import com.example.xcommandcenter.ui.habit.HabitDetailScreen
 import com.example.xcommandcenter.ui.home.HomeScreen
 import com.example.xcommandcenter.ui.note.NoteDetailScreen
-import com.example.xcommandcenter.ui.project.ProjectDetailScreen
+import com.example.xcommandcenter.ui.plan.PlanDetailScreen
 import com.example.xcommandcenter.ui.quote.QuoteDetailScreen
 import com.example.xcommandcenter.ui.settings.SettingsScreen
 import com.example.xcommandcenter.ui.task.TaskDetailScreen
@@ -64,10 +64,10 @@ fun AppNavHost(
                 ItemType.TASK -> TaskDetailScreen(onBack = back, onOpen = open)
                 ItemType.GOAL -> GoalDetailScreen(onBack = back, onOpen = open)
                 ItemType.HABIT -> HabitDetailScreen(onBack = back, onOpen = open)
-                ItemType.PROJECT -> ProjectDetailScreen(
+                ItemType.PLAN -> PlanDetailScreen(
                     onBack = back,
                     onOpen = open,
-                    onCreateChild = { parentId -> navController.navigate(Routes.newItem(ItemType.PROJECT, parentId)) },
+                    onCreateChild = { parentId -> navController.navigate(Routes.newItem(ItemType.PLAN, parentId)) },
                 )
                 ItemType.NOTE -> NoteDetailScreen(onBack = back, onOpen = open)
                 ItemType.BOOK -> BookDetailScreen(onBack = back, onOpen = open)

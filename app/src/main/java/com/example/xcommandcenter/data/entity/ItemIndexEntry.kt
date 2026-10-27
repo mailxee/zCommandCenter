@@ -17,7 +17,7 @@ import com.example.xcommandcenter.domain.ItemType
         SELECT 'TASK' AS type, id, title, NULL AS subtitle FROM tasks
         UNION ALL SELECT 'GOAL', id, title, NULL FROM goals
         UNION ALL SELECT 'HABIT', id, name, NULL FROM habits
-        UNION ALL SELECT 'PROJECT', id, title, NULL FROM projects
+        UNION ALL SELECT 'PLAN', id, title, NULL FROM plans
         UNION ALL SELECT 'NOTE', id,
             CASE WHEN TRIM(title) <> '' THEN title ELSE REPLACE(SUBSTR(body, 1, 80), CHAR(10), ' ') END,
             NULL FROM notes

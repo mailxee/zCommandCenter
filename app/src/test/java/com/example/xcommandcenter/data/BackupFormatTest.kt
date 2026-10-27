@@ -6,13 +6,14 @@ import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.backup.Sheet
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
+import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
-import com.example.xcommandcenter.data.entity.ProjectEntity
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
@@ -40,20 +41,24 @@ class BackupFormatTest {
     private val data = BackupData(
         tasks = listOf(
             TaskEntity(1, "Water plants", "Balcony", LocalDate.of(2026, 10, 31), created + 3_600_000, Priority.LOW, false, created,
-                RecurrenceType.WEEKLY, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)), 1, 2, false),
+                RecurrenceType.WEEKLY, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)), 1, 2, false, sortOrder = 3),
             TaskEntity(2, "File taxes", priority = Priority.CRITICAL, completed = true, createdAt = created),
         ),
         goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created)),
         habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created)),
         habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1))),
-        projects = listOf(ProjectEntity(2, "Child", parentId = 1, completed = true, createdAt = created), ProjectEntity(1, "Parent", completed = true, createdAt = created)),
-        notes = listOf(NoteEntity(1, "", "Body only", created)),
+        plans = listOf(PlanEntity(2, "Child", parentId = 1, completed = true, createdAt = created), PlanEntity(1, "Parent", completed = true, createdAt = created)),
+        notes = listOf(NoteEntity(1, "", "Body only", created, sortOrder = -2)),
         books = listOf(BookEntity(1, "Atomic Habits", "James Clear", "", created)),
         chapters = listOf(ChapterEntity(5, 1, 0, "The surprising power", 2, true, created)),
         quotes = listOf(QuoteEntity(1, "Done is better than perfect.", createdAt = created)),
-        links = listOf(LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PROJECT, 2)).copy(createdAt = created)),
+        links = listOf(LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PLAN, 2)).copy(createdAt = created)),
         tags = listOf(TagEntity(7, "Home")),
         itemTags = listOf(ItemTagEntity(ItemType.TASK, 1, 7), ItemTagEntity(ItemType.CHAPTER, 5, 7)),
+        checklistItems = listOf(
+            ChecklistItemEntity(taskId = 1, position = 0, text = "Basil", done = true),
+            ChecklistItemEntity(taskId = 1, position = 1, text = "Tomatoes"),
+        ),
     )
 
     @Test
@@ -64,8 +69,8 @@ class BackupFormatTest {
         assertEquals(data.habits, back.habits)
         assertEquals(data.habitMarks, back.habitMarks)
         // Parents come first on import, so the foreign key is satisfied.
-        assertEquals(listOf(1L, 2L), back.projects.map { it.id })
-        assertEquals(data.projects.sortedBy { it.id }, back.projects)
+        assertEquals(listOf(1L, 2L), back.plans.map { it.id })
+        assertEquals(data.plans.sortedBy { it.id }, back.plans)
         assertEquals(data.notes, back.notes)
         assertEquals(data.books, back.books)
         assertEquals(data.chapters, back.chapters)
@@ -73,13 +78,24 @@ class BackupFormatTest {
         assertEquals(data.links.map { it.copy(id = 0) }, back.links)
         assertEquals(listOf("Home"), back.tags.map { it.name })
         assertEquals(setOf(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.CHAPTER, 5)), back.itemTags.map { ItemRef(it.type, it.itemId) }.toSet())
+        assertEquals(data.checklistItems, back.checklistItems)
+    }
+
+    @Test
+    fun `checklist items of a missing task are skipped`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { sheet ->
+            if (sheet.name == "Checklists") sheet.copy(rows = sheet.rows + listOf(listOf("99", "", "1", "Orphan"))) else sheet
+        }
+        val result = BackupFormat.fromSheets(sheets, zone)
+        assertEquals(1, result.skipped)
+        assertEquals(2, result.data.checklistItems.size)
     }
 
     @Test
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Chapters", "Habit history", "Links", "Tags"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Chapters", "Habit history", "Links", "Tags"), names)
     }
 
     @Test
@@ -119,11 +135,11 @@ class BackupFormatTest {
     }
 
     @Test
-    fun `a completed project with an open child is reopened`() {
-        val sheets = BackupFormat.toSheets(data.copy(projects = listOf(ProjectEntity(1, "Parent", completed = true), ProjectEntity(2, "Child", parentId = 1))), TabOrder.default, zone)
-        val projects = BackupFormat.fromSheets(sheets, zone).data.projects
-        assertFalse(projects.first { it.id == 1L }.completed)
-        assertNull(projects.first { it.id == 1L }.parentId)
+    fun `a completed plan with an open child is reopened`() {
+        val sheets = BackupFormat.toSheets(data.copy(plans = listOf(PlanEntity(1, "Parent", completed = true), PlanEntity(2, "Child", parentId = 1))), TabOrder.default, zone)
+        val plans = BackupFormat.fromSheets(sheets, zone).data.plans
+        assertFalse(plans.first { it.id == 1L }.completed)
+        assertNull(plans.first { it.id == 1L }.parentId)
     }
 
     @Test(expected = ImportException::class)
