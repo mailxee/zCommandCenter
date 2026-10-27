@@ -73,6 +73,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val showCompleted by viewModel.showCompletedTasks.collectAsStateWithLifecycle()
     val completedCount by viewModel.completedTaskCount.collectAsStateWithLifecycle()
+    val priorityView = viewModel.priorityView(ItemType.TASK)
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     // Tasks can only be moved in the custom order; in the others their place follows from their fields.
     val movable = reorder && sort == TaskSort.CUSTOM
@@ -85,7 +86,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(
         empty = tasks.isEmpty(),
         emptyText = "No tasks yet.",
-        filtered = tagFilter.active || repeat != RepeatFilter.ALL || (!showCompleted && completedCount > 0),
+        filtered = tagFilter.active || repeat != RepeatFilter.ALL || priorityView.filtered || (!showCompleted && completedCount > 0),
         state = drag.listState,
     ) {
         item {
@@ -112,6 +113,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
+        priorityFilterChips(ItemType.TASK, priorityView, viewModel)
         if (completedCount > 0) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -509,6 +511,11 @@ private fun LazyListScope.priorityControls(tab: ItemType, view: PriorityView, vi
             }
         }
     }
+    priorityFilterChips(tab, view, viewModel)
+}
+
+/** One chip per priority; any combination can be on, and none shows every item. */
+private fun LazyListScope.priorityFilterChips(tab: ItemType, view: PriorityView, viewModel: HomeViewModel) {
     item {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Priority.entries.forEach { priority ->

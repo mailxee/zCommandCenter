@@ -534,6 +534,14 @@ tab.
   What is saved at once (tags, links, read counts, a plan's completion) is not part of the form, so
   it never counts as unsaved.
 
+### 2.27 Priority filter on the Tasks tab
+
+Under the All / Repeating / One-off row, the Tasks tab has the same priority chips as the other
+tabs (Low, Medium, High, Critical; any combination, none shows every task). They share
+`HomeViewModel.priorityFilters` (keyed by tab) and `priorityFilterChips` with those tabs, and
+combine with the repeat, completed and tag filters. Tasks keep their own sorts (Due date, Priority,
+Custom).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
