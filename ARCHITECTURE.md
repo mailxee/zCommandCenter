@@ -514,8 +514,13 @@ tab.
   the filter keeps the plans above a match, as the tag filter does. Items can only be dragged in the
   custom order; turning on reorder mode switches the current tab to it.
 - **Tag filter bar:** shows only the tags on the current tab's items (on Plans, also those on tasks
-  linked to plans), plus any selected tag, so a selection can always be turned off. The selection
-  still applies to every tab.
+  linked to plans), plus any tag the filter uses, so it can always be turned off. The filter still
+  applies to every tab.
+- **Hiding a tag:** tapping a tag shows only items with it; pressing and holding it hides items with
+  it instead (`TagFilter.excluded`), and the chip turns grey and struck through. Holding it again, or
+  tapping it, makes it plain; "Clear" resets both. Material's chips take no long press, so the bar
+  draws its own (`TagChip`), with a long-press label for accessibility services. On Plans, a plan with
+  a hidden tag is not shown for its tasks' sake, only as the parent of another match.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -700,6 +705,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/ManualOrderTest.kt` | Dragged orders and one-step moves around hidden rows, refusing moves past the ends, moving a plan with its rows. |
 | `data/XlsxTest.kt` | Workbook round trip (escaping, blanks, leading zeros), reading Excel-style shared strings and gaps, column letters. |
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
+| `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 
 Run them with `./gradlew testDebugUnitTest`.

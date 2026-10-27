@@ -1,19 +1,28 @@
 package com.example.xcommandcenter.ui.home
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -24,8 +33,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -114,9 +129,10 @@ fun HomeScreen(
 }
 
 /**
- * One filter for every tab: selected tags stay selected when switching tabs. Shows the tags used on
- * [tab]'s items, plus any selected tag, so a selection can always be turned off; hidden when that
- * leaves none. The chips wrap onto more lines, so every tag stays on screen.
+ * One filter for every tab: tap a tag to show only items with it, press and hold it to hide items
+ * with it; both stay on when switching tabs. Shows the tags used on [tab]'s items, plus any tag in
+ * use by the filter, so it can always be turned off; hidden when that leaves none. The chips wrap
+ * onto more lines, so every tag stays on screen.
  */
 @Composable
 private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
@@ -124,7 +140,7 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
     val filter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val tabTagIds by viewModel.tabTagIds.collectAsStateWithLifecycle()
     val used = tabTagIds[tab].orEmpty()
-    val tags = allTags.filter { it.id in used || it.id in filter.selected }
+    val tags = allTags.filter { it.id in used || it.id in filter.selected || it.id in filter.excluded }
     if (tags.isEmpty()) return
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -135,10 +151,67 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
             AssistChip(onClick = viewModel::clearTags, label = { Text("Clear") })
         }
         tags.forEach { tag ->
-            FilterChip(
+            TagChip(
+                label = tag.label(),
                 selected = tag.id in filter.selected,
+                excluded = tag.id in filter.excluded,
                 onClick = { viewModel.toggleTag(tag.id) },
-                label = { Text(tag.label()) },
+                onLongClick = { viewModel.toggleExcludedTag(tag.id) },
+            )
+        }
+    }
+}
+
+/**
+ * A tag in the filter bar, drawn like a filter chip (Material's chips take no long press). Selected
+ * shows a check; excluded is greyed out and struck through.
+ */
+@Composable
+private fun TagChip(label: String, selected: Boolean, excluded: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val haptics = LocalHapticFeedback.current
+    val shape = RoundedCornerShape(8.dp)
+    Surface(
+        shape = shape,
+        color = if (selected) colors.secondaryContainer else Color.Transparent,
+        border = if (selected) null else BorderStroke(1.dp, colors.outlineVariant),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick()
+                    },
+                    onLongClickLabel = if (excluded) "Show items with this tag" else "Hide items with this tag",
+                )
+                .semantics {
+                    if (selected) stateDescription = "Showing only items with this tag"
+                    if (excluded) stateDescription = "Items with this tag are hidden"
+                }
+                .heightIn(min = 32.dp)
+                .padding(horizontal = 12.dp),
+        ) {
+            if (selected) {
+                Icon(
+                    painterResource(R.drawable.ic_check),
+                    contentDescription = null,
+                    tint = colors.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                color = when {
+                    selected -> colors.onSecondaryContainer
+                    excluded -> colors.onSurface.copy(alpha = 0.38f)
+                    else -> colors.onSurfaceVariant
+                },
+                textDecoration = if (excluded) TextDecoration.LineThrough else null,
             )
         }
     }
