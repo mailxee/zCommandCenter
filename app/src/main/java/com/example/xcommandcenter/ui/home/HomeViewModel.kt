@@ -212,6 +212,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     val notes: StateFlow<List<NoteEntity>> = notesRepo.observeAll().filteredByTags(ItemType.NOTE) { it.id }
 
+    /** List items per note id, for the "list of 3 items" line. */
+    val noteListCounts: StateFlow<Map<Long, Int>> = notesRepo.observeListCounts().stateIn(emptyMap())
+
     val books: StateFlow<List<BookWithProgress>> =
         booksRepo.observeAllWithProgress().filteredByTags(ItemType.BOOK) { it.book.id }
 

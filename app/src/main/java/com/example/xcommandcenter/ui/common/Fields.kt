@@ -10,6 +10,9 @@ import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -25,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.xcommandcenter.domain.Priority
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -37,7 +41,8 @@ private val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 private val timeFormat = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
 fun LocalDate.display(): String = format(dateFormat)
-fun LocalDateTime.display(): String = "${toLocalDate().display()}, ${toLocalTime().format(timeFormat)}"
+fun LocalDateTime.display(): String = "${toLocalDate().display()}, ${toLocalTime().display()}"
+fun LocalTime.display(): String = format(timeFormat)
 
 /** A labelled date with a picker and a clear button. */
 @Composable
@@ -54,6 +59,43 @@ fun DateField(label: String, date: LocalDate?, onChange: (LocalDate?) -> Unit) {
     }
     if (picking) {
         DatePickerDialogFor(date ?: LocalDate.now(), onDismiss = { picking = false }) {
+            picking = false
+            onChange(it)
+        }
+    }
+}
+
+/** "Priority" with one button per level, Critical last; used by tasks and notes. */
+@Composable
+fun PriorityField(priority: Priority, onChange: (Priority) -> Unit) {
+    SectionTitle("Priority")
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        Priority.entries.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = priority == option,
+                onClick = { onChange(option) },
+                shape = SegmentedButtonDefaults.itemShape(index, Priority.entries.size),
+                label = { Text(option.label, maxLines = 1) },
+            )
+        }
+    }
+}
+
+/** A labelled time of day with a picker and a clear button. */
+@Composable
+fun TimeField(label: String, time: LocalTime?, onChange: (LocalTime?) -> Unit) {
+    var picking by rememberSaveable { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        OutlinedButton(onClick = { picking = true }) { Text(time?.display() ?: "Set") }
+        if (time != null) TextButton(onClick = { onChange(null) }) { Text("Clear") }
+    }
+    if (picking) {
+        TimePickerDialog(time ?: LocalTime.of(9, 0), onDismiss = { picking = false }) {
             picking = false
             onChange(it)
         }

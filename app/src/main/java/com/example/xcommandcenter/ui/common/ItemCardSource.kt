@@ -1,7 +1,10 @@
 package com.example.xcommandcenter.ui.common
 
+import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
+import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
@@ -58,8 +61,8 @@ class ItemCardSource(
     private val texts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
         combine(tasks.observeAll(), tasks.observeChecklistCounts(), goals.observeAll(), ::Triple),
         combine(habits.observeAll(), habits.observeAllMarks(), plans.observeAll(), ::Triple),
-        combine(notes.observeAll(), books.observeAllWithProgress(), quotes.observeAll(), ::Triple),
-    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, bookList, quoteList) ->
+        combine(notes.observeAll(), notes.observeListCounts(), books.observeAllWithProgress(), quotes.observeAll()) { a, b, c, d -> NoteBookQuote(a, b, c, d) },
+    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList) ->
         val today = LocalDate.now()
         buildMap {
             taskList.forEach { put(ItemRef(ItemType.TASK, it.id), taskCardText(it, checklists[it.id]) to CardControl.Task(it.completed)) }
@@ -70,11 +73,18 @@ class ItemCardSource(
                 put(ItemRef(ItemType.HABIT, habit.id), habitCardText(summary) to control)
             }
             planList.forEach { put(ItemRef(ItemType.PLAN, it.id), planCardText(it) to CardControl.Plan(it)) }
-            noteList.forEach { put(ItemRef(ItemType.NOTE, it.id), noteCardText(it) to null) }
+            noteList.forEach { put(ItemRef(ItemType.NOTE, it.id), noteCardText(it, listCounts[it.id] ?: 0) to null) }
             bookList.forEach { put(ItemRef(ItemType.BOOK, it.book.id), bookCardText(it) to null) }
             quoteList.forEach { put(ItemRef(ItemType.QUOTE, it.id), quoteCardText(it) to null) }
         }
     }
+
+    private data class NoteBookQuote(
+        val notes: List<NoteEntity>,
+        val listCounts: Map<Long, Int>,
+        val books: List<BookWithProgress>,
+        val quotes: List<QuoteEntity>,
+    )
 
     /** Text, control, tags and links per item; the entry is filled in by [cardsFor]. */
     private val parts = combine(texts, tags.observeTagsByItem(), links.observeLinksByOwner(), ::Triple)

@@ -22,9 +22,11 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.RecurrenceFields
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
+import com.example.xcommandcenter.ui.common.TimeField
 import com.example.xcommandcenter.ui.common.times
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -86,6 +88,18 @@ fun HabitDetailScreen(
             intervalHelp = "Counted from the habit's start date.",
         )
 
+        SectionTitle("Reminder")
+        TimeField("Remind me at", habit.reminderTime) { time ->
+            viewModel.update { it.copy(reminderMinutes = time?.let { t -> t.hour * 60 + t.minute }) }
+        }
+        if (habit.reminderTime != null) {
+            Text(
+                "On each scheduled day, unless the day is already marked.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         OutlinedTextField(
             value = habit.notes,
             onValueChange = { v -> viewModel.update { it.copy(notes = v) } },
@@ -93,6 +107,7 @@ fun HabitDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinksInText(habit.notes)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
 

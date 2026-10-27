@@ -22,21 +22,21 @@ import com.example.xcommandcenter.ui.settings.SettingsScreen
 import com.example.xcommandcenter.ui.task.TaskDetailScreen
 
 /**
- * @param openTaskId a task to open, e.g. from a tapped reminder; [onTaskOpened] consumes it.
+ * @param openItem an item to open, e.g. from a tapped reminder; [onItemOpened] consumes it.
  */
 @Composable
 fun AppNavHost(
-    openTaskId: Long?,
-    onTaskOpened: () -> Unit,
+    openItem: ItemRef?,
+    onItemOpened: () -> Unit,
     navController: NavHostController = rememberNavController(),
 ) {
     val open: (ItemRef) -> Unit = { navController.navigate(Routes.item(it)) }
     val back: () -> Unit = { navController.popBackStack() }
 
-    LaunchedEffect(openTaskId) {
-        if (openTaskId != null) {
-            navController.navigate(Routes.item(ItemRef(ItemType.TASK, openTaskId))) { launchSingleTop = true }
-            onTaskOpened()
+    LaunchedEffect(openItem) {
+        if (openItem != null) {
+            navController.navigate(Routes.item(openItem)) { launchSingleTop = true }
+            onItemOpened()
         }
     }
 

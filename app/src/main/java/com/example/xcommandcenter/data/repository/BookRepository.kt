@@ -14,13 +14,24 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun get(id: Long): BookEntity? = dao.get(id)
 
-    /** A new book gets a place in the list; an edited one keeps its place. */
-    suspend fun save(book: BookEntity): Long =
-        if (book.id == 0L) {
-            dao.insert(book.copy(sortOrder = dao.newSortOrder()))
-        } else {
-            book.id.also { dao.update(book.copy(sortOrder = dao.get(book.id)?.sortOrder ?: book.sortOrder)) }
-        }
+    /**
+     * A new book gets a place in the list; an edited one keeps its place, read count and
+     * internalized flag, which change at once rather than through the form.
+     */
+    suspend fun save(book: BookEntity): Long {
+        if (book.id == 0L) return dao.insert(book.copy(sortOrder = dao.newSortOrder(), readCount = 0, internalized = false))
+        val stored = dao.get(book.id) ?: book
+        dao.update(book.copy(sortOrder = stored.sortOrder, readCount = stored.readCount, internalized = stored.internalized))
+        return book.id
+    }
+
+    suspend fun addBookReadCount(bookId: Long, delta: Int) = dao.addBookReadCount(bookId, delta)
+
+    suspend fun clearBookReadCount(bookId: Long) = dao.clearBookReadCount(bookId)
+
+    suspend fun setBookInternalized(bookId: Long, internalized: Boolean) = dao.setBookInternalized(bookId, internalized)
+
+    suspend fun clearReadCount(chapterId: Long) = dao.clearReadCount(chapterId)
 
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 

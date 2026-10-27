@@ -31,6 +31,23 @@ class BookDetailViewModel(
     var book by mutableStateOf(BookEntity(title = ""))
         private set
 
+    /** The stored book, for its read count and internalized flag, which change at once. */
+    val stored: StateFlow<BookEntity?> = itemId
+        .flatMapLatest { id -> if (id == 0L) flowOf(null) else repository.observe(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun addBookRead(delta: Int) {
+        viewModelScope.launch { repository.addBookReadCount(itemId.value, delta) }
+    }
+
+    fun clearBookReads() {
+        viewModelScope.launch { repository.clearBookReadCount(itemId.value) }
+    }
+
+    fun setBookInternalized(internalized: Boolean) {
+        viewModelScope.launch { repository.setBookInternalized(itemId.value, internalized) }
+    }
+
     /** Table of contents, in order. Chapter changes are saved immediately. */
     val chapters: StateFlow<List<ChapterEntity>> = itemId
         .flatMapLatest { id -> if (id == 0L) flowOf(emptyList()) else repository.observeChapters(id) }

@@ -1,13 +1,11 @@
 package com.example.xcommandcenter.ui.home
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -113,16 +111,19 @@ fun HomeScreen(
     }
 }
 
-/** One filter for every tab: selected tags stay selected when switching tabs. Hidden until something is tagged. */
+/**
+ * One filter for every tab: selected tags stay selected when switching tabs. Hidden until something
+ * is tagged. The chips wrap onto more lines, so every tag stays on screen.
+ */
 @Composable
 private fun TagFilterBar(viewModel: HomeViewModel) {
     val tags by viewModel.allTags.collectAsStateWithLifecycle()
     val filter by viewModel.tagFilter.collectAsStateWithLifecycle()
     if (tags.isEmpty()) return
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         if (filter.active) {
             AssistChip(onClick = viewModel::clearTags, label = { Text("Clear") })

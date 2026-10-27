@@ -6,6 +6,7 @@ import com.example.xcommandcenter.data.dao.BackupDao
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.clearCollapsedPlans
 import com.example.xcommandcenter.data.prefs.clearSettings
+import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.reminder.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,7 @@ class BackupRepository(
     private val context: Context,
     private val dao: BackupDao,
     private val tasks: TaskRepository,
+    private val habits: HabitRepository,
     private val reminders: ReminderScheduler,
     private val tabOrder: TabOrderRepository,
 ) {
@@ -50,6 +52,7 @@ class BackupRepository(
         dao.replaceAll(result.data)
         clearCollapsedPlans(context)
         tasks.rescheduleAllReminders()
+        habits.rescheduleAllReminders()
         result
     }
 
@@ -62,5 +65,6 @@ class BackupRepository(
 
     private suspend fun cancelAllReminders() {
         dao.tasks().filter { it.reminderAt != null }.forEach { reminders.cancel(it.id) }
+        dao.habits().filter { it.reminderMinutes != null }.forEach { reminders.cancelHabit(it.id) }
     }
 }

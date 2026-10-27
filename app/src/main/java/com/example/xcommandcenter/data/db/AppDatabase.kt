@@ -1,6 +1,7 @@
 package com.example.xcommandcenter.data.db
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -26,6 +27,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
+import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
@@ -40,6 +42,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         HabitMarkEntity::class,
         PlanEntity::class,
         NoteEntity::class,
+        NoteListItemEntity::class,
         BookEntity::class,
         ChapterEntity::class,
         QuoteEntity::class,
@@ -48,8 +51,10 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         ItemTagEntity::class,
     ],
     views = [ItemIndexEntry::class],
-    // Reset to 1 when Projects became Plans; databases from earlier builds are not migrated (the app is reinstalled).
-    version = 1,
+    // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
+    // 2: habit reminders, note priority and lists, book read count and internalized.
+    version = 2,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

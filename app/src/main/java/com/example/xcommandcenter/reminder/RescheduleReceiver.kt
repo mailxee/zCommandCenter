@@ -25,6 +25,7 @@ class RescheduleReceiver : BroadcastReceiver() {
         container.applicationScope.launch {
             try {
                 container.taskRepository.rescheduleAllReminders()
+                container.habitRepository.rescheduleAllReminders()
             } finally {
                 pending.finish()
             }

@@ -9,6 +9,7 @@ import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
+import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
@@ -25,6 +26,7 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -43,6 +45,7 @@ data class BackupData(
     val tags: List<TagEntity> = emptyList(),
     val itemTags: List<ItemTagEntity> = emptyList(),
     val checklistItems: List<ChecklistItemEntity> = emptyList(),
+    val noteListItems: List<NoteListItemEntity> = emptyList(),
 ) {
     val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size
 }
@@ -51,7 +54,7 @@ data class BackupData(
 class ImportException(message: String) : Exception(message)
 
 /**
- * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Chapters,
+ * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists, Chapters,
  * Habit history, Links and Tags, so that an import restores everything. Columns are found by header name, so
  * reordering columns in Excel is fine. Ids tie rows together; a blank id gets a new one.
  * Enums are written as their labels ("Medium", "Every N days") and read by label or name.
@@ -62,8 +65,10 @@ object BackupFormat {
     const val LINKS = "Links"
     const val TAGS = "Tags"
     const val CHECKLISTS = "Checklists"
+    const val NOTE_LISTS = "Note lists"
 
     private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    private val clock = DateTimeFormatter.ofPattern("HH:mm")
     private val excelEpoch = LocalDate.of(1899, 12, 30)
 
     // --- export ---
@@ -97,7 +102,7 @@ object BackupFormat {
             ),
             ItemType.HABIT to Sheet(
                 ItemType.HABIT.tabLabel,
-                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order")) +
+                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Reminder")) +
                     data.habits.map {
                         listOf(
                             it.id.toString(), it.name, it.category.label, it.recurrenceType.label,
@@ -105,6 +110,7 @@ object BackupFormat {
                             if (it.recurrenceType == RecurrenceType.MONTHLY) it.dayOfMonth.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_DAYS) it.intervalDays.toString() else "",
                             it.startDate.toString(), it.notes, time(it.createdAt), it.sortOrder.toString(),
+                            it.reminderTime?.format(clock).orEmpty(),
                         )
                     },
             ),
@@ -120,13 +126,18 @@ object BackupFormat {
             ),
             ItemType.NOTE to Sheet(
                 ItemType.NOTE.tabLabel,
-                listOf(listOf("ID", "Title", "Body", "Created", "Order")) +
-                    data.notes.map { listOf(it.id.toString(), it.title, it.body, time(it.createdAt), it.sortOrder.toString()) },
+                listOf(listOf("ID", "Title", "Body", "Priority", "Created", "Order")) +
+                    data.notes.map { listOf(it.id.toString(), it.title, it.body, it.priority.label, time(it.createdAt), it.sortOrder.toString()) },
             ),
             ItemType.BOOK to Sheet(
                 ItemType.BOOK.tabLabel,
-                listOf(listOf("ID", "Title", "Author", "Description", "Created", "Order")) +
-                    data.books.map { listOf(it.id.toString(), it.title, it.author, it.description, time(it.createdAt), it.sortOrder.toString()) },
+                listOf(listOf("ID", "Title", "Author", "Description", "Read count", "Internalized", "Created", "Order")) +
+                    data.books.map {
+                        listOf(
+                            it.id.toString(), it.title, it.author, it.description, it.readCount.toString(), bool(it.internalized),
+                            time(it.createdAt), it.sortOrder.toString(),
+                        )
+                    },
             ),
             ItemType.QUOTE to Sheet(
                 ItemType.QUOTE.tabLabel,
@@ -149,6 +160,13 @@ object BackupFormat {
             listOf(listOf("Task ID", "Task", "Position", "Item", "Done")) +
                 data.checklistItems.sortedWith(compareBy({ it.taskId }, { it.position })).map {
                     listOf(it.taskId.toString(), title(ItemRef(ItemType.TASK, it.taskId)), (it.position + 1).toString(), it.text, bool(it.done))
+                },
+        )
+        val noteLists = Sheet(
+            NOTE_LISTS,
+            listOf(listOf("Note ID", "Note", "Position", "Item")) +
+                data.noteListItems.sortedWith(compareBy({ it.noteId }, { it.position })).map {
+                    listOf(it.noteId.toString(), title(ItemRef(ItemType.NOTE, it.noteId)), (it.position + 1).toString(), it.text)
                 },
         )
         val history = Sheet(
@@ -176,7 +194,7 @@ object BackupFormat {
                     listOf(ref.type.singular, ref.id.toString(), title(ref), tagNames[it.tagId].orEmpty())
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, chapters, history, links, tags)
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -227,7 +245,7 @@ object BackupFormat {
                 recurrenceType = r.enum("Repeat", RecurrenceType.entries) { it.label } ?: RecurrenceType.DAILY,
                 weekdays = r.weekdays("Weekdays"), dayOfMonth = r.int("Day of month", 1, 1..31), intervalDays = r.int("Every N days", 2, 1..365),
                 startDate = r.date("Start date") ?: LocalDate.now(zone), notes = r.text("Notes"), createdAt = r.dateTime("Created") ?: now,
-                sortOrder = r.order(),
+                sortOrder = r.order(), reminderMinutes = r.time("Reminder")?.let { it.hour * 60 + it.minute },
             ).also { if (it.recurrenceType == RecurrenceType.WEEKLY && it.weekdays == 0) r.fail("A weekly habit needs at least one weekday") }
         }.withIds("Habits") { h, id -> h.copy(id = id) }
 
@@ -240,13 +258,17 @@ object BackupFormat {
         val plans = consistentPlans(rawPlans)
 
         val notes = sheet(ItemType.NOTE.tabLabel, true)!!.items("Title", "Body") { r ->
-            NoteEntity(id = r.id(), title = r.text("Title"), body = r.text("Body"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order())
+            NoteEntity(
+                id = r.id(), title = r.text("Title"), body = r.text("Body"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
+                priority = r.enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM,
+            )
         }.withIds("Notes") { n, id -> n.copy(id = id) }
 
         val books = sheet(ItemType.BOOK.tabLabel, true)!!.items("Title") { r ->
             BookEntity(
                 id = r.id(), title = r.required("Title"), author = r.text("Author"), description = r.text("Description"),
                 createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
+                readCount = r.int("Read count", 0, 0..1_000_000), internalized = r.bool("Internalized"),
             )
         }.withIds("Books") { b, id -> b.copy(id = id) }
 
@@ -278,6 +300,16 @@ object BackupFormat {
             if (taskId !in taskIds) return@mapNotNull null.also { skipped++ }
             ChecklistItemEntity(taskId = taskId, position = r.int("Position", 1, 1..100_000) - 1, text = r.required("Item"), done = r.bool("Done"))
         }.groupBy { it.taskId }.values.flatMap { group ->
+            group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
+        }
+
+        val noteIds = notes.map { it.id }.toSet()
+        // Positions are renumbered 0..n-1 per note, in the order given.
+        val noteListItems = sheet(NOTE_LISTS, false)?.rows("Item").orEmpty().mapNotNull { r ->
+            val noteId = r.long("Note ID") ?: r.fail("Note ID is required")
+            if (noteId !in noteIds) return@mapNotNull null.also { skipped++ }
+            NoteListItemEntity(noteId = noteId, position = r.int("Position", 1, 1..100_000) - 1, text = r.required("Item"))
+        }.groupBy { it.noteId }.values.flatMap { group ->
             group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
         }
 
@@ -317,7 +349,7 @@ object BackupFormat {
         }.distinct()
 
         return ImportResult(
-            BackupData(tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems),
+            BackupData(tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems, noteListItems),
             skipped,
         )
     }
@@ -431,6 +463,15 @@ object BackupFormat {
             runCatching { return LocalDate.parse(t.take(10)) }
             t.toDoubleOrNull()?.let { return excelEpoch.plusDays(it.toLong()) }
             fail("$column \"$t\" isn't a date like 2026-10-25")
+        }
+
+        /** "HH:mm", or an Excel time (a fraction of a day). */
+        fun time(column: String): LocalTime? {
+            val t = text(column).ifEmpty { return null }
+            runCatching { return LocalTime.parse(t, clock) }
+            runCatching { return LocalTime.parse(t) }
+            t.toDoubleOrNull()?.takeIf { it in 0.0..<1.0 }?.let { return LocalTime.ofSecondOfDay(Math.round(it * 86_400) % 86_400) }
+            fail("$column \"$t\" isn't a time like 08:30")
         }
 
         /** "yyyy-MM-dd HH:mm", ISO with T, a plain date, or an Excel serial number; local time zone. */

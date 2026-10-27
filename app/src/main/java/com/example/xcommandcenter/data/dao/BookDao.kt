@@ -106,6 +106,18 @@ interface BookDao {
     @Query("UPDATE chapters SET readCount = MAX(readCount + :delta, 0) WHERE id = :id")
     suspend fun addReadCount(id: Long, delta: Int)
 
+    @Query("UPDATE chapters SET readCount = 0 WHERE id = :id")
+    suspend fun clearReadCount(id: Long)
+
+    @Query("UPDATE books SET readCount = MAX(readCount + :delta, 0) WHERE id = :id")
+    suspend fun addBookReadCount(id: Long, delta: Int)
+
+    @Query("UPDATE books SET readCount = 0 WHERE id = :id")
+    suspend fun clearBookReadCount(id: Long)
+
+    @Query("UPDATE books SET internalized = :internalized WHERE id = :id")
+    suspend fun setBookInternalized(id: Long, internalized: Boolean)
+
     @Query("UPDATE chapters SET internalized = :internalized WHERE id = :id")
     suspend fun setInternalized(id: Long, internalized: Boolean)
 

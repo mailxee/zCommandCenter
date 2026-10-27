@@ -17,15 +17,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemStyles
+import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.reminder.Notifications
 import com.example.xcommandcenter.ui.common.LocalItemStyles
 import com.example.xcommandcenter.ui.navigation.AppNavHost
 import com.example.xcommandcenter.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
-    /** Set when launched from a reminder notification; the nav host opens that task. */
-    private var openTaskId by mutableStateOf<Long?>(null)
+    /** Set when launched from a reminder notification; the nav host opens that task or habit. */
+    private var openItem by mutableStateOf<ItemRef?>(null)
 
     /**
      * Token of the last open-task intent acted on. A notification tap can recreate the activity
@@ -45,7 +47,7 @@ class MainActivity : ComponentActivity() {
             AppTheme {
                 CompositionLocalProvider(LocalItemStyles provides styles) {
                     RequestNotificationPermission()
-                    AppNavHost(openTaskId = openTaskId, onTaskOpened = { openTaskId = null })
+                    AppNavHost(openItem = openItem, onItemOpened = { openItem = null })
                 }
             }
         }
@@ -62,15 +64,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readIntent(intent: Intent) {
-        val taskId = intent.getLongExtra(EXTRA_OPEN_TASK_ID, 0L)
+        val type = ItemType.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_OPEN_TYPE) }
+        val id = intent.getLongExtra(EXTRA_OPEN_ID, 0L)
         val token = intent.getLongExtra(EXTRA_TOKEN, 0L)
-        if (taskId == 0L || token == handledToken) return
+        if (type == null || id == 0L || token == handledToken) return
         handledToken = token
-        openTaskId = taskId
+        openItem = ItemRef(type, id)
     }
 
     companion object {
-        const val EXTRA_OPEN_TASK_ID = "openTaskId"
+        /** The [ItemType] name and id of the item a notification opens. */
+        const val EXTRA_OPEN_TYPE = "openType"
+        const val EXTRA_OPEN_ID = "openId"
         /** Unique per notification, so each tap is handled exactly once. */
         const val EXTRA_TOKEN = "openTaskToken"
         private const val KEY_HANDLED_TOKEN = "handledOpenTaskToken"

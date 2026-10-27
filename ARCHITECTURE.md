@@ -463,6 +463,32 @@ tab.
 | Building the cards from `HomeViewModel` | It is scoped to the home screen and filtered by the tag filter; detail pages need every linked item. |
 | Look-only cards without controls | The user wants linked items to work as they do in their tabs. |
 
+### 2.23 Habit reminders, note lists and priority, book progress, web links
+
+- **Habit reminders:** a habit can have a reminder time (`habits.reminderMinutes`). One alarm per
+  habit holds its next reminder: the first scheduled day, from its start date, whose time is still
+  ahead (`Recurrence.nextReminder`), so an "every N days" habit reminds only on the days a mark is
+  due. When the alarm fires, `HabitRepository.reminderFired` schedules the next one and the
+  notification shows only if today has no mark yet. Habit alarms use their own intent action and
+  notification channel, are re-registered on boot and after an import, and a tap opens the habit
+  (notifications now carry an item type and id, not just a task id).
+- **Repeating tasks:** the next occurrence skips dates that have already passed
+  (`Recurrence.nextFrom`), so completing an overdue task gives it a future due date, and its
+  reminder, moved by the same number of days, keeps its time and its distance from the due date and
+  actually fires. Previously a task completed late got a next occurrence, and a reminder, in the past.
+- **Note lists:** `note_list_items` (`noteId` with `ON DELETE CASCADE`), edited in the note form and
+  saved with it, like a task's checklist but with bullets instead of checkboxes. The two forms share
+  `ListEditor`. Notes also have a priority, shown on their card (critical in red, as for tasks).
+- **Book progress:** `books.readCount` and `books.internalized`, changed at once from the book page
+  (like a chapter's), and never overwritten by saving the book's form. Chapters and books can clear
+  their read count.
+- **Web links:** `WebLinks.find` spots http(s):// and www. addresses. Card text shows them as
+  tappable links; under a description field, the links in it are listed as tappable text, since
+  tapping the field itself edits it.
+- **Tag filter bar:** chips wrap onto more lines (`FlowRow`) instead of scrolling sideways.
+- Schema v2 adds these columns and the table through `AutoMigration(1 → 2)`; the Excel workbook
+  gains a "Note lists" sheet and Priority, Reminder, Read count and Internalized columns.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -496,7 +522,7 @@ file changed; template files left as they were (backup rules, Gradle wrapper,
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
-| `app/schemas/.../AppDatabase/1.json` (created, generated) | Exported Room schema, version 1 since the reset in §2.17. |
+| `app/schemas/.../AppDatabase/1.json`, `2.json` (created, generated) | Exported Room schemas: version 1 since the reset in §2.17; v2 adds the columns and table of §2.23 via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
 | `ARCHITECTURE.md` (created) | This document. |
 
@@ -519,6 +545,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled` and `nextAfter`, `Recurrence.of` from stored columns, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
 | `domain/ItemStyle.kt` | A tab's item style (color, bold, italic, underline, font), its stored form and summary, and `ItemStyles` for all tabs (§2.21). |
+| `domain/WebLinks.kt` | Finding web addresses in free text (§2.23). |
 | `domain/ManualOrder.kt` | Applying a new order to the visible rows of a list while hidden rows keep their slots, one-step moves, and moving a plan with the rows under it (§2.18, §2.20). |
 | `domain/PlanTree.kt` | Flatten a plan tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
@@ -604,6 +631,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/RecurrenceFields.kt` | Schedule editor and its validation, shared by habits and tasks. |
 | `ui/common/DetailScaffold.kt` | Shared detail frame: back/save/delete (with confirmation), snackbar, scrolling content. |
 | `ui/common/LinkedItems.kt` | "Linked items" section: linked items as tab cards with their controls, grouped by tab; and the two-step link picker dialog with search. |
+| `ui/common/ListEditor.kt` | The bulleted list editor shared by task checklists and note lists. |
+| `ui/common/WebLinkText.kt` | Tappable web links in card text and under description fields. |
 | `ui/common/ItemCard.kt` | The item card shared by the tabs and the linked items, the per-type card text, and habit summaries (§2.22). |
 | `ui/common/ItemCardSource.kt` | Card data (text, control, tags, links) for every item, and the card controls' actions, for detail pages (§2.22). |
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
@@ -639,6 +668,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/RecurrenceTest.kt` | Next occurrence for each schedule type, month-end clamping, empty weekly rule, building from columns. |
 | `domain/PlanTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
 | `domain/ItemStyleTest.kt` | Style round trip, fallbacks for unreadable values, defaults (italic quotes, chapters as books), summaries. |
+| `domain/WebLinksTest.kt` | Links found with sentence punctuation left out, brackets that belong to a link, plain text. |
 | `domain/ManualOrderTest.kt` | Dragged orders and one-step moves around hidden rows, refusing moves past the ends, moving a plan with its rows. |
 | `data/XlsxTest.kt` | Workbook round trip (escaping, blanks, leading zeros), reading Excel-style shared strings and gaps, column letters. |
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
