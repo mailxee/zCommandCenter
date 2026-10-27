@@ -34,7 +34,7 @@ class QuoteDetailViewModel(
         quote = transform(quote)
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         if (quote.text.isBlank()) {
             message = "The quote text is required"
             return
@@ -45,7 +45,7 @@ class QuoteDetailViewModel(
             source = quote.source.trim(),
             author = quote.author.trim(),
         )
-        viewModelScope.launch { onSaved(repository.save(toSave)) }
+        viewModelScope.launch { onSaved(repository.save(toSave), close) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }

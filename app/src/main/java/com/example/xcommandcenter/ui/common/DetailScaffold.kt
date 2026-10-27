@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.example.xcommandcenter.R
 
 /**
- * Frame shared by all detail screens: back, save and delete actions, a snackbar for the view
+ * Frame shared by all detail screens: back, delete, save (stays) and save-and-close actions, a snackbar for the view
  * model's messages, and a scrolling column for the content. Navigates back once [closed], which a
  * successful save or a delete sets.
  */
@@ -40,7 +40,7 @@ fun DetailScaffold(
     title: String,
     viewModel: ItemDetailViewModel,
     onBack: () -> Unit,
-    onSave: (() -> Unit)?,
+    onSave: ((close: Boolean) -> Unit)?,
     onDelete: (() -> Unit)?,
     deleteWarning: String = "This also removes all of its links.",
     content: @Composable ColumnScope.() -> Unit,
@@ -72,8 +72,11 @@ fun DetailScaffold(
                         }
                     }
                     if (onSave != null) {
-                        IconButton(onClick = onSave) {
-                            Icon(painterResource(R.drawable.ic_check), contentDescription = "Save")
+                        IconButton(onClick = { onSave(false) }) {
+                            Icon(painterResource(R.drawable.ic_save), contentDescription = "Save")
+                        }
+                        IconButton(onClick = { onSave(true) }) {
+                            Icon(painterResource(R.drawable.ic_check), contentDescription = "Save and close")
                         }
                     }
                 },

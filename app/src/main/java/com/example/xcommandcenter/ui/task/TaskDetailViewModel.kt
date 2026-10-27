@@ -96,7 +96,7 @@ class TaskDetailViewModel(
         form = form.copy(checklist = form.checklist.filterNot { it.key == key })
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         val f = form
         val error = when {
             f.title.isBlank() -> "A title is required"
@@ -125,7 +125,7 @@ class TaskDetailViewModel(
         // Blank items are dropped; the rest keep their order.
         val checklist = f.checklist.filter { it.text.isNotBlank() }
             .map { ChecklistItemEntity(taskId = itemId.value, position = 0, text = it.text.trim(), done = it.done) }
-        viewModelScope.launch { onSaved(repository.save(task, checklist)) }
+        viewModelScope.launch { onSaved(repository.save(task, checklist), close) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }

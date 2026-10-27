@@ -34,13 +34,13 @@ class GoalDetailViewModel(
         goal = transform(goal)
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         if (goal.title.isBlank()) {
             message = "A title is required"
             return
         }
         val toSave = goal.copy(id = itemId.value, title = goal.title.trim())
-        viewModelScope.launch { onSaved(repository.save(toSave)) }
+        viewModelScope.launch { onSaved(repository.save(toSave), close) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }

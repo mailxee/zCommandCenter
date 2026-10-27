@@ -44,7 +44,7 @@ class PlanDetailViewModel(
         plan = transform(plan)
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         if (plan.title.isBlank()) {
             message = "A title is required"
             return
@@ -52,7 +52,7 @@ class PlanDetailViewModel(
         val toSave = plan.copy(id = itemId.value, title = plan.title.trim())
         viewModelScope.launch {
             try {
-                onSaved(repository.save(toSave))
+                onSaved(repository.save(toSave), close)
             } catch (e: IllegalArgumentException) {
                 message = e.message
             }

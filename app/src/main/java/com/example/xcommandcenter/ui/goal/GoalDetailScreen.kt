@@ -44,7 +44,7 @@ fun GoalDetailScreen(
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
-        LinkedItemsSection(viewModel, onOpen)
         TagsSection(viewModel)
+        LinkedItemsSection(viewModel, onOpen)
     }
 }

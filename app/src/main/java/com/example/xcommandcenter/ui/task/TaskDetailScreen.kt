@@ -70,6 +70,7 @@ fun TaskDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
         ChecklistSection(viewModel)
         SectionTitle("Priority")
@@ -109,7 +110,6 @@ fun TaskDetailScreen(
             Checkbox(checked = form.completed, onCheckedChange = { c -> viewModel.update { it.copy(completed = c) } })
             Text("Completed")
         }
-        TagsSection(viewModel)
     }
 }
 

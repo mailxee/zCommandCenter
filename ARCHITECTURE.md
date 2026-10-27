@@ -187,10 +187,10 @@ instance per process) also holds the set of collapsed plans (§2.11).
   link/unlink, tag/untag, picker search, and the message/closed state that every detail screen
   shares. `DetailScaffold`, `TagsSection` and `LinkedItemsSection` are the matching UI.
   - *Rejected:* copying this logic into each of the eight screens.
-- **Explicit save (✓ button), which closes the screen:** a successful save pops the screen, back
-  to wherever it was opened from (a tab keeps its selection, a linked item's page shows again).
-  A new item gets an id when first saved. Linking and tagging are enabled after that, because both
-  need a real id, so they are done by reopening the item. Completing a plan is the one exception:
+- **Explicit save, two buttons:** the save button saves and stays on the page (a snackbar says
+  "Saved"); the ✓ saves and pops the screen, back to wherever it was opened from (a tab keeps its
+  selection, a linked item's page shows again). A new item gets an id when first saved. Linking
+  and tagging are enabled after that, because both need a real id. Completing a plan is the one exception:
   it applies at once, outside the form (§2.11).
   - *Rejected:* auto-saving every keystroke creates empty items whenever the user backs out of a "new" screen.
   - *Rejected:* creating the item when the screen opens has the same problem.
@@ -447,7 +447,8 @@ item is struck through, and a critical open task is shown in red.
 **Chosen (confirmed with the user):** on a detail page, each linked item is shown as the same card
 its own tab shows: title in its style, detail lines, tags, its other links, and the same control
 (task and plan checkboxes, the habit's "today" chip), plus a button to remove the link. The section
-sits right after the item's title and description fields (after Notes for a habit). A linked plan
+sits right after the item's title and description fields (after Notes for a habit), below the
+item's tags. A linked plan
 that can't be ticked because of open subplans gets the same "complete all" dialog as on the Plans
 tab.
 - One `ItemCard` composable and one text builder per type (`taskCardText`, `habitCardText`, …,
@@ -624,7 +625,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 ### Resources
 | File | Purpose |
 |---|---|
-| `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_drag_handle.xml`, `ic_expand_less.xml`, `ic_expand_more.xml`, `ic_reorder.xml`, `ic_settings.xml` | Material icons used in the UI. |
+| `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_drag_handle.xml`, `ic_expand_less.xml`, `ic_expand_more.xml`, `ic_reorder.xml`, `ic_save.xml`, `ic_settings.xml` | Material icons used in the UI. |
 | `app/src/main/res/drawable/ic_notification.xml` | Status-bar icon for reminders. |
 | `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`, `ic_launcher_round.xml` (modified) | Adaptive launcher icon: logo foreground over the gradient background, no monochrome layer. |
 | `app/src/main/res/mipmap-*dpi/ic_launcher_foreground.png` (created) | Logo artwork for each density (108–432 px), centred in the 66dp safe zone with faded edges. |

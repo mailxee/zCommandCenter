@@ -76,6 +76,7 @@ fun BookDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
 
         SectionTitle("Table of contents")
@@ -122,7 +123,6 @@ fun BookDetailScreen(
             }
         }
 
-        TagsSection(viewModel)
     }
 
     if (addingChapter) {

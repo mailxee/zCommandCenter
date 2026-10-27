@@ -93,6 +93,7 @@ fun HabitDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
 
         viewModel.saved?.let { saved ->
@@ -122,6 +123,5 @@ fun HabitDetailScreen(
             }
         }
 
-        TagsSection(viewModel)
     }
 }
