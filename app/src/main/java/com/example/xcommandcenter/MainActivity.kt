@@ -10,12 +10,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.xcommandcenter.domain.ItemStyles
 import com.example.xcommandcenter.reminder.Notifications
+import com.example.xcommandcenter.ui.common.LocalItemStyles
 import com.example.xcommandcenter.ui.navigation.AppNavHost
 import com.example.xcommandcenter.ui.theme.AppTheme
 
@@ -36,9 +40,13 @@ class MainActivity : ComponentActivity() {
         handledToken = savedInstanceState?.getLong(KEY_HANDLED_TOKEN, NO_TOKEN) ?: NO_TOKEN
         readIntent(intent)
         setContent {
+            val styles by (application as XCommandCenterApp).container.itemStyleRepository.styles
+                .collectAsStateWithLifecycle(initialValue = ItemStyles())
             AppTheme {
-                RequestNotificationPermission()
-                AppNavHost(openTaskId = openTaskId, onTaskOpened = { openTaskId = null })
+                CompositionLocalProvider(LocalItemStyles provides styles) {
+                    RequestNotificationPermission()
+                    AppNavHost(openTaskId = openTaskId, onTaskOpened = { openTaskId = null })
+                }
             }
         }
     }

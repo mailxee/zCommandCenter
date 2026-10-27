@@ -121,7 +121,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         .map { name -> TaskSort.entries.firstOrNull { it.name == name } ?: TaskSort.DUE_DATE }
         .stateIn(TaskSort.DUE_DATE)
 
-    /** While on, every tab shows up/down buttons on its rows instead of their usual trailing controls. */
+    /** While on, every tab shows a drag handle on its rows instead of their usual trailing controls. */
     val reorderMode = MutableStateFlow(false)
 
     /** Ticks per task id, for the "Checklist 2/5" line. */
@@ -249,49 +249,71 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Moves an item one place up (-1) or down (+1) among the rows shown in its tab. Rows hidden by
-     * a filter keep their places. Open and completed tasks are kept apart, as the list shows them,
-     * and a plan moves among its sibling plans.
+     * Stores the order of [shownIds] after a drag: the rows shown in a tab (for plans, one set of
+     * siblings), first to last. Rows hidden by a filter keep their places.
+     */
+    fun reorder(type: ItemType, shownIds: List<Long>) {
+        viewModelScope.launch {
+            val all = orderedIds(type, shownIds.firstOrNull() ?: return@launch)
+            saveOrder(type, ManualOrder.reorder(all, shownIds))
+        }
+    }
+
+    /**
+     * Moves an item one place up (-1) or down (+1) among the rows shown in its tab; the step
+     * version of a drag, offered to accessibility services. Open and completed tasks are kept
+     * apart, as the list shows them, and a plan moves among its sibling plans.
      */
     fun move(type: ItemType, id: Long, offset: Int) {
         viewModelScope.launch {
-            when (type) {
+            val shown = when (type) {
                 ItemType.TASK -> {
                     val task = tasks.value.firstOrNull { it.id == id } ?: return@launch
-                    val all = tasksRepo.observeAll().first()
-                        .sortedWith(compareBy<TaskEntity> { it.completed }.thenBy { it.sortOrder }.thenBy { it.title.lowercase() })
-                    val shown = tasks.value.filter { it.completed == task.completed }
-                    ManualOrder.move(all.map { it.id }, shown.map { it.id }, id, offset)?.let { tasksRepo.reorder(it) }
+                    tasks.value.filter { it.completed == task.completed }.map { it.id }
                 }
-                ItemType.GOAL ->
-                    ManualOrder.move(goalsRepo.observeAll().first().map { it.id }, goals.value.map { it.id }, id, offset)
-                        ?.let { goalsRepo.reorder(it) }
-                ItemType.HABIT ->
-                    ManualOrder.move(habitsRepo.observeAll().first().map { it.id }, habits.value.map { it.habit.id }, id, offset)
-                        ?.let { habitsRepo.reorder(it) }
+                ItemType.GOAL -> goals.value.map { it.id }
+                ItemType.HABIT -> habits.value.map { it.habit.id }
                 ItemType.PLAN -> {
-                    val all = plansRepo.observeAll().first()
-                    val parentId = all.firstOrNull { it.id == id }?.parentId
-                    val shown = planTree.value.filterIsInstance<PlanTreeItem.Plan>().map { it.plan }
-                    ManualOrder.move(
-                        all.filter { it.parentId == parentId }.map { it.id },
-                        shown.filter { it.parentId == parentId }.map { it.id },
-                        id,
-                        offset,
-                    )?.let { plansRepo.reorder(it) }
+                    val shownPlans = planTree.value.filterIsInstance<PlanTreeItem.Plan>().map { it.plan }
+                    val parentId = shownPlans.firstOrNull { it.id == id }?.parentId
+                    shownPlans.filter { it.parentId == parentId }.map { it.id }
                 }
-                ItemType.NOTE ->
-                    ManualOrder.move(notesRepo.observeAll().first().map { it.id }, notes.value.map { it.id }, id, offset)
-                        ?.let { notesRepo.reorder(it) }
-                ItemType.BOOK ->
-                    ManualOrder.move(booksRepo.observeAllWithProgress().first().map { it.book.id }, books.value.map { it.book.id }, id, offset)
-                        ?.let { booksRepo.reorder(it) }
-                ItemType.QUOTE ->
-                    ManualOrder.move(quotesRepo.observeAll().first().map { it.id }, quotes.value.map { it.id }, id, offset)
-                        ?.let { quotesRepo.reorder(it) }
-                ItemType.CHAPTER -> Unit // Chapters are ordered on their book's page.
+                ItemType.NOTE -> notes.value.map { it.id }
+                ItemType.BOOK -> books.value.map { it.book.id }
+                ItemType.QUOTE -> quotes.value.map { it.id }
+                ItemType.CHAPTER -> return@launch // Chapters are ordered on their book's page.
             }
+            ManualOrder.move(orderedIds(type, id), shown, id, offset)?.let { saveOrder(type, it) }
         }
+    }
+
+    /** Every id of [type] in its stored order; for plans, the siblings of plan [anyId]. */
+    private suspend fun orderedIds(type: ItemType, anyId: Long): List<Long> = when (type) {
+        ItemType.TASK -> tasksRepo.observeAll().first()
+            .sortedWith(compareBy<TaskEntity> { it.completed }.thenBy { it.sortOrder }.thenBy { it.title.lowercase() })
+            .map { it.id }
+        ItemType.GOAL -> goalsRepo.observeAll().first().map { it.id }
+        ItemType.HABIT -> habitsRepo.observeAll().first().map { it.id }
+        ItemType.PLAN -> {
+            val all = plansRepo.observeAll().first()
+            val parentId = all.firstOrNull { it.id == anyId }?.parentId
+            all.filter { it.parentId == parentId }.map { it.id }
+        }
+        ItemType.NOTE -> notesRepo.observeAll().first().map { it.id }
+        ItemType.BOOK -> booksRepo.observeAllWithProgress().first().map { it.book.id }
+        ItemType.QUOTE -> quotesRepo.observeAll().first().map { it.id }
+        ItemType.CHAPTER -> emptyList()
+    }
+
+    private suspend fun saveOrder(type: ItemType, ids: List<Long>) = when (type) {
+        ItemType.TASK -> tasksRepo.reorder(ids)
+        ItemType.GOAL -> goalsRepo.reorder(ids)
+        ItemType.HABIT -> habitsRepo.reorder(ids)
+        ItemType.PLAN -> plansRepo.reorder(ids)
+        ItemType.NOTE -> notesRepo.reorder(ids)
+        ItemType.BOOK -> booksRepo.reorder(ids)
+        ItemType.QUOTE -> quotesRepo.reorder(ids)
+        ItemType.CHAPTER -> Unit
     }
 
     fun setRepeatFilter(filter: RepeatFilter) {

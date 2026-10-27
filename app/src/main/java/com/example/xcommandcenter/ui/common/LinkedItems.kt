@@ -15,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -77,7 +78,9 @@ fun LinkedItemsSection(
                         group.forEach { entry ->
                             ListItem(
                                 colors = clearListItemColors(),
-                                headlineContent = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                                headlineContent = {
+                                    Text(entry.title, style = itemTextStyle(entry.type, LocalTextStyle.current), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                },
                                 supportingContent = entry.describe()?.let { { Text(it) } },
                                 trailingContent = {
                                     IconButton(onClick = { viewModel.unlink(entry.ref) }) {
@@ -136,7 +139,7 @@ fun LinkPickerDialog(
                     ItemType.tabs.forEach { option ->
                         ListItem(
                             colors = clearListItemColors(),
-                            headlineContent = { Text(option.tabLabel) },
+                            headlineContent = { Text(option.tabLabel, style = itemTextStyle(option, LocalTextStyle.current)) },
                             modifier = Modifier.clickable { tab = option },
                         )
                     }
@@ -158,7 +161,9 @@ fun LinkPickerDialog(
                             val linked = entry.ref in alreadyLinked
                             ListItem(
                                 colors = clearListItemColors(),
-                                headlineContent = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                                headlineContent = {
+                                    Text(entry.title, style = itemTextStyle(entry.type, LocalTextStyle.current), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                },
                                 supportingContent = {
                                     val detail = listOfNotNull(entry.describe(), if (linked) "Already linked" else null)
                                     if (detail.isNotEmpty()) Text(detail.joinToString(" · "))

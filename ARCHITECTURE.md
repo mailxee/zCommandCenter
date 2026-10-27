@@ -1,6 +1,6 @@
-# xCommandCenter — Architecture
+# Manage Everything — Architecture
 
-A personal command center for Android. Seven tabs (Tasks, Goals, Habits, Plans, Notes,
+Manage Everything (formerly xCommandCenter) is a personal command center for Android. Seven tabs (Tasks, Goals, Habits, Plans, Notes,
 Books, Quotes) share one local Room database. Any item can be linked to any other item and
 tagged, and one tag filter applies to every tab. Plans form a tree with completion, tasks can
 repeat, and habits track streaks. Settings can export everything to an Excel workbook, import
@@ -167,7 +167,7 @@ and streaks look current.
 
 **Chosen:** a comma-separated list of tab names under one key. `TabOrder.parse` ignores unknown
 names and appends missing tabs, so adding a tab in a later version can't hide it. The default
-is the enum order, with Quotes last (pinned by a test). Settings reorders with up/down buttons. The same preferences file (`SettingsStore.kt`, one DataStore
+is the enum order, with Quotes last (pinned by a test). Settings reorders by drag and drop (§2.20). The same preferences file (`SettingsStore.kt`, one DataStore
 instance per process) also holds the set of collapsed plans (§2.11).
 
 | Alternative | Why rejected |
@@ -203,7 +203,7 @@ instance per process) also holds the set of collapsed plans (§2.11).
   - *Rejected:* clearing the extra from the intent; the system's copy of the intent still has it after process death.
 - **Lists show tags and links inline:** every row shows its tags (`#name`) and ends with
   "Linked: …", each from one query over all rows, so each tab shows how its items are organised.
-- **Chapter reorder** uses up/down buttons and renumbers positions `0..n-1` in a transaction.
+- **Chapter reorder** is by drag and drop (§2.20) and renumbers positions `0..n-1` in a transaction.
 - **Icons** are ten small vector drawables. *Rejected:* the Compose material-icons artifacts, a
   large dependency for ten glyphs.
 
@@ -372,19 +372,18 @@ with a "Projects" sheet don't import. A build from before the rename must be uni
 
 **Chosen:** a `sortOrder` column (default 0) on each tab's table. Every tab query orders by
 `sortOrder` first and then by its old key, so before any reordering nothing moves.
-A reorder button in the top bar turns on reorder mode: every row shows up/down arrows (as chapters
-and the Settings tab order already do). A move swaps the row with its neighbour among the rows
-shown, and `ManualOrder.move` keeps rows hidden by a filter in their slots; the whole list is then
-written back as 0..n-1 in one transaction (`reorder` in each DAO). Plans move among their sibling
+A reorder button in the top bar turns on reorder mode: every row shows a drag handle (§2.20).
+When a row is dropped, the new order of the rows shown is applied with `ManualOrder.reorder`, which
+keeps rows hidden by a filter in their slots; the whole list is then written back as 0..n-1 in one
+transaction (`reorder` in each DAO). Plans move among their sibling
 plans; open and completed tasks are moved separately, as the list keeps them apart. Tasks get a
-third sort, "Custom", which uses `sortOrder`; the arrows only appear in it, and turning on reorder
+third sort, "Custom", which uses `sortOrder`; the handles only appear in it, and turning on reorder
 mode on the Tasks tab switches to it. The chosen task sort is now kept in DataStore.
 New items go to the end, except on Notes and Quotes, which list newest first and put them at the
 top. Saving an edited item keeps its place (the repositories copy the stored `sortOrder`).
 
 | Alternative | Why rejected |
 |---|---|
-| Drag and drop | Needs a library or a custom gesture layer over `LazyColumn`; arrows match the rest of the app and are easy to hit. |
 | One order table keyed by `(type, id)` | Another table to keep in step on delete and import, like links, for a single integer per row. |
 | Fractional positions (insert between two values) | Saves a few writes per move, but lists are small and renumbering 0..n-1 keeps the values readable in the Excel export. |
 
@@ -402,6 +401,46 @@ sheet.
 |---|---|
 | Saving each tick at once | Mixes two save models on one form; the rest of the task form is saved with the ✓ button. |
 | Storing the checklist as text in the task row | Can't be counted per task in SQL, and editing one item would rewrite them all anyway. |
+
+### 2.20 Drag and drop
+
+**Chosen (asked for by the user, replacing up/down arrows):** the `sh.calvin.reorderable` library.
+Rows are dragged by a handle (a grip icon), so a tap on the row still opens it and scrolling
+still works. The tab lists use its `LazyColumn` support; the Settings tab order and a book's
+chapters, which sit in scrolling columns, use its `ReorderableColumn`.
+- Each list keeps a local copy of its rows that follows the finger; the drop saves the new order,
+  and the copy is replaced when the stored order comes back from Room.
+- Only valid targets make way while dragging: tasks in the dragged task's group (open or
+  completed), and plans with the dragged plan's parent. A dragged plan takes everything under it
+  along (`ManualOrder.moveBlock`); the rows under it are hidden during the drag.
+- Accessibility services can't drag, so each handle offers "Move up" and "Move down" actions that
+  move the row one place (`HomeViewModel.move`, `ManualOrder.move`).
+
+| Alternative | Why rejected |
+|---|---|
+| Writing the drag gesture by hand over `LazyColumn` | Auto-scroll at the edges, item offsets and animations are a lot of code to get right; the library is small, Compose-only and widely used. |
+| Long-press anywhere on a row to drag | Clashes with tapping a row to open it and with the row's checkboxes and chips. |
+
+### 2.21 Item styles per tab
+
+**Chosen (asked for by the user):** each tab has an item style (a color from a fixed palette,
+bold, italic, underline, and a font: default, serif, mono or cursive), set in Settings → Item styles.
+An item's title is shown in its tab's style everywhere: its own tab, the tab row label, the "Linked:"
+line on other tabs' rows (each linked title in its own style), linked-item lists on detail pages,
+the link picker, a plan's parent and child lists, and the detail screen's title. Chapters follow
+the Books style. Quotes keep italics as their default. Two things stay on top of a style: a done
+item is struck through, and a critical open task is shown in red.
+- `ItemStyle` (domain) is stored per tab in DataStore (`ItemStyleRepository`, one key per tab, so
+  "Delete everything" resets them) and provided once at the root through `LocalItemStyles`, so no
+  view model has to pass styles around.
+- Each palette color has a darker shade for light surfaces and a lighter one for dark surfaces
+  (`StyleColor.toColor`), so text stays readable in both themes and with wallpaper colors.
+
+| Alternative | Why rejected |
+|---|---|
+| A free color picker | Any color can be unreadable on one of the themes; a fixed palette with two shades each can't. |
+| Font size per tab | Rows of different heights make the lists and "Linked:" lines uneven. |
+| Styles in the Room database | They are display settings, like the tab order, not data to export or link. |
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -432,7 +471,7 @@ file changed; template files left as they were (backup rules, Gradle wrapper,
 | File | Purpose |
 |---|---|
 | `build.gradle.kts` (modified) | Declares the Compose compiler, KSP and Room Gradle plugins. |
-| `gradle/libs.versions.toml` (modified) | Version catalog: Compose BOM, Room, Navigation, Lifecycle, DataStore, KSP. |
+| `gradle/libs.versions.toml` (modified) | Version catalog: Compose BOM, Room, Navigation, Lifecycle, DataStore, KSP, Reorderable. |
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
@@ -458,7 +497,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/Priority.kt` | Low < Medium < High < Critical; ordinal is the sort rank. |
 | `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled` and `nextAfter`, `Recurrence.of` from stored columns, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
-| `domain/ManualOrder.kt` | Moving an item among the visible rows of a list while hidden rows keep their slots (§2.18). |
+| `domain/ItemStyle.kt` | A tab's item style (color, bold, italic, underline, font), its stored form and summary, and `ItemStyles` for all tabs (§2.21). |
+| `domain/ManualOrder.kt` | Applying a new order to the visible rows of a list while hidden rows keep their slots, one-step moves, and moving a plan with the rows under it (§2.18, §2.20). |
 | `domain/PlanTree.kt` | Flatten a plan tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
 
@@ -505,6 +545,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below; clearing all settings or the collapsed set. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedPlansRepository.kt` | Which plans are collapsed in the Plans tab. |
+| `data/prefs/ItemStyleRepository.kt` | Each tab's item style (§2.21). |
 | `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18). |
 
 ### data/repository/
@@ -535,6 +576,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/theme/Theme.kt` | Material 3 theme (dynamic color on Android 12+, light/dark fallback). |
 | `ui/navigation/Routes.kt` | Route strings: home, settings, `item/{type}/{id}?parent=`. |
 | `ui/navigation/AppNavHost.kt` | Navigation graph; dispatches the item route to the right detail screen; opens a task from a reminder. |
+| `ui/common/DragHandle.kt` | The drag handle shown while reordering, with Move up / Move down accessibility actions. |
+| `ui/common/ItemStyleUi.kt` | `LocalItemStyles`, and turning a style into Compose text styles with light/dark color shades. |
 | `ui/common/ItemDetailViewModel.kt` | Base ViewModel: current id, linked items and tags, link/unlink, tag/untag, picker search, messages, close-after-delete. |
 | `ui/common/Tags.kt` | "Tags" card of every detail screen and its add-tag dialog with suggestions. |
 | `ui/common/RecurrenceFields.kt` | Schedule editor and its validation, shared by habits and tasks. |
@@ -543,9 +586,9 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, plan tree, …), the shared tag filter and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
-| `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Plans is a collapsible outline with linked tasks. In reorder mode every row gets up/down arrows. |
+| `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Plans is a collapsible outline with linked tasks. In reorder mode every row gets a drag handle. |
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status; export, import and delete with a busy flag and result messages. |
-| `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
+| `ui/settings/SettingsScreen.kt`, `ItemStyleDialog.kt` | Reorder tabs (drag and drop, reset); item styles per tab; notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
 | `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; tags; links. |
 | `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; tags; links. |
@@ -559,7 +602,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 ### Resources
 | File | Purpose |
 |---|---|
-| `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_arrow_up.xml`, `ic_arrow_down.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_expand_less.xml`, `ic_expand_more.xml`, `ic_settings.xml` | Material icons used in the UI. |
+| `app/src/main/res/drawable/ic_add.xml`, `ic_arrow_back.xml`, `ic_check.xml`, `ic_close.xml`, `ic_delete.xml`, `ic_drag_handle.xml`, `ic_expand_less.xml`, `ic_expand_more.xml`, `ic_reorder.xml`, `ic_settings.xml` | Material icons used in the UI. |
 | `app/src/main/res/drawable/ic_notification.xml` | Status-bar icon for reminders. |
 | `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`, `ic_launcher_round.xml` (modified) | Adaptive launcher icon: logo foreground over the gradient background, no monochrome layer. |
 | `app/src/main/res/mipmap-*dpi/ic_launcher_foreground.png` (created) | Logo artwork for each density (108–432 px), centred in the 66dp safe zone with faded edges. |
@@ -572,7 +615,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TabOrderTest.kt` | Default order (Quotes last), parsing, round trip, unknown/missing tabs, moves. |
 | `domain/RecurrenceTest.kt` | Next occurrence for each schedule type, month-end clamping, empty weekly rule, building from columns. |
 | `domain/PlanTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
-| `domain/ManualOrderTest.kt` | Moving up and down, refusing moves past the ends, hidden rows keeping their slots. |
+| `domain/ItemStyleTest.kt` | Style round trip, fallbacks for unreadable values, defaults (italic quotes, chapters as books), summaries. |
+| `domain/ManualOrderTest.kt` | Dragged orders and one-step moves around hidden rows, refusing moves past the ends, moving a plan with its rows. |
 | `data/XlsxTest.kt` | Workbook round trip (escaping, blanks, leading zeros), reading Excel-style shared strings and gaps, column letters. |
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |

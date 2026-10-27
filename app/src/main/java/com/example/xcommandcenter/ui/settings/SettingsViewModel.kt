@@ -8,18 +8,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.backup.ImportException
+import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
+import com.example.xcommandcenter.domain.ItemStyle
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.reminder.ReminderScheduler
+import java.time.LocalDate
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 class SettingsViewModel(
     private val tabOrderRepository: TabOrderRepository,
+    private val itemStyleRepository: ItemStyleRepository,
     private val reminderScheduler: ReminderScheduler,
     private val backup: BackupRepository,
 ) : ViewModel() {
@@ -48,10 +51,19 @@ class SettingsViewModel(
         viewModelScope.launch { tabOrderRepository.setOrder(TabOrder.default) }
     }
 
+    /** Applied at once, like the tab order; the screen shows the result through the app-wide styles. */
+    fun setStyle(tab: ItemType, style: ItemStyle) {
+        viewModelScope.launch { itemStyleRepository.setStyle(tab, style) }
+    }
+
+    fun resetStyle(tab: ItemType) {
+        viewModelScope.launch { itemStyleRepository.reset(tab) }
+    }
+
     fun canScheduleExactReminders(): Boolean = reminderScheduler.canScheduleExact()
 
-    /** Suggested name for an export, e.g. "xCommandCenter-2026-10-25.xlsx". */
-    fun exportFileName(): String = "xCommandCenter-${LocalDate.now()}.xlsx"
+    /** Suggested name for an export, e.g. "ManageEverything-2026-10-25.xlsx". */
+    fun exportFileName(): String = "ManageEverything-${LocalDate.now()}.xlsx"
 
     fun export(uri: Uri) = run("Export failed") {
         val count = backup.export(uri)

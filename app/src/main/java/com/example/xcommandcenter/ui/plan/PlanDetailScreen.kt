@@ -12,6 +12,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -24,8 +25,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.text.style.TextDecoration
-import com.example.xcommandcenter.ui.common.clearListItemColors
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,6 +38,9 @@ import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
+import com.example.xcommandcenter.ui.common.clearListItemColors
+import com.example.xcommandcenter.ui.common.itemSpanStyle
+import com.example.xcommandcenter.ui.common.itemTextStyle
 
 @Composable
 fun PlanDetailScreen(
@@ -89,11 +93,12 @@ fun PlanDetailScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 parent?.title ?: "None (top level)",
-                style = MaterialTheme.typography.bodyLarge,
+                style = if (parent != null) itemTextStyle(ItemType.PLAN, MaterialTheme.typography.bodyLarge) else MaterialTheme.typography.bodyLarge,
                 modifier = Modifier
                     .weight(1f)
                     .then(if (parent != null) Modifier.clickable { onOpen(ItemRef(ItemType.PLAN, parent.id)) } else Modifier),
-                color = if (parent != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                // A plain parent title shows as a link; a styled one keeps its plan color.
+                color = if (parent != null) itemSpanStyle(ItemType.PLAN).color.takeOrElse { MaterialTheme.colorScheme.primary } else MaterialTheme.colorScheme.onSurface,
             )
             OutlinedButton(onClick = { choosingParent = true }) { Text("Change") }
         }
@@ -108,7 +113,14 @@ fun PlanDetailScreen(
                     ListItem(
                         colors = clearListItemColors(),
                         headlineContent = {
-                            Text(child.title, textDecoration = if (child.completed) TextDecoration.LineThrough else null)
+                            val style = itemTextStyle(ItemType.PLAN, LocalTextStyle.current)
+                            Text(
+                                child.title,
+                                style = style,
+                                textDecoration = TextDecoration.combine(
+                                    listOfNotNull(style.textDecoration, TextDecoration.LineThrough.takeIf { child.completed }),
+                                ),
+                            )
                         },
                         modifier = Modifier.clickable { onOpen(ItemRef(ItemType.PLAN, child.id)) },
                     )
@@ -148,7 +160,7 @@ fun PlanDetailScreen(
                         items(options, key = { it.node.id }) { row ->
                             ListItem(
                                 colors = clearListItemColors(),
-                                headlineContent = { Text(row.node.title) },
+                                headlineContent = { Text(row.node.title, style = itemTextStyle(ItemType.PLAN, LocalTextStyle.current)) },
                                 modifier = Modifier
                                     .padding(start = (row.depth * 16).dp)
                                     .clickable {

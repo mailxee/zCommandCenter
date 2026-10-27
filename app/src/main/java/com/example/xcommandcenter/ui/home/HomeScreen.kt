@@ -13,6 +13,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,6 +35,7 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
+import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
 
 @Composable
@@ -53,7 +56,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (reorder) "Reorder" else "xCommandCenter") },
+                title = { Text(if (reorder) "Reorder" else stringResource(R.string.app_name)) },
                 actions = {
                     if (reorder) {
                         IconButton(onClick = { viewModel.setReorderMode(false) }) {
@@ -91,7 +94,7 @@ fun HomeScreen(
                             selectedName = tab.name
                             if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
                         },
-                        text = { Text(tab.tabLabel) },
+                        text = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
                     )
                 }
             }
