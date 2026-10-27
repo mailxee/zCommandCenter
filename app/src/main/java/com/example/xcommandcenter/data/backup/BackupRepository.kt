@@ -3,6 +3,7 @@ package com.example.xcommandcenter.data.backup
 import android.content.Context
 import android.net.Uri
 import com.example.xcommandcenter.data.dao.BackupDao
+import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.clearCollapsedPlans
 import com.example.xcommandcenter.data.prefs.clearSettings
@@ -20,11 +21,12 @@ class BackupRepository(
     private val dao: BackupDao,
     private val reminders: ReminderRepository,
     private val tabOrder: TabOrderRepository,
+    private val itemStyles: ItemStyleRepository,
 ) {
     /** Writes the whole database to [uri]; returns how many items (across the seven tabs) went in. */
     suspend fun export(uri: Uri): Int = withContext(Dispatchers.IO) {
         val data = dao.snapshot()
-        val sheets = BackupFormat.toSheets(data, tabOrder.order.first())
+        val sheets = BackupFormat.toSheets(data, tabOrder.order.first(), styles = itemStyles.styles.first())
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Can't write to the chosen file")
         out.use { Xlsx.write(sheets, it) }
         data.itemCount
@@ -48,6 +50,10 @@ class BackupRepository(
         dao.replaceAll(result.data)
         clearCollapsedPlans(context)
         reminders.rescheduleAll()
+        result.settings?.let { settings ->
+            tabOrder.setOrder(settings.tabOrder)
+            settings.styles.forEach { (tab, style) -> itemStyles.setStyle(tab, style) }
+        }
         result
     }
 

@@ -17,11 +17,16 @@ import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemStyle
+import com.example.xcommandcenter.domain.ItemStyles
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.domain.Recurrence
 import com.example.xcommandcenter.domain.RecurrenceType
+import com.example.xcommandcenter.domain.StyleColor
+import com.example.xcommandcenter.domain.StyleFont
+import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.domain.shortName
 import java.time.DayOfWeek
 import java.time.Instant
@@ -57,7 +62,8 @@ class ImportException(message: String) : Exception(message)
 
 /**
  * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists, Chapters,
- * Habit history, Links, Tags and Reminders, so that an import restores everything. Columns are found by header name, so
+ * Habit history, Links, Tags, Reminders and Settings (the tab order and each tab's item style), so
+ * that an import restores everything. Columns are found by header name, so
  * reordering columns in Excel is fine. Ids tie rows together; a blank id gets a new one.
  * Enums are written as their labels ("Medium", "Every N days") and read by label or name.
  */
@@ -69,6 +75,7 @@ object BackupFormat {
     const val CHECKLISTS = "Checklists"
     const val NOTE_LISTS = "Note lists"
     const val REMINDERS = "Reminders"
+    const val SETTINGS = "Settings"
 
     private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val clock = DateTimeFormatter.ofPattern("HH:mm")
@@ -76,7 +83,12 @@ object BackupFormat {
 
     // --- export ---
 
-    fun toSheets(data: BackupData, tabOrder: List<ItemType>, zone: ZoneId = ZoneId.systemDefault()): List<Sheet> {
+    fun toSheets(
+        data: BackupData,
+        tabOrder: List<ItemType>,
+        zone: ZoneId = ZoneId.systemDefault(),
+        styles: ItemStyles = ItemStyles(),
+    ): List<Sheet> {
         fun time(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTime) }.orEmpty()
         fun bool(b: Boolean) = if (b) "TRUE" else "FALSE"
         fun days(mask: Int) = Recurrence.daysFromMask(mask).sorted().joinToString(", ") { it.shortName() }
@@ -212,7 +224,18 @@ object BackupFormat {
                     listOf(it.itemType.singular, it.itemId.toString(), title(it.ref), at)
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags, reminders)
+        val settings = Sheet(
+            SETTINGS,
+            listOf(listOf("Tab", "Position", "Color", "Bold", "Italic", "Underline", "Font")) +
+                tabOrder.mapIndexed { index, tab ->
+                    val style = styles[tab]
+                    listOf(
+                        tab.tabLabel, (index + 1).toString(), style.color.label, bool(style.bold), bool(style.italic), bool(style.underline),
+                        style.font.label,
+                    )
+                },
+        )
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags, reminders, settings)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -393,12 +416,37 @@ object BackupFormat {
             taskReminders + habitReminders
         }
 
+        val settings = sheet(SETTINGS, false)?.let { table ->
+            val rows = table.rows("Tab").map { r ->
+                val tab = r.itemType("Tab").takeIf { it.isTab } ?: r.fail("Tab \"${r.text("Tab")}\" isn't one of the tabs")
+                val default = ItemStyle.default(tab)
+                val style = ItemStyle(
+                    color = r.enum("Color", StyleColor.entries) { it.label } ?: default.color,
+                    bold = if (r.text("Bold").isEmpty()) default.bold else r.bool("Bold"),
+                    italic = if (r.text("Italic").isEmpty()) default.italic else r.bool("Italic"),
+                    underline = if (r.text("Underline").isEmpty()) default.underline else r.bool("Underline"),
+                    font = r.enum("Font", StyleFont.entries) { it.label } ?: default.font,
+                )
+                Triple(tab, r.int("Position", Int.MAX_VALUE, 1..Int.MAX_VALUE), style)
+            }
+            rows.groupingBy { it.first }.eachCount().filterValues { it > 1 }.keys.firstOrNull()?.let {
+                throw ImportException("The \"$SETTINGS\" sheet lists ${it.tabLabel} more than once. Nothing was imported.")
+            }
+            // Tabs left out keep the default order after the listed ones, and their default style.
+            val listed = rows.sortedBy { it.second }.map { it.first }
+            BackupSettings(
+                tabOrder = TabOrder.parse(TabOrder.serialize(listed)),
+                styles = ItemType.tabs.associateWith { tab -> rows.firstOrNull { it.first == tab }?.third ?: ItemStyle.default(tab) },
+            )
+        }
+
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
                 noteListItems, reminders,
             ),
             skipped,
+            settings,
         )
     }
 
@@ -548,7 +596,11 @@ object BackupFormat {
 }
 
 /** What an import produced, and how many rows were skipped because they pointed at missing items. */
-data class ImportResult(val data: BackupData, val skipped: Int)
+/** [settings] is null for a workbook without a Settings sheet; the current settings then stay. */
+data class ImportResult(val data: BackupData, val skipped: Int, val settings: BackupSettings? = null)
+
+/** The Settings sheet: the tab order and every tab's item style. */
+data class BackupSettings(val tabOrder: List<ItemType>, val styles: Map<ItemType, ItemStyle>)
 
 private fun RecurrenceType?.usesDayOfMonth() = this == RecurrenceType.MONTHLY || this == RecurrenceType.EVERY_N_MONTHS
 

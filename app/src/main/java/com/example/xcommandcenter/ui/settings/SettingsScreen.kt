@@ -186,7 +186,8 @@ fun SettingsScreen(
 
             SectionTitle("Data")
             Text(
-                "Export saves everything to an Excel workbook: one sheet per tab, plus chapters, habit history, links, tags and reminders. " +
+                "Export saves everything to an Excel workbook: one sheet per tab, plus chapters, habit history, links, tags, reminders " +
+                    "and these settings (tab order and item styles). " +
                     "Importing a workbook replaces all current data.",
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -216,7 +217,8 @@ fun SettingsScreen(
             title = { Text("Replace all data?") },
             text = {
                 Text(
-                    "Everything in the app (items, links, tags and habit history) will be replaced by the workbook. " +
+                    "Everything in the app (items, links, tags, habit history, reminders, and the tab order and item styles) " +
+                        "will be replaced by the workbook. " +
                         "Export first if you want to keep a copy of the current data.",
                 )
             },

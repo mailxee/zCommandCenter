@@ -625,6 +625,15 @@ Done today chip (`isDue`), the history on the habit's page (`recentDueDates`), a
 also set for tomorrow; marking a day re-sets the habit's alarms). The habit's page explains the
 rule under the schedule.
 
+### 2.33 Settings in the backup; chapters "Done"
+
+- **Backup:** the workbook ends with a Settings sheet: one row per tab with its position and item
+  style (Tab, Position, Color, Bold, Italic, Underline, Font). Importing it sets the tab order and
+  every tab's style; tabs left out follow the listed ones and keep their default style; a blank
+  cell takes the tab's default. A workbook without the sheet leaves the current settings alone.
+- **Chapters:** on a book's page each chapter's checkbox is labelled "Done" (it was "Internalized").
+  The data and the book's own "Internalized" are unchanged.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

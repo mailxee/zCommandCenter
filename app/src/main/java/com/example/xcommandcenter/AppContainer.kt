@@ -48,5 +48,5 @@ class AppContainer(context: Context) {
         taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
         linkRepository, tagRepository, reminderRepository,
     )
-    val backupRepository = BackupRepository(context, database.backupDao(), reminderRepository, tabOrderRepository)
+    val backupRepository = BackupRepository(context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository)
 }

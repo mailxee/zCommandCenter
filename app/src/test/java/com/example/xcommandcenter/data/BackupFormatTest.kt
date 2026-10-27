@@ -21,10 +21,14 @@ import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemStyle
+import com.example.xcommandcenter.domain.ItemStyles
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.Recurrence
 import com.example.xcommandcenter.domain.RecurrenceType
+import com.example.xcommandcenter.domain.StyleColor
+import com.example.xcommandcenter.domain.StyleFont
 import com.example.xcommandcenter.domain.TabOrder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -104,6 +108,33 @@ class BackupFormatTest {
     }
 
     @Test
+    fun `settings come back with the tab order and item styles`() {
+        val order = listOf(ItemType.NOTE, ItemType.TASK) + TabOrder.default.filterNot { it == ItemType.NOTE || it == ItemType.TASK }
+        val styles = ItemStyles(mapOf(ItemType.NOTE to ItemStyle(color = StyleColor.BLUE, bold = true, font = StyleFont.SERIF)))
+        val settings = BackupFormat.fromSheets(BackupFormat.toSheets(data, order, zone, styles), zone).settings!!
+        assertEquals(order, settings.tabOrder)
+        assertEquals(ItemStyle(color = StyleColor.BLUE, bold = true, font = StyleFont.SERIF), settings.styles[ItemType.NOTE])
+        // Quotes keep their default italics.
+        assertEquals(ItemStyle.default(ItemType.QUOTE), settings.styles[ItemType.QUOTE])
+    }
+
+    @Test
+    fun `a workbook without a Settings sheet leaves the settings alone`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name == "Settings" }
+        assertNull(BackupFormat.fromSheets(sheets, zone).settings)
+    }
+
+    @Test
+    fun `tabs left out of the Settings sheet follow the listed ones`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { sheet ->
+            if (sheet.name == "Settings") sheet.copy(rows = listOf(sheet.rows.first(), listOf("Quotes", "1", "Red"))) else sheet
+        }
+        val settings = BackupFormat.fromSheets(sheets, zone).settings!!
+        assertEquals(listOf(ItemType.QUOTE) + TabOrder.default.dropLast(1), settings.tabOrder)
+        assertEquals(ItemStyle(color = StyleColor.RED, italic = true), settings.styles[ItemType.QUOTE])
+    }
+
+    @Test
     fun `a workbook without a Reminders sheet takes the old Reminder columns`() {
         val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name == "Reminders" }.map { sheet ->
             when (sheet.name) {
@@ -136,7 +167,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags", "Reminders"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags", "Reminders", "Settings"), names)
     }
 
     @Test

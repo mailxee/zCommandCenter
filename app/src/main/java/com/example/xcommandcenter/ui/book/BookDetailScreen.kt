@@ -190,7 +190,7 @@ private fun ChapterRow(
             TextButton(onClick = onRead) { Text("+1") }
             if (chapter.readCount > 0) TextButton(onClick = onClearReads) { Text("Clear") }
             Checkbox(checked = chapter.internalized, onCheckedChange = onInternalized)
-            Text("Internalized", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("Done", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             dragHandle()
         }
     }
