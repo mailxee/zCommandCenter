@@ -89,7 +89,7 @@ fun HabitDetailScreen(
             intervalHelp = "Counted from the habit's start date.",
         )
 
-        RemindersSection(viewModel)
+        RemindersSection(viewModel, viewModel::nextReminder)
 
         OutlinedTextField(
             value = habit.notes,

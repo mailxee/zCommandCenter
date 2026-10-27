@@ -21,7 +21,6 @@ import com.example.xcommandcenter.domain.Search
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.ui.common.HabitSummary
 import com.example.xcommandcenter.ui.common.habitSummary
-import com.example.xcommandcenter.ui.common.reminderLine
 import com.example.xcommandcenter.ui.plan.BlockedCompletion
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,9 +145,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val searchQuery = MutableStateFlow("")
 
     /** Each item's reminder line for its card (see [reminderLine]). */
-    val reminderLines: StateFlow<Map<ItemRef, String>> = container.reminderRepository.observeAll()
-        .map { byItem -> byItem.mapNotNull { (ref, times) -> reminderLine(ref.type, times)?.let { ref to it } }.toMap() }
-        .stateIn(emptyMap())
+    val reminderLines: StateFlow<Map<ItemRef, String>> = container.itemCardSource.reminderLines.stateIn(emptyMap())
 
     val taskSort: StateFlow<TaskSort> = taskSortRepo.sort
         .map { name -> TaskSort.entries.firstOrNull { it.name == name } ?: TaskSort.DUE_DATE }

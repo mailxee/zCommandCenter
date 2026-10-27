@@ -592,8 +592,10 @@ wraps or gains lines.
   number of days as the due date (`TaskDao.complete`).
 - **Deleting:** each repository's delete removes the reminders (and alarms) of whatever is gone,
   including subplans and chapters (`ReminderRepository.removeOrphans`).
-- **Cards:** a habit's card lists its reminder times; any other card shows the next reminder still
-  to come and how many more follow (`reminderLine`); a done item shows none.
+- **Cards:** a habit's card lists its reminder times and the date and time of the next one
+  (skipping today once it is marked; `nextReminder`), as does each time on the habit's page; any
+  other card shows the next reminder still to come and how many more follow (`reminderLine`); a
+  done item shows none.
 - **Backup:** a Reminders sheet (Type, ID, Title, Reminder). A workbook without it (from an older
   version) takes the single Reminder column of its Tasks and Habits sheets instead.
 

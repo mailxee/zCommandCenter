@@ -89,14 +89,26 @@ class ItemCardSource(
         val quotes: List<QuoteEntity>,
     )
 
-    /** Text, control, tags, links and reminders per item; the entry is filled in by [cardsFor]. */
-    private val parts = combine(texts, tags.observeTagsByItem(), links.observeLinksByOwner(), reminders.observeAll(), ::CardParts)
+    /** Each item's reminder line (see [reminderLine]); a habit's names its next reminder, so it needs the habit and its marks. */
+    val reminderLines: Flow<Map<ItemRef, String>> =
+        combine(reminders.observeAll(), habits.observeAll(), habits.observeAllMarks()) { byItem, habitList, marks ->
+            val habitsById = habitList.associateBy { it.id }
+            val today = LocalDate.now()
+            byItem.mapNotNull { (ref, times) ->
+                val habit = if (ref.type == ItemType.HABIT) habitsById[ref.id] else null
+                val markedToday = habit != null && today in marks[habit.id].orEmpty()
+                reminderLine(ref.type, times, habit = habit, markedToday = markedToday)?.let { ref to it }
+            }.toMap()
+        }
+
+    /** Text, control, tags, links and reminder lines per item; the entry is filled in by [cardsFor]. */
+    private val parts = combine(texts, tags.observeTagsByItem(), links.observeLinksByOwner(), reminderLines, ::CardParts)
 
     private data class CardParts(
         val texts: Map<ItemRef, Pair<CardText, CardControl?>>,
         val tagsByItem: Map<ItemRef, List<TagEntity>>,
         val linksByOwner: Map<ItemRef, List<ItemIndexEntry>>,
-        val remindersByItem: Map<ItemRef, List<Long>>,
+        val reminderLines: Map<ItemRef, String>,
     )
 
     /**
@@ -104,7 +116,7 @@ class ItemCardSource(
      * line leaves out [self], whose page the cards are shown on.
      */
     fun cardsFor(self: ItemRef, entries: Flow<List<ItemIndexEntry>>): Flow<List<ItemCardData>> =
-        combine(entries, parts) { list, (texts, tagsByItem, linksByOwner, remindersByItem) ->
+        combine(entries, parts) { list, (texts, tagsByItem, linksByOwner, reminderLines) ->
             list.map { entry ->
                 val (text, control) = texts[entry.ref] ?: (chapterCardText(entry) to null)
                 ItemCardData(
@@ -113,7 +125,7 @@ class ItemCardSource(
                     tags = tagsByItem[entry.ref].orEmpty(),
                     links = linksByOwner[entry.ref].orEmpty().filter { it.ref != self },
                     control = control,
-                    reminder = remindersByItem[entry.ref]?.let { reminderLine(entry.type, it) },
+                    reminder = reminderLines[entry.ref],
                 )
             }
         }

@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import com.example.xcommandcenter.R
+import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.domain.ItemType
 import java.time.Instant
 import java.time.LocalDate
@@ -25,19 +26,20 @@ import java.time.ZoneId
 
 /**
  * The item's reminders, any number, each with a remove button, and "Add reminder". A habit's are
- * times of day, used on each scheduled day; anything else's are a date and a time, once. Saved
- * with the form.
+ * times of day, used on each scheduled day, each shown with [nextHabitReminder], when it next goes
+ * off; anything else's are a date and a time, once. Saved with the form.
  */
 @Composable
-fun RemindersSection(viewModel: ItemDetailViewModel) {
+fun RemindersSection(viewModel: ItemDetailViewModel, nextHabitReminder: (Long) -> LocalDateTime? = { null }) {
     val habit = viewModel.type == ItemType.HABIT
     SectionTitle("Reminders")
     val now = System.currentTimeMillis()
     viewModel.reminders.forEach { time ->
         val past = !habit && time <= now
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val next = if (habit) nextHabitReminder(time)?.let { " · next ${it.display()}" }.orEmpty() else ""
             Text(
-                reminderText(viewModel.type, time) + if (past) " (past)" else "",
+                reminderText(viewModel.type, time) + next + if (past) " (past)" else "",
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (past) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -92,13 +94,33 @@ fun reminderText(type: ItemType, time: Long): String =
     }
 
 /**
- * The reminder line on an item's card: a habit's times of day, or the next reminder still to come
- * on anything else (with how many more follow). Null when there is nothing to show.
+ * When a habit's reminder at [minute] of the day next goes off and shows: on a scheduled day, at a
+ * time still ahead of [now], and not today if today is already marked ([markedToday]).
  */
-fun reminderLine(type: ItemType, times: List<Long>, now: Long = System.currentTimeMillis()): String? {
+fun HabitEntity.nextReminder(minute: Long, now: LocalDateTime, markedToday: Boolean): LocalDateTime? {
+    val time = LocalTime.of((minute / 60).toInt(), (minute % 60).toInt())
+    val from = if (markedToday) now.toLocalDate().atTime(LocalTime.MAX) else now
+    return recurrence.nextReminder(startDate, time, from)
+}
+
+/**
+ * The reminder line on an item's card: a habit's times of day and when the next one is (given the
+ * [habit] and whether today is [markedToday]), or the next reminder still to come on anything else
+ * (with how many more follow). Null when there is nothing to show.
+ */
+fun reminderLine(
+    type: ItemType,
+    times: List<Long>,
+    now: Long = System.currentTimeMillis(),
+    habit: HabitEntity? = null,
+    markedToday: Boolean = false,
+): String? {
     if (type == ItemType.HABIT) {
         if (times.isEmpty()) return null
-        return (if (times.size == 1) "Reminder " else "Reminders ") + times.sorted().joinToString(", ") { reminderText(type, it) }
+        val at = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDateTime()
+        val next = habit?.let { h -> times.mapNotNull { h.nextReminder(it, at, markedToday) }.minOrNull() }
+        return (if (times.size == 1) "Reminder " else "Reminders ") + times.sorted().joinToString(", ") { reminderText(type, it) } +
+            next?.let { " · next ${it.display()}" }.orEmpty()
     }
     val upcoming = times.filter { it > now }.sorted()
     val next = upcoming.firstOrNull() ?: return null

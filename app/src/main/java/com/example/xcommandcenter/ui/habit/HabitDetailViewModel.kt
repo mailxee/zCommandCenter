@@ -13,6 +13,7 @@ import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
+import com.example.xcommandcenter.ui.common.nextReminder
 import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class HabitDetailViewModel(
     savedStateHandle: SavedStateHandle,
@@ -46,6 +48,19 @@ class HabitDetailViewModel(
     val marks: StateFlow<Set<LocalDate>> = itemId
         .flatMapLatest { id -> if (id == 0L) flowOf(emptySet()) else repository.observeMarks(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /**
+     * When the reminder at [minute] of the day next goes off, by the schedule as edited (saving
+     * keeps it), skipping today once it is marked.
+     */
+    fun nextReminder(minute: Long): LocalDateTime? {
+        val edited = habit.copy(
+            dayOfMonth = dayOfMonthText.toIntOrNull() ?: habit.dayOfMonth,
+            intervalDays = intervalText.toIntOrNull()?.takeIf { it > 0 } ?: habit.intervalDays,
+        )
+        val now = LocalDateTime.now()
+        return edited.nextReminder(minute, now, markedToday = now.toLocalDate() in marks.value)
+    }
 
     init {
         val id = itemId.value
