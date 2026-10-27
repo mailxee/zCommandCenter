@@ -32,6 +32,8 @@ data class TaskEntity(
     @ColumnInfo(defaultValue = "2") val intervalDays: Int = 2,
     /** Set once completing this occurrence has created the next one, so unticking and ticking again doesn't make another. */
     @ColumnInfo(defaultValue = "0") val nextCreated: Boolean = false,
+    /** Position in the tab's list, lowest first; ties keep the tab's default order. Set by reordering. */
+    @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
 ) {
     val recurrence: Recurrence?
         get() = recurrenceType?.let { Recurrence.of(it, weekdays, dayOfMonth, intervalDays) }

@@ -13,11 +13,24 @@ import java.time.LocalDate
 
 @Dao
 interface HabitDao {
-    @Query("SELECT * FROM habits ORDER BY createdAt")
+    @Query("SELECT * FROM habits ORDER BY sortOrder, createdAt")
     fun observeAll(): Flow<List<HabitEntity>>
 
     @Query("SELECT * FROM habits WHERE id = :id")
     suspend fun get(id: Long): HabitEntity?
+
+    /** The sortOrder for a new item: after every other one. */
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM habits")
+    suspend fun newSortOrder(): Int
+
+    @Query("UPDATE habits SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
+    /** Stores [ids] as the new order, first to last. */
+    @Transaction
+    suspend fun reorder(ids: List<Long>) {
+        ids.forEachIndexed { index, id -> setSortOrder(id, index) }
+    }
 
     @Insert
     suspend fun insert(habit: HabitEntity): Long

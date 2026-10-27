@@ -18,8 +18,15 @@ class HabitRepository(private val dao: HabitDao) {
 
     suspend fun get(id: Long): HabitEntity? = dao.get(id)
 
+    /** A new habit gets a place in the list; an edited one keeps its place. */
     suspend fun save(habit: HabitEntity): Long =
-        if (habit.id == 0L) dao.insert(habit) else habit.id.also { dao.update(habit) }
+        if (habit.id == 0L) {
+            dao.insert(habit.copy(sortOrder = dao.newSortOrder()))
+        } else {
+            habit.id.also { dao.update(habit.copy(sortOrder = dao.get(habit.id)?.sortOrder ?: habit.sortOrder)) }
+        }
+
+    suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
     suspend fun toggleMark(habitId: Long, date: LocalDate) = dao.toggleMark(habitId, date)
 

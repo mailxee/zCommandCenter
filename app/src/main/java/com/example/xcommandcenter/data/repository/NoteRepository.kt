@@ -9,8 +9,15 @@ class NoteRepository(private val dao: NoteDao) {
 
     suspend fun get(id: Long): NoteEntity? = dao.get(id)
 
+    /** A new note gets a place in the list; an edited one keeps its place. */
     suspend fun save(note: NoteEntity): Long =
-        if (note.id == 0L) dao.insert(note) else note.id.also { dao.update(note) }
+        if (note.id == 0L) {
+            dao.insert(note.copy(sortOrder = dao.newSortOrder()))
+        } else {
+            note.id.also { dao.update(note.copy(sortOrder = dao.get(note.id)?.sortOrder ?: note.sortOrder)) }
+        }
+
+    suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
     suspend fun delete(id: Long) = dao.delete(id)
 }

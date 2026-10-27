@@ -5,6 +5,7 @@ import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
 import com.example.xcommandcenter.data.prefs.CollapsedProjectsRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
+import com.example.xcommandcenter.data.prefs.TaskSortRepository
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.HabitRepository
@@ -27,6 +28,7 @@ class AppContainer(context: Context) {
 
     val reminderScheduler = ReminderScheduler(context)
     val tabOrderRepository = TabOrderRepository(context)
+    val taskSortRepository = TaskSortRepository(context)
     val collapsedProjectsRepository = CollapsedProjectsRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
     val tagRepository = TagRepository(database.tagDao())

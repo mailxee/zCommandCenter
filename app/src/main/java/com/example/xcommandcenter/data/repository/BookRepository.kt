@@ -14,8 +14,15 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun get(id: Long): BookEntity? = dao.get(id)
 
+    /** A new book gets a place in the list; an edited one keeps its place. */
     suspend fun save(book: BookEntity): Long =
-        if (book.id == 0L) dao.insert(book) else book.id.also { dao.update(book) }
+        if (book.id == 0L) {
+            dao.insert(book.copy(sortOrder = dao.newSortOrder()))
+        } else {
+            book.id.also { dao.update(book.copy(sortOrder = dao.get(book.id)?.sortOrder ?: book.sortOrder)) }
+        }
+
+    suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
     suspend fun delete(id: Long) = dao.delete(id)
 

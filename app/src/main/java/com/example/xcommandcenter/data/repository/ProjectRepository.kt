@@ -17,10 +17,13 @@ class ProjectRepository(private val dao: ProjectDao) {
         if (project.id != 0L && parentId != null) {
             val all = dao.observeAll().first()
             val forbidden = ProjectTree.subtreeIds(project.id, all, { it.id }, { it.parentId })
-            require(parentId !in forbidden) { "A project cannot be moved under itself or its descendants" }
+            require(parentId !in forbidden) { "A plan cannot be moved under itself or its descendants" }
         }
         return dao.saveDetails(project)
     }
+
+    /** Stores the order of one set of siblings. */
+    suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
     /** Returns the number of open subprojects; the project is completed only when that is 0. */
     suspend fun complete(id: Long): Int = dao.complete(id)

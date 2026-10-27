@@ -8,7 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 /** The app's one preferences file; DataStore allows a single instance per file per process. */
 internal val Context.settingsStore by preferencesDataStore(name = "settings")
 
-/** Forgets every saved setting (tab order, collapsed projects); used by "Delete everything". */
+/** Forgets every saved setting (tab order, task sort, collapsed plans); used by "Delete everything". */
 suspend fun clearSettings(context: Context) {
     context.settingsStore.edit { it.clear() }
 }

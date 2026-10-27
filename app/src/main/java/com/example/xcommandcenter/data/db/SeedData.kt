@@ -102,7 +102,7 @@ internal object SeedData {
                 Recurrence.Weekly(setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)), "Easy pace, 5 km."),
             SeedHabit(2, "Read 20 pages", HabitCategory.POSITIVE, Recurrence.Daily, "Before bed, paper book."),
             SeedHabit(3, "Floss", HabitCategory.NEGATIVE, Recurrence.Daily, "Almost automatic; only mark the nights I skip."),
-            SeedHabit(4, "Monthly review", HabitCategory.POSITIVE, Recurrence.Monthly(1), "Review goals and projects on the 1st."),
+            SeedHabit(4, "Monthly review", HabitCategory.POSITIVE, Recurrence.Monthly(1), "Review goals and plans on the 1st."),
             SeedHabit(5, "Spanish practice", HabitCategory.NEGATIVE, Recurrence.EveryNDays(2), "Mark only the sessions I miss."),
         )
         for (habit in habits) {

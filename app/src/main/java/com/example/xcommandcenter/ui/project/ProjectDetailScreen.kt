@@ -57,12 +57,12 @@ fun ProjectDetailScreen(
     val completed = all.firstOrNull { it.id == id }?.completed ?: false
 
     DetailScaffold(
-        title = if (id == 0L) "New project" else "Project",
+        title = if (id == 0L) "New plan" else "Plan",
         viewModel = viewModel,
         onBack = onBack,
         onSave = viewModel::save,
         onDelete = if (id == 0L) null else viewModel::delete,
-        deleteWarning = "Its child projects move up one level. All of its links are removed.",
+        deleteWarning = "Its child plans move up one level. All of its links are removed.",
     ) {
         OutlinedTextField(
             value = project.title,
@@ -85,7 +85,7 @@ fun ProjectDetailScreen(
             }
         }
 
-        SectionTitle("Parent project")
+        SectionTitle("Parent plan")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 parent?.title ?: "None (top level)",
@@ -99,10 +99,10 @@ fun ProjectDetailScreen(
         }
 
         if (id != 0L) {
-            SectionTitle("Child projects")
+            SectionTitle("Child plans")
             Card(Modifier.fillMaxWidth()) {
                 if (children.isEmpty()) {
-                    Text("No child projects.", modifier = Modifier.padding(16.dp))
+                    Text("No child plans.", modifier = Modifier.padding(16.dp))
                 }
                 children.forEach { child ->
                     ListItem(
@@ -114,7 +114,7 @@ fun ProjectDetailScreen(
                     )
                 }
                 TextButton(onClick = { onCreateChild(id) }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Text("Add child project")
+                    Text("Add child plan")
                 }
             }
         }
@@ -133,7 +133,7 @@ fun ProjectDetailScreen(
         val options = ProjectTree.flatten(all, { it.id }, { it.parentId }).filter { it.node.id !in excluded }
         AlertDialog(
             onDismissRequest = { choosingParent = false },
-            title = { Text("Parent project") },
+            title = { Text("Parent plan") },
             text = {
                 Column {
                     ListItem(

@@ -1,8 +1,8 @@
 # xCommandCenter — Architecture
 
-A personal command center for Android. Seven tabs (Tasks, Goals, Habits, Projects, Notes,
+A personal command center for Android. Seven tabs (Tasks, Goals, Habits, Plans, Notes,
 Books, Quotes) share one local Room database. Any item can be linked to any other item and
-tagged, and one tag filter applies to every tab. Projects form a tree with completion, tasks can
+tagged, and one tag filter applies to every tab. Plans form a tree with completion, tasks can
 repeat, and habits track streaks. Settings can export everything to an Excel workbook, import
 one back, or delete everything.
 
@@ -187,8 +187,10 @@ instance per process) also holds the set of collapsed projects (§2.11).
   link/unlink, tag/untag, picker search, and the message/closed state that every detail screen
   shares. `DetailScaffold`, `TagsSection` and `LinkedItemsSection` are the matching UI.
   - *Rejected:* copying this logic into each of the eight screens.
-- **Explicit save (✓ button):** a new item gets an id when first saved. Linking and tagging are
-  enabled after that, because both need a real id. Completing a project is the one exception:
+- **Explicit save (✓ button), which closes the screen:** a successful save pops the screen, back
+  to wherever it was opened from (a tab keeps its selection, a linked item's page shows again).
+  A new item gets an id when first saved. Linking and tagging are enabled after that, because both
+  need a real id, so they are done by reopening the item. Completing a project is the one exception:
   it applies at once, outside the form (§2.11).
   - *Rejected:* auto-saving every keystroke creates empty items whenever the user backs out of a "new" screen.
   - *Rejected:* creating the item when the screen opens has the same problem.
@@ -356,6 +358,48 @@ are refused, so a crafted file can't pull in external entities.
 
 ---
 
+### 2.17 Projects renamed to Plans
+
+**Chosen:** only what the user sees changes: the tab, sheet and screen texts say "Plan(s)" and
+"subplan(s)". The code, the `projects` table and the stored `ItemType.PROJECT` name stay, because
+the type name is stored in `links`, `item_tags` and the `item_index` view; renaming it would need a
+data migration for no visible gain. Import still accepts a workbook with a "Projects" sheet.
+
+### 2.18 Manual order in every tab
+
+**Chosen:** a `sortOrder` column (default 0, auto-migration v3→v4) on each tab's table. Every tab
+query orders by `sortOrder` first and then by its old key, so before any reordering nothing moves.
+A reorder button in the top bar turns on reorder mode: every row shows up/down arrows (as chapters
+and the Settings tab order already do). A move swaps the row with its neighbour among the rows
+shown, and `ManualOrder.move` keeps rows hidden by a filter in their slots; the whole list is then
+written back as 0..n-1 in one transaction (`reorder` in each DAO). Plans move among their sibling
+plans; open and completed tasks are moved separately, as the list keeps them apart. Tasks get a
+third sort, "Custom", which uses `sortOrder`; the arrows only appear in it, and turning on reorder
+mode on the Tasks tab switches to it. The chosen task sort is now kept in DataStore.
+New items go to the end, except on Notes and Quotes, which list newest first and put them at the
+top. Saving an edited item keeps its place (the repositories copy the stored `sortOrder`).
+
+| Alternative | Why rejected |
+|---|---|
+| Drag and drop | Needs a library or a custom gesture layer over `LazyColumn`; arrows match the rest of the app and are easy to hit. |
+| One order table keyed by `(type, id)` | Another table to keep in step on delete and import, like links, for a single integer per row. |
+| Fractional positions (insert between two values) | Saves a few writes per move, but lists are small and renumbering 0..n-1 keeps the values readable in the Excel export. |
+
+### 2.19 Task checklists
+
+**Chosen:** a `checklist_items` table (`taskId` with `ON DELETE CASCADE`, `position`, `text`,
+`done`). The task form edits the checklist like its other fields: items are added, ticked, edited
+and removed in the form and written with the task on save (`TaskDao.replaceChecklist`), so a new
+task can have a checklist before it has an id. Ticking items never affects the task: a task can be
+completed with open items. Completing a repeating task copies the checklist, unticked, to the next
+occurrence. The Tasks and Plans tabs show "Checklist 2/5". Export and import use a "Checklists"
+sheet.
+
+| Alternative | Why rejected |
+|---|---|
+| Saving each tick at once | Mixes two save models on one form; the rest of the task form is saved with the ✓ button. |
+| Storing the checklist as text in the task row | Can't be counted per task in SQL, and editing one item would rewrite them all anyway. |
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -389,7 +433,7 @@ file changed; template files left as they were (backup rules, Gradle wrapper,
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
-| `app/schemas/.../AppDatabase/1.json`, `2.json`, `3.json` (created, generated) | Exported Room schemas; v2 adds `projects.completed`, v3 adds task schedules and tags, both via auto-migration. |
+| `app/schemas/.../AppDatabase/1.json` … `4.json` (created, generated) | Exported Room schemas; v2 adds `projects.completed`, v3 adds task schedules and tags, v4 adds `sortOrder` and `checklist_items`, all via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
 | `ARCHITECTURE.md` (created) | This document. |
 
@@ -411,6 +455,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/Priority.kt` | Low < Medium < High < Critical; ordinal is the sort rank. |
 | `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled` and `nextAfter`, `Recurrence.of` from stored columns, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
+| `domain/ManualOrder.kt` | Moving an item among the visible rows of a list while hidden rows keep their slots (§2.18). |
 | `domain/ProjectTree.kt` | Flatten a project tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
 
@@ -422,6 +467,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/GoalEntity.kt` | `goals`: title, strategy. |
 | `data/entity/HabitEntity.kt` | `habits`: name, category, flat recurrence columns, start date, notes; maps to `Recurrence`. |
 | `data/entity/HabitMarkEntity.kt` | `habit_marks`: one explicit mark per habit per date (cascade on habit delete). |
+| `data/entity/ChecklistItemEntity.kt` | `checklist_items`: a task's checklist, and the `ChecklistCount` projection (§2.19). |
 | `data/entity/ProjectEntity.kt` | `projects`: title, description, self-referencing `parentId`, completed. |
 | `data/entity/NoteEntity.kt` | `notes`: optional title, body. |
 | `data/entity/BookEntity.kt` | `books`: title, author, description; `BookWithProgress` projection for the list. |
@@ -455,7 +501,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history, 28 cross-tab links, a repeating task and four tags. |
 | `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below; clearing all settings or the collapsed set. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
-| `data/prefs/CollapsedProjectsRepository.kt` | Which projects are collapsed in the Projects tab. |
+| `data/prefs/CollapsedProjectsRepository.kt` | Which plans are collapsed in the Plans tab. |
+| `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18). |
 
 ### data/repository/
 | File | Purpose |
@@ -493,7 +540,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, project tree, …), the shared tag filter and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
-| `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Projects is a collapsible outline with linked tasks. |
+| `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Plans is a collapsible outline with linked tasks. In reorder mode every row gets up/down arrows. |
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status; export, import and delete with a busy flag and result messages. |
 | `ui/settings/SettingsScreen.kt` | Reorder tabs (up/down, reset); notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
@@ -522,6 +569,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TabOrderTest.kt` | Default order (Quotes last), parsing, round trip, unknown/missing tabs, moves. |
 | `domain/RecurrenceTest.kt` | Next occurrence for each schedule type, month-end clamping, empty weekly rule, building from columns. |
 | `domain/ProjectTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
+| `domain/ManualOrderTest.kt` | Moving up and down, refusing moves past the ends, hidden rows keeping their slots. |
 | `data/XlsxTest.kt` | Workbook round trip (escaping, blanks, leading zeros), reading Excel-style shared strings and gaps, column letters. |
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, project consistency, error messages. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |

@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface ProjectDao {
-    @Query("SELECT * FROM projects ORDER BY title COLLATE NOCASE")
+    @Query("SELECT * FROM projects ORDER BY sortOrder, title COLLATE NOCASE")
     fun observeAll(): Flow<List<ProjectEntity>>
 
     @Query("SELECT * FROM projects")
@@ -24,6 +24,19 @@ interface ProjectDao {
 
     @Query("SELECT * FROM projects WHERE id = :id")
     suspend fun get(id: Long): ProjectEntity?
+
+    /** The sortOrder for a new item: after every other one. */
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM projects")
+    suspend fun newSortOrder(): Int
+
+    @Query("UPDATE projects SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
+    /** Stores [ids] as the new order, first to last. */
+    @Transaction
+    suspend fun reorder(ids: List<Long>) {
+        ids.forEachIndexed { index, id -> setSortOrder(id, index) }
+    }
 
     @Insert
     suspend fun insert(project: ProjectEntity): Long
@@ -46,11 +59,11 @@ interface ProjectDao {
     @Query("DELETE FROM item_tags WHERE type = 'PROJECT' AND itemId = :id")
     suspend fun deleteTags(id: Long)
 
-    /** Inserts or updates the editable fields; the stored completion state is kept. */
+    /** Inserts or updates the editable fields; the stored completion state and position are kept. */
     @Transaction
     suspend fun saveDetails(project: ProjectEntity): Long {
         val stored = if (project.id == 0L) null else get(project.id)
-        val toSave = project.copy(completed = stored?.completed ?: false)
+        val toSave = project.copy(completed = stored?.completed ?: false, sortOrder = stored?.sortOrder ?: newSortOrder())
         val id = if (stored == null) insert(toSave.copy(id = 0)) else toSave.id.also { update(toSave) }
         if (!toSave.completed) reopenAncestors(id)
         return id

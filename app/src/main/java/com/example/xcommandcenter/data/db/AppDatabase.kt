@@ -19,6 +19,7 @@ import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
+import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
@@ -34,6 +35,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
 @Database(
     entities = [
         TaskEntity::class,
+        ChecklistItemEntity::class,
         GoalEntity::class,
         HabitEntity::class,
         HabitMarkEntity::class,
@@ -47,9 +49,10 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         ItemTagEntity::class,
     ],
     views = [ItemIndexEntry::class],
-    version = 3,
+    version = 4,
     // 2: projects.completed. 3: task recurrence columns, tags and item_tags.
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    // 4: sortOrder on every tab's table, and checklist_items.
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

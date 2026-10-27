@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.AppContainer
 import com.example.xcommandcenter.data.entity.BookWithProgress
+import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
@@ -15,6 +16,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.ProjectTree
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.ui.project.BlockedCompletion
@@ -23,12 +25,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priority") }
+/** [CUSTOM] is the user's own order, set by reordering; the only sort in which tasks can be moved. */
+enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priority"), CUSTOM("Custom") }
 
 enum class RepeatFilter(val label: String) {
     ALL("All"),
@@ -63,7 +67,7 @@ data class HabitSummary(
     val markedToday: Boolean,
 )
 
-/** One row of the Projects tab: a project, or a task linked to the project above it. */
+/** One row of the Plans tab: a plan (stored as a project), or a task linked to the plan above it. */
 sealed interface ProjectTreeItem {
     val key: String
     val depth: Int
@@ -91,6 +95,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val projectsRepo = container.projectRepository
     private val collapsedProjects = container.collapsedProjectsRepository
     private val tagsRepo = container.tagRepository
+    private val goalsRepo = container.goalRepository
+    private val notesRepo = container.noteRepository
+    private val booksRepo = container.bookRepository
+    private val quotesRepo = container.quoteRepository
+    private val taskSortRepo = container.taskSortRepository
 
     val tabOrder: StateFlow<List<ItemType>> = container.tabOrderRepository.order.stateIn(TabOrder.default)
 
@@ -108,7 +117,15 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             TagFilter(byItem, selected intersect inUse.map { it.id }.toSet())
         }.stateIn(TagFilter())
 
-    val taskSort = MutableStateFlow(TaskSort.DUE_DATE)
+    val taskSort: StateFlow<TaskSort> = taskSortRepo.sort
+        .map { name -> TaskSort.entries.firstOrNull { it.name == name } ?: TaskSort.DUE_DATE }
+        .stateIn(TaskSort.DUE_DATE)
+
+    /** While on, every tab shows up/down buttons on its rows instead of their usual trailing controls. */
+    val reorderMode = MutableStateFlow(false)
+
+    /** Ticks per task id, for the "Checklist 2/5" line. */
+    val checklistCounts: StateFlow<Map<Long, ChecklistCount>> = tasksRepo.observeChecklistCounts().stateIn(emptyMap())
 
     val repeatFilter = MutableStateFlow(RepeatFilter.ALL)
 
@@ -120,12 +137,13 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             val order = when (sort) {
                 TaskSort.DUE_DATE -> byDue.then(byPriority)
                 TaskSort.PRIORITY -> byPriority.then(byDue)
+                TaskSort.CUSTOM -> compareBy { it.sortOrder }
             }
             tasks.filter { repeat.matches(it) && tags.matches(ItemRef(ItemType.TASK, it.id)) }
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
 
-    val goals: StateFlow<List<GoalEntity>> = container.goalRepository.observeAll().filteredByTags(ItemType.GOAL) { it.id }
+    val goals: StateFlow<List<GoalEntity>> = goalsRepo.observeAll().filteredByTags(ItemType.GOAL) { it.id }
 
     val habits: StateFlow<List<HabitSummary>> =
         combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks(), tagFilter) { habits, marks, tags ->
@@ -161,7 +179,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         }
 
     /**
-     * The Projects tab: the project tree with each project's linked tasks right below it, ahead of
+     * The Plans tab: the plan tree with each project's linked tasks right below it, ahead of
      * its subprojects. Completed projects and tasks are left out unless their toggle is on; hiding
      * a completed project never orphans an open one, because everything below it is completed too.
      * A collapsed project hides its tasks and its whole subtree. With a tag filter on, only
@@ -207,12 +225,12 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** Set when ticking a project was refused because of open subprojects. */
     val blockedCompletion = MutableStateFlow<BlockedCompletion?>(null)
 
-    val notes: StateFlow<List<NoteEntity>> = container.noteRepository.observeAll().filteredByTags(ItemType.NOTE) { it.id }
+    val notes: StateFlow<List<NoteEntity>> = notesRepo.observeAll().filteredByTags(ItemType.NOTE) { it.id }
 
     val books: StateFlow<List<BookWithProgress>> =
-        container.bookRepository.observeAllWithProgress().filteredByTags(ItemType.BOOK) { it.book.id }
+        booksRepo.observeAllWithProgress().filteredByTags(ItemType.BOOK) { it.book.id }
 
-    val quotes: StateFlow<List<QuoteEntity>> = container.quoteRepository.observeAll().filteredByTags(ItemType.QUOTE) { it.id }
+    val quotes: StateFlow<List<QuoteEntity>> = quotesRepo.observeAll().filteredByTags(ItemType.QUOTE) { it.id }
 
     fun toggleTag(tagId: Long) {
         selectedTagIds.value = selectedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
@@ -223,7 +241,57 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     }
 
     fun setTaskSort(sort: TaskSort) {
-        taskSort.value = sort
+        viewModelScope.launch { taskSortRepo.setSort(sort.name) }
+    }
+
+    fun setReorderMode(on: Boolean) {
+        reorderMode.value = on
+    }
+
+    /**
+     * Moves an item one place up (-1) or down (+1) among the rows shown in its tab. Rows hidden by
+     * a filter keep their places. Open and completed tasks are kept apart, as the list shows them,
+     * and a plan moves among its sibling plans.
+     */
+    fun move(type: ItemType, id: Long, offset: Int) {
+        viewModelScope.launch {
+            when (type) {
+                ItemType.TASK -> {
+                    val task = tasks.value.firstOrNull { it.id == id } ?: return@launch
+                    val all = tasksRepo.observeAll().first()
+                        .sortedWith(compareBy<TaskEntity> { it.completed }.thenBy { it.sortOrder }.thenBy { it.title.lowercase() })
+                    val shown = tasks.value.filter { it.completed == task.completed }
+                    ManualOrder.move(all.map { it.id }, shown.map { it.id }, id, offset)?.let { tasksRepo.reorder(it) }
+                }
+                ItemType.GOAL ->
+                    ManualOrder.move(goalsRepo.observeAll().first().map { it.id }, goals.value.map { it.id }, id, offset)
+                        ?.let { goalsRepo.reorder(it) }
+                ItemType.HABIT ->
+                    ManualOrder.move(habitsRepo.observeAll().first().map { it.id }, habits.value.map { it.habit.id }, id, offset)
+                        ?.let { habitsRepo.reorder(it) }
+                ItemType.PROJECT -> {
+                    val all = projectsRepo.observeAll().first()
+                    val parentId = all.firstOrNull { it.id == id }?.parentId
+                    val shown = projectTree.value.filterIsInstance<ProjectTreeItem.Project>().map { it.project }
+                    ManualOrder.move(
+                        all.filter { it.parentId == parentId }.map { it.id },
+                        shown.filter { it.parentId == parentId }.map { it.id },
+                        id,
+                        offset,
+                    )?.let { projectsRepo.reorder(it) }
+                }
+                ItemType.NOTE ->
+                    ManualOrder.move(notesRepo.observeAll().first().map { it.id }, notes.value.map { it.id }, id, offset)
+                        ?.let { notesRepo.reorder(it) }
+                ItemType.BOOK ->
+                    ManualOrder.move(booksRepo.observeAllWithProgress().first().map { it.book.id }, books.value.map { it.book.id }, id, offset)
+                        ?.let { booksRepo.reorder(it) }
+                ItemType.QUOTE ->
+                    ManualOrder.move(quotesRepo.observeAll().first().map { it.id }, quotes.value.map { it.id }, id, offset)
+                        ?.let { quotesRepo.reorder(it) }
+                ItemType.CHAPTER -> Unit // Chapters are ordered on their book's page.
+            }
+        }
     }
 
     fun setRepeatFilter(filter: RepeatFilter) {

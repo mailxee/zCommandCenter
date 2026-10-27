@@ -11,11 +11,11 @@ data class BlockedCompletion(val projectId: Long, val title: String, val openCou
 /** Offers to complete the project together with every project below it. */
 @Composable
 fun CompleteProjectDialog(blocked: BlockedCompletion, onCompleteAll: () -> Unit, onDismiss: () -> Unit) {
-    val subprojects = if (blocked.openCount == 1) "1 open subproject" else "${blocked.openCount} open subprojects"
+    val subprojects = if (blocked.openCount == 1) "1 open subplan" else "${blocked.openCount} open subplans"
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Complete project?") },
-        text = { Text("“${blocked.title}” has $subprojects. Complete it together with all of its subprojects?") },
+        title = { Text("Complete plan?") },
+        text = { Text("“${blocked.title}” has $subprojects. Complete it together with all of its subplans?") },
         confirmButton = { TextButton(onClick = onCompleteAll) { Text("Complete all") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.TagRepository
@@ -20,6 +21,9 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
+/** One checklist item being edited; [key] tells rows apart while their text changes. */
+data class ChecklistLine(val key: Long, val text: String, val done: Boolean = false)
+
 data class TaskForm(
     val title: String = "",
     val description: String = "",
@@ -31,6 +35,8 @@ data class TaskForm(
     /** Null for a one-off task. */
     val recurrenceType: RecurrenceType? = null,
     val weekdays: Int = 0,
+    /** Saved with the rest of the form. Open items don't stop the task from being completed. */
+    val checklist: List<ChecklistLine> = emptyList(),
 )
 
 class TaskDetailViewModel(
@@ -47,10 +53,13 @@ class TaskDetailViewModel(
     var dayOfMonthText by mutableStateOf("1")
     var intervalText by mutableStateOf("2")
 
+    private var nextLineKey = 0L
+
     init {
         val id = itemId.value
         if (id != 0L) viewModelScope.launch {
             val task = repository.get(id) ?: return@launch onMissing()
+            val checklist = repository.checklist(id).map { ChecklistLine(nextLineKey++, it.text, it.done) }
             dayOfMonthText = task.dayOfMonth.toString()
             intervalText = task.intervalDays.toString()
             form = TaskForm(
@@ -63,12 +72,26 @@ class TaskDetailViewModel(
                 createdAt = task.createdAt,
                 recurrenceType = task.recurrenceType,
                 weekdays = task.weekdays,
+                checklist = checklist,
             )
         }
     }
 
     fun update(transform: (TaskForm) -> TaskForm) {
         form = transform(form)
+    }
+
+    fun addChecklistItem(text: String) {
+        if (text.isBlank()) return
+        form = form.copy(checklist = form.checklist + ChecklistLine(nextLineKey++, text.trim()))
+    }
+
+    fun updateChecklistItem(key: Long, transform: (ChecklistLine) -> ChecklistLine) {
+        form = form.copy(checklist = form.checklist.map { if (it.key == key) transform(it) else it })
+    }
+
+    fun removeChecklistItem(key: Long) {
+        form = form.copy(checklist = form.checklist.filterNot { it.key == key })
     }
 
     fun save() {
@@ -97,20 +120,10 @@ class TaskDetailViewModel(
             dayOfMonth = dayOfMonthText.toIntOrNull() ?: 1,
             intervalDays = intervalText.toIntOrNull() ?: 2,
         )
-        viewModelScope.launch {
-            val before = itemId.value.takeIf { it != 0L }?.let { repository.get(it) }
-            val id = repository.save(task)
-            val inPast = reminderAt != null && reminderAt <= System.currentTimeMillis() && !f.completed
-            val spawned = f.completed && f.recurrenceType != null && (before == null || (!before.completed && !before.nextCreated))
-            onSaved(
-                id,
-                when {
-                    spawned -> "Saved. The next occurrence was added to your tasks."
-                    inPast -> "Saved. The reminder time has passed, so it will not fire."
-                    else -> "Saved"
-                },
-            )
-        }
+        // Blank items are dropped; the rest keep their order.
+        val checklist = f.checklist.filter { it.text.isNotBlank() }
+            .map { ChecklistItemEntity(taskId = itemId.value, position = 0, text = it.text.trim(), done = it.done) }
+        viewModelScope.launch { onSaved(repository.save(task, checklist)) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }

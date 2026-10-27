@@ -31,7 +31,8 @@ import com.example.xcommandcenter.R
 
 /**
  * Frame shared by all detail screens: back, save and delete actions, a snackbar for the view
- * model's messages, and a scrolling column for the content. Navigates back once [closed].
+ * model's messages, and a scrolling column for the content. Navigates back once [closed], which a
+ * successful save or a delete sets.
  */
 @Composable
 fun DetailScaffold(
