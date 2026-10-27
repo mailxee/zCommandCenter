@@ -64,9 +64,9 @@ fun HomeScreen(
                         IconButton(
                             onClick = {
                                 viewModel.setReorderMode(true)
-                                // Tasks and notes can only be moved in their custom order.
+                                // Items can only be moved in their tab's custom order.
                                 if (selected == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
-                                if (selected == ItemType.NOTE) viewModel.setNoteSort(NoteSort.CUSTOM)
+                                if (selected in priorityTabs) viewModel.setPrioritySort(selected, PrioritySort.CUSTOM)
                             },
                         ) {
                             Icon(painterResource(R.drawable.ic_reorder), contentDescription = "Reorder")
@@ -92,13 +92,13 @@ fun HomeScreen(
                         onClick = {
                             selectedName = tab.name
                             if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
-                            if (reorder && tab == ItemType.NOTE) viewModel.setNoteSort(NoteSort.CUSTOM)
+                            if (reorder && tab in priorityTabs) viewModel.setPrioritySort(tab, PrioritySort.CUSTOM)
                         },
                         text = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
                     )
                 }
             }
-            TagFilterBar(viewModel)
+            TagFilterBar(viewModel, selected)
             when (selected) {
                 ItemType.TASK -> TasksTab(viewModel, onOpen)
                 ItemType.GOAL -> GoalsTab(viewModel, onOpen)
@@ -114,13 +114,17 @@ fun HomeScreen(
 }
 
 /**
- * One filter for every tab: selected tags stay selected when switching tabs. Hidden until something
- * is tagged. The chips wrap onto more lines, so every tag stays on screen.
+ * One filter for every tab: selected tags stay selected when switching tabs. Shows the tags used on
+ * [tab]'s items, plus any selected tag, so a selection can always be turned off; hidden when that
+ * leaves none. The chips wrap onto more lines, so every tag stays on screen.
  */
 @Composable
-private fun TagFilterBar(viewModel: HomeViewModel) {
-    val tags by viewModel.allTags.collectAsStateWithLifecycle()
+private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
+    val allTags by viewModel.allTags.collectAsStateWithLifecycle()
     val filter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val tabTagIds by viewModel.tabTagIds.collectAsStateWithLifecycle()
+    val used = tabTagIds[tab].orEmpty()
+    val tags = allTags.filter { it.id in used || it.id in filter.selected }
     if (tags.isEmpty()) return
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),

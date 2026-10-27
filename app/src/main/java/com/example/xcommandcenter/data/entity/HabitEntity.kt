@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.xcommandcenter.domain.HabitCategory
+import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.Recurrence
 import com.example.xcommandcenter.domain.RecurrenceType
 import java.time.LocalDate
@@ -31,6 +32,8 @@ data class HabitEntity(
     @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
     /** Time of day to remind on each scheduled day, in minutes after midnight; null for no reminder. */
     val reminderMinutes: Int? = null,
+    /** How important the item is; Medium unless set. Tabs can sort and filter by it. */
+    @ColumnInfo(defaultValue = "MEDIUM") val priority: Priority = Priority.MEDIUM,
 ) {
     val recurrence: Recurrence
         get() = Recurrence.of(recurrenceType, weekdays, dayOfMonth, intervalDays)

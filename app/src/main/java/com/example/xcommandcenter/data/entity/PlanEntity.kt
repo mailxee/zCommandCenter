@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.xcommandcenter.domain.Priority
 
 /** Plans form a tree through [parentId]; null means a top-level plan. [sortOrder] orders siblings. */
 @Entity(
@@ -29,4 +30,6 @@ data class PlanEntity(
     @ColumnInfo(defaultValue = "0") val completed: Boolean = false,
     /** Position in the tab's list, lowest first; ties keep the tab's default order. Set by reordering. */
     @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
+    /** How important the item is; Medium unless set. Tabs can sort and filter by it. */
+    @ColumnInfo(defaultValue = "MEDIUM") val priority: Priority = Priority.MEDIUM,
 )

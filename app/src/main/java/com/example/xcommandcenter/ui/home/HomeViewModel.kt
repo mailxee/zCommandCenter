@@ -35,8 +35,15 @@ import java.time.LocalDate
 /** [CUSTOM] is the user's own order, set by reordering; the only sort in which tasks can be moved. */
 enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priority"), CUSTOM("Custom") }
 
-/** [CUSTOM] is the user's own order, the only one in which notes can be moved; [PRIORITY] puts Critical first. */
-enum class NoteSort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
+/**
+ * How the Goals, Habits, Plans, Notes, Books and Quotes tabs are sorted: [CUSTOM] is the user's own
+ * order, the only one in which items can be moved; [PRIORITY] puts Critical first, keeping the
+ * custom order among items of the same priority.
+ */
+enum class PrioritySort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
+
+/** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts. */
+val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE)
 
 enum class RepeatFilter(val label: String) {
     ALL("All"),
@@ -145,15 +152,19 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
 
-    val goals: StateFlow<List<GoalEntity>> = goalsRepo.observeAll().filteredByTags(ItemType.GOAL) { it.id }
+    /** Each tab's sort; a tab not in the map uses [PrioritySort.CUSTOM]. */
+    val prioritySorts = MutableStateFlow<Map<ItemType, PrioritySort>>(emptyMap())
+
+    /** Each tab's priority filter: the priorities to show; empty or missing shows every item. */
+    val priorityFilters = MutableStateFlow<Map<ItemType, Set<Priority>>>(emptyMap())
+
+    val goals: StateFlow<List<GoalEntity>> = goalsRepo.observeAll().sortedAndFiltered(ItemType.GOAL, { it.id }, { it.priority })
 
     val habits: StateFlow<List<HabitSummary>> =
-        combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks(), tagFilter) { habits, marks, tags ->
+        combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks()) { habits, marks ->
             val today = LocalDate.now()
-            habits.filter { tags.matches(ItemRef(ItemType.HABIT, it.id)) }.map { habit ->
-                habitSummary(habit, marks[habit.id].orEmpty(), today)
-            }
-        }.stateIn(emptyList())
+            habits.map { habit -> habitSummary(habit, marks[habit.id].orEmpty(), today) }
+        }.sortedAndFiltered(ItemType.HABIT, { it.habit.id }, { it.habit.priority })
 
     val showCompletedPlans = MutableStateFlow(false)
 
@@ -185,15 +196,22 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         tasksByPlan,
         combine(showCompletedPlans, showCompletedPlanTasks, ::Pair),
         container.collapsedPlansRepository.collapsed,
-        tagFilter,
-    ) { all, tasksByPlan, (showPlans, showTasks), collapsed, tags ->
-        val shown = if (showPlans) all else all.filterNot { it.completed }
+        combine(tagFilter, prioritySorts, priorityFilters, ::Triple),
+    ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tags, sorts, filters) ->
+        // Sorting the plans sorts siblings: the tree keeps each plan's children in the order given.
+        val sorted = if (sorts[ItemType.PLAN] == PrioritySort.PRIORITY) all.sortedByDescending { it.priority.ordinal } else all
+        val shown = if (showPlans) sorted else sorted.filterNot { it.completed }
+        val priorities = filters[ItemType.PLAN].orEmpty()
         fun tasksOf(planId: Long) = tasksByPlan[planId].orEmpty()
             .filter { (showTasks || !it.completed) && tags.matches(ItemRef(ItemType.TASK, it.id)) }
-        val visible = if (!tags.active) {
+        val visible = if (!tags.active && priorities.isEmpty()) {
             shown
         } else {
-            val hits = shown.filter { tags.matches(ItemRef(ItemType.PLAN, it.id)) || tasksOf(it.id).isNotEmpty() }.map { it.id }
+            // The priority filter applies to the plans themselves; their tasks are shown as usual.
+            val hits = shown.filter { plan ->
+                (priorities.isEmpty() || plan.priority in priorities) &&
+                    (!tags.active || tags.matches(ItemRef(ItemType.PLAN, plan.id)) || tasksOf(plan.id).isNotEmpty())
+            }.map { it.id }
             val keep = hits.toSet() + hits.flatMap { PlanTree.ancestorIds(it, shown, { p -> p.id }, { p -> p.parentId }) }
             shown.filter { it.id in keep }
         }
@@ -220,25 +238,28 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** Set when ticking a plan was refused because of open subplans. */
     val blockedCompletion = MutableStateFlow<BlockedCompletion?>(null)
 
-    val noteSort = MutableStateFlow(NoteSort.CUSTOM)
-
-    /** Priorities to show on the Notes tab; empty shows every note. */
-    val notePriorities = MutableStateFlow<Set<Priority>>(emptySet())
-
-    val notes: StateFlow<List<NoteEntity>> =
-        combine(notesRepo.observeAll(), noteSort, notePriorities, tagFilter) { notes, sort, priorities, tags ->
-            val shown = notes.filter { (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.NOTE, it.id)) }
-            // A stable sort, so notes of the same priority keep their custom order.
-            if (sort == NoteSort.PRIORITY) shown.sortedByDescending { it.priority.ordinal } else shown
-        }.stateIn(emptyList())
+    val notes: StateFlow<List<NoteEntity>> = notesRepo.observeAll().sortedAndFiltered(ItemType.NOTE, { it.id }, { it.priority })
 
     /** List items per note id, for the "list of 3 items" line. */
     val noteListCounts: StateFlow<Map<Long, Int>> = notesRepo.observeListCounts().stateIn(emptyMap())
 
     val books: StateFlow<List<BookWithProgress>> =
-        booksRepo.observeAllWithProgress().filteredByTags(ItemType.BOOK) { it.book.id }
+        booksRepo.observeAllWithProgress().sortedAndFiltered(ItemType.BOOK, { it.book.id }, { it.book.priority })
 
-    val quotes: StateFlow<List<QuoteEntity>> = quotesRepo.observeAll().filteredByTags(ItemType.QUOTE) { it.id }
+    val quotes: StateFlow<List<QuoteEntity>> = quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority })
+
+    /**
+     * The tags on the items each tab lists, for its tag filter bar. The Plans tab also lists the
+     * tasks linked to plans, so their tags count there too.
+     */
+    val tabTagIds: StateFlow<Map<ItemType, Set<Long>>> =
+        combine(tagsRepo.observeTagsByItem(), tasksByPlan) { byItem, tasksByPlan ->
+            val planTaskIds = tasksByPlan.values.flatten().map { it.id }.toSet()
+            ItemType.tabs.associateWith { tab ->
+                byItem.filterKeys { ref -> ref.type == tab || (tab == ItemType.PLAN && ref.type == ItemType.TASK && ref.id in planTaskIds) }
+                    .values.flatten().map { it.id }.toSet()
+            }
+        }.stateIn(emptyMap())
 
     fun toggleTag(tagId: Long) {
         selectedTagIds.value = selectedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
@@ -332,12 +353,13 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.CHAPTER -> Unit
     }
 
-    fun setNoteSort(sort: NoteSort) {
-        noteSort.value = sort
+    fun setPrioritySort(tab: ItemType, sort: PrioritySort) {
+        prioritySorts.value = prioritySorts.value + (tab to sort)
     }
 
-    fun toggleNotePriority(priority: Priority) {
-        notePriorities.value = notePriorities.value.let { if (priority in it) it - priority else it + priority }
+    fun togglePriority(tab: ItemType, priority: Priority) {
+        val current = priorityFilters.value[tab].orEmpty()
+        priorityFilters.value = priorityFilters.value + (tab to if (priority in current) current - priority else current + priority)
     }
 
     fun setRepeatFilter(filter: RepeatFilter) {
@@ -384,9 +406,17 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         viewModelScope.launch { habitsRepo.toggleMark(habitId, LocalDate.now()) }
     }
 
-    /** Keeps the items of [type] that pass the shared tag filter. */
-    private fun <T> Flow<List<T>>.filteredByTags(type: ItemType, id: (T) -> Long): StateFlow<List<T>> =
-        combine(this, tagFilter) { items, tags -> items.filter { tags.matches(ItemRef(type, id(it))) } }.stateIn(emptyList())
+    /**
+     * Keeps the items of [type] that pass the shared tag filter and the tab's priority filter, in
+     * the tab's sort. Sorting by priority is stable, so items of the same priority keep their
+     * custom order.
+     */
+    private fun <T> Flow<List<T>>.sortedAndFiltered(type: ItemType, id: (T) -> Long, priority: (T) -> Priority): StateFlow<List<T>> =
+        combine(this, tagFilter, prioritySorts, priorityFilters) { items, tags, sorts, filters ->
+            val priorities = filters[type].orEmpty()
+            val shown = items.filter { (priorities.isEmpty() || priority(it) in priorities) && tags.matches(ItemRef(type, id(it))) }
+            if (sorts[type] == PrioritySort.PRIORITY) shown.sortedByDescending { priority(it).ordinal } else shown
+        }.stateIn(emptyList())
 
     private fun <T> Flow<T>.stateIn(initial: T): StateFlow<T> =
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)

@@ -35,6 +35,7 @@ import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.LinksInText
+import com.example.xcommandcenter.ui.common.PriorityField
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
 import com.example.xcommandcenter.ui.common.times
@@ -82,6 +83,7 @@ fun BookDetailScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(book.description)
+        PriorityField(book.priority) { p -> viewModel.update { it.copy(priority = p) } }
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
 
