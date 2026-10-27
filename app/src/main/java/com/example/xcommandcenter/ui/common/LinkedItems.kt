@@ -91,8 +91,21 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
     }
 }
 
+/**
+ * Items linked to something else shown on this page, such as a book's chapter: a [title], then the
+ * cards with their usual controls. Links are added and removed on that item's own page.
+ */
 @Composable
-private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit) {
+fun LinkedCardsGroup(title: String, cards: List<ItemCardData>, viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        cards.forEach { card -> LinkedCard(card, viewModel, onOpen, removable = false) }
+    }
+}
+
+/** [removable] offers a button that removes the link to this page's item. */
+@Composable
+private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit, removable: Boolean = true) {
     val control = card.control
     ItemCard(
         type = card.ref.type,
@@ -119,8 +132,10 @@ private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpe
                         label = { Text(if (control.positive) "Done today" else "Missed today") },
                     )
                 }
-                IconButton(onClick = { viewModel.unlink(card.ref) }) {
-                    Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove link")
+                if (removable) {
+                    IconButton(onClick = { viewModel.unlink(card.ref) }) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove link")
+                    }
                 }
             }
         },

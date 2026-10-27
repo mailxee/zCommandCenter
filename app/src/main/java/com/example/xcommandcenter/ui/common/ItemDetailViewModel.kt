@@ -52,6 +52,9 @@ abstract class ItemDetailViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Cards for the items linked to [owner], another item shown on this page (a book's chapter). */
+    protected fun linkedCardsOf(owner: ItemRef): Flow<List<ItemCardData>> = cards.cardsFor(owner, links.observeLinked(owner))
+
     /** Set when ticking a linked plan was refused because of open subplans. */
     var linkedBlocked by mutableStateOf<BlockedCompletion?>(null)
         private set

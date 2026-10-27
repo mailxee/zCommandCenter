@@ -33,6 +33,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.DragHandle
+import com.example.xcommandcenter.ui.common.LinkedCardsGroup
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
@@ -87,6 +88,13 @@ fun BookDetailScreen(
         RemindersSection(viewModel)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
+        val chapterLinks by viewModel.chapterLinks.collectAsStateWithLifecycle()
+        if (chapterLinks.isNotEmpty()) {
+            SectionTitle("Linked to chapters")
+            chapterLinks.forEach { (chapter, cards) ->
+                LinkedCardsGroup("${chapter.position + 1}. ${chapter.title}", cards, viewModel, onOpen)
+            }
+        }
 
         // Like a chapter's progress, applied at once rather than on save.
         stored?.let { saved ->

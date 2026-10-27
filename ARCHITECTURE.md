@@ -636,6 +636,13 @@ rule under the schedule.
   done", "Book done"). The data (`internalized` columns) and the backup's "Internalized" columns
   keep their names, so older workbooks still import.
 
+### 2.34 A book's page shows what its chapters are linked to
+
+Below the book's own linked items, "Linked to chapters" lists, per chapter in table-of-contents
+order, the items linked to that chapter, as cards with their usual controls
+(`BookDetailViewModel.chapterLinks`, `LinkedCardsGroup`). Chapters with no links are left out.
+These links are added and removed on the chapter's page, so the cards have no remove button.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
