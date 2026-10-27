@@ -8,6 +8,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -61,6 +62,7 @@ fun ChapterDetailScreen(
                 Text("Read ${chapter.readCount} times", modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = { viewModel.addRead(-1) }, enabled = chapter.readCount > 0) { Text("−1") }
                 OutlinedButton(onClick = { viewModel.addRead(1) }) { Text("+1") }
+                TextButton(onClick = viewModel::clearReads, enabled = chapter.readCount > 0) { Text("Clear") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Internalized", modifier = Modifier.weight(1f))

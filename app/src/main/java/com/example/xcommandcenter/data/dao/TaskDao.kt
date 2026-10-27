@@ -96,10 +96,10 @@ interface TaskDao {
 
     /**
      * Marks the task completed. A repeating task also gets its next occurrence, once: a copy due
-     * on the next scheduled date after this one's due date (today if it has none), with the
-     * reminder moved by the same number of days, the same links and tags, and the same checklist
-     * with every item unticked. The completed
-     * task stays as history. Returns the new task's id, or null if none was created.
+     * on the next scheduled date after this one's due date (today if it has none), skipping dates
+     * that have already passed, with the reminder moved by the same number of days (so it keeps its
+     * time and its distance from the due date), the same links and tags, and the same checklist
+     * with every item unticked. The completed task stays as history. Returns the new task's id, or null if none was created.
      */
     @Transaction
     suspend fun complete(id: Long): Long? {
@@ -107,8 +107,9 @@ interface TaskDao {
         setCompleted(id, true)
         val recurrence = task.recurrence ?: return null
         if (task.nextCreated) return null
-        val from = task.dueDate ?: LocalDate.now()
-        val next = recurrence.nextAfter(from) ?: return null
+        val today = LocalDate.now()
+        val from = task.dueDate ?: today
+        val next = recurrence.nextFrom(from, today) ?: return null
         val days = ChronoUnit.DAYS.between(from, next)
         val reminder = task.reminderAt?.let {
             Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).plusDays(days).toInstant().toEpochMilli()

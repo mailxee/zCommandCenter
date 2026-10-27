@@ -14,6 +14,7 @@ import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
+import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
@@ -29,6 +30,7 @@ interface BackupDao {
     @Query("SELECT * FROM habit_marks") suspend fun habitMarks(): List<HabitMarkEntity>
     @Query("SELECT * FROM plans ORDER BY id") suspend fun plans(): List<PlanEntity>
     @Query("SELECT * FROM notes ORDER BY id") suspend fun notes(): List<NoteEntity>
+    @Query("SELECT * FROM note_list_items ORDER BY noteId, position") suspend fun noteListItems(): List<NoteListItemEntity>
     @Query("SELECT * FROM books ORDER BY id") suspend fun books(): List<BookEntity>
     @Query("SELECT * FROM chapters ORDER BY bookId, position") suspend fun chapters(): List<ChapterEntity>
     @Query("SELECT * FROM quotes ORDER BY id") suspend fun quotes(): List<QuoteEntity>
@@ -39,7 +41,7 @@ interface BackupDao {
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
-        tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(),
+        tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -49,6 +51,7 @@ interface BackupDao {
     @Insert suspend fun insertHabitMarks(rows: List<HabitMarkEntity>)
     @Insert suspend fun insertPlans(rows: List<PlanEntity>)
     @Insert suspend fun insertNotes(rows: List<NoteEntity>)
+    @Insert suspend fun insertNoteListItems(rows: List<NoteListItemEntity>)
     @Insert suspend fun insertBooks(rows: List<BookEntity>)
     @Insert suspend fun insertChapters(rows: List<ChapterEntity>)
     @Insert suspend fun insertQuotes(rows: List<QuoteEntity>)
@@ -63,6 +66,7 @@ interface BackupDao {
     @Query("DELETE FROM habit_marks") suspend fun deleteHabitMarks()
     @Query("DELETE FROM chapters") suspend fun deleteChapters()
     @Query("DELETE FROM checklist_items") suspend fun deleteChecklistItems()
+    @Query("DELETE FROM note_list_items") suspend fun deleteNoteListItems()
     @Query("DELETE FROM tasks") suspend fun deleteTasks()
     @Query("DELETE FROM goals") suspend fun deleteGoals()
     @Query("DELETE FROM habits") suspend fun deleteHabits()
@@ -79,6 +83,7 @@ interface BackupDao {
         deleteHabitMarks()
         deleteChapters()
         deleteChecklistItems()
+        deleteNoteListItems()
         deleteTasks()
         deleteGoals()
         deleteHabits()
@@ -103,6 +108,7 @@ interface BackupDao {
         insertHabitMarks(data.habitMarks)
         insertPlans(data.plans)
         insertNotes(data.notes)
+        insertNoteListItems(data.noteListItems)
         insertBooks(data.books)
         insertChapters(data.chapters)
         insertQuotes(data.quotes)

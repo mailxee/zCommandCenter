@@ -13,6 +13,7 @@ import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
+import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
@@ -45,11 +46,11 @@ class BackupFormatTest {
             TaskEntity(2, "File taxes", priority = Priority.CRITICAL, completed = true, createdAt = created),
         ),
         goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created)),
-        habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created)),
+        habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created, reminderMinutes = 7 * 60 + 30)),
         habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1))),
         plans = listOf(PlanEntity(2, "Child", parentId = 1, completed = true, createdAt = created), PlanEntity(1, "Parent", completed = true, createdAt = created)),
-        notes = listOf(NoteEntity(1, "", "Body only", created, sortOrder = -2)),
-        books = listOf(BookEntity(1, "Atomic Habits", "James Clear", "", created)),
+        notes = listOf(NoteEntity(1, "", "Body only", created, sortOrder = -2, priority = Priority.HIGH)),
+        books = listOf(BookEntity(1, "Atomic Habits", "James Clear", "", created, readCount = 2, internalized = true)),
         chapters = listOf(ChapterEntity(5, 1, 0, "The surprising power", 2, true, created)),
         quotes = listOf(QuoteEntity(1, "Done is better than perfect.", createdAt = created)),
         links = listOf(LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PLAN, 2)).copy(createdAt = created)),
@@ -58,6 +59,10 @@ class BackupFormatTest {
         checklistItems = listOf(
             ChecklistItemEntity(taskId = 1, position = 0, text = "Basil", done = true),
             ChecklistItemEntity(taskId = 1, position = 1, text = "Tomatoes"),
+        ),
+        noteListItems = listOf(
+            NoteListItemEntity(noteId = 1, position = 0, text = "First"),
+            NoteListItemEntity(noteId = 1, position = 1, text = "Second"),
         ),
     )
 
@@ -79,6 +84,7 @@ class BackupFormatTest {
         assertEquals(listOf("Home"), back.tags.map { it.name })
         assertEquals(setOf(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.CHAPTER, 5)), back.itemTags.map { ItemRef(it.type, it.itemId) }.toSet())
         assertEquals(data.checklistItems, back.checklistItems)
+        assertEquals(data.noteListItems, back.noteListItems)
     }
 
     @Test
@@ -95,7 +101,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Chapters", "Habit history", "Links", "Tags"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags"), names)
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.TagsSection
 
 @Composable
@@ -44,6 +45,7 @@ fun GoalDetailScreen(
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinksInText(goal.strategy)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
     }

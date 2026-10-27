@@ -37,7 +37,7 @@ class AppContainer(context: Context) {
     val tagRepository = TagRepository(database.tagDao())
     val taskRepository = TaskRepository(database.taskDao(), reminderScheduler)
     val goalRepository = GoalRepository(database.goalDao())
-    val habitRepository = HabitRepository(database.habitDao())
+    val habitRepository = HabitRepository(database.habitDao(), reminderScheduler)
     val planRepository = PlanRepository(database.planDao())
     val noteRepository = NoteRepository(database.noteDao())
     val bookRepository = BookRepository(database.bookDao())
@@ -46,5 +46,5 @@ class AppContainer(context: Context) {
         taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
         linkRepository, tagRepository,
     )
-    val backupRepository = BackupRepository(context, database.backupDao(), taskRepository, reminderScheduler, tabOrderRepository)
+    val backupRepository = BackupRepository(context, database.backupDao(), taskRepository, habitRepository, reminderScheduler, tabOrderRepository)
 }

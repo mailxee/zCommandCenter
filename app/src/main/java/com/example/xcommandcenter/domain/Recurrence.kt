@@ -2,6 +2,8 @@ package com.example.xcommandcenter.domain
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 
 enum class HabitCategory(val label: String) {
@@ -64,6 +66,26 @@ sealed interface Recurrence {
      */
     fun nextAfter(date: LocalDate): LocalDate? =
         generateSequence(date.plusDays(1)) { it.plusDays(1) }.take(400).firstOrNull { isScheduled(it, date) }
+
+    /**
+     * Like [nextAfter], but never before [today]: occurrences that have already passed are
+     * skipped, so a repeating task completed late gets its next occurrence in the future.
+     */
+    fun nextFrom(date: LocalDate, today: LocalDate): LocalDate? {
+        val first = maxOf(date.plusDays(1), today)
+        return generateSequence(first) { it.plusDays(1) }.take(400).firstOrNull { isScheduled(it, date) }
+    }
+
+    /**
+     * When a habit with this schedule should next remind at [time]: the first scheduled day, from
+     * [start] on, whose [time] is after [now]. Null when nothing is scheduled within 400 days.
+     */
+    fun nextReminder(start: LocalDate, time: LocalTime, now: LocalDateTime): LocalDateTime? =
+        generateSequence(maxOf(now.toLocalDate(), start)) { it.plusDays(1) }
+            .take(400)
+            .filter { isScheduled(it, start) }
+            .map { it.atTime(time) }
+            .firstOrNull { it.isAfter(now) }
 
     companion object {
         /** Builds a recurrence from the flat columns that habits and tasks store. */

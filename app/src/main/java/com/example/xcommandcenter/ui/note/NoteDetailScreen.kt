@@ -12,6 +12,9 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.LinksInText
+import com.example.xcommandcenter.ui.common.ListEditor
+import com.example.xcommandcenter.ui.common.PriorityField
 import com.example.xcommandcenter.ui.common.TagsSection
 
 @Composable
@@ -44,6 +47,16 @@ fun NoteDetailScreen(
             minLines = 8,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinksInText(note.body)
+        ListEditor(
+            title = "List",
+            lines = viewModel.list,
+            checkable = false,
+            onAdd = viewModel::addListItem,
+            onUpdate = viewModel::updateListItem,
+            onRemove = viewModel::removeListItem,
+        )
+        PriorityField(note.priority) { p -> viewModel.update { it.copy(priority = p) } }
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
     }

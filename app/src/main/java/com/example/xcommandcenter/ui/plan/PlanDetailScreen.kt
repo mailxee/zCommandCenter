@@ -36,6 +36,7 @@ import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
 import com.example.xcommandcenter.ui.common.clearListItemColors
@@ -81,6 +82,7 @@ fun PlanDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinksInText(plan.description)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
         if (id != 0L) {

@@ -338,6 +338,7 @@ private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: Check
 @Composable
 fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val listCounts by viewModel.noteListCounts.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
@@ -349,7 +350,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             ReorderableItem(drag.state, key = note.id, enabled = reorder) {
                 ItemCard(
                     ItemType.NOTE,
-                    text = noteCardText(note),
+                    text = noteCardText(note, listCounts[note.id] ?: 0),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },

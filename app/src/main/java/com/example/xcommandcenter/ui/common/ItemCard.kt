@@ -81,7 +81,8 @@ fun goalCardText(goal: GoalEntity) = CardText(goal.title, listOfNotNull(goal.str
 fun habitCardText(summary: HabitSummary) = CardText(
     title = summary.habit.name,
     lines = listOf(
-        "${summary.habit.category.label} · ${summary.habit.recurrence.describe()}",
+        "${summary.habit.category.label} · ${summary.habit.recurrence.describe()}" +
+            (summary.habit.reminderTime?.let { " · reminder ${it.display()}" } ?: ""),
         if (summary.positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
         else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
     ),
@@ -91,13 +92,27 @@ fun habitCardText(summary: HabitSummary) = CardText(
 fun planCardText(plan: PlanEntity, hidden: String? = null) =
     CardText(plan.title, listOfNotNull(plan.description.ifBlank { null }, hidden), done = plan.completed)
 
-fun noteCardText(note: NoteEntity) = CardText(note.title.ifBlank { "Untitled" }, listOfNotNull(note.body.ifBlank { null }))
+/** [listCount] is the number of items in the note's list. */
+fun noteCardText(note: NoteEntity, listCount: Int) = CardText(
+    title = note.title.ifBlank { "Untitled" },
+    lines = listOfNotNull(
+        "${note.priority.label} priority" + (if (listCount > 0) " · list of ${listCount.items()}" else ""),
+        note.body.ifBlank { null },
+    ),
+    emphasis = note.priority == Priority.CRITICAL,
+)
+
+private fun Int.items(): String = if (this == 1) "1 item" else "$this items"
 
 fun bookCardText(item: BookWithProgress) = CardText(
     title = item.book.title,
     lines = listOfNotNull(
         item.book.author.ifBlank { null },
         "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
+        listOfNotNull(
+            "Read ${times(item.book.readCount)}".takeIf { item.book.readCount > 0 },
+            "Book internalized".takeIf { item.book.internalized },
+        ).joinToString(" · ").ifEmpty { null },
     ),
 )
 
@@ -142,7 +157,7 @@ fun ItemCard(
                 )
                 text.lines.forEach { line ->
                     Text(
-                        line,
+                        linkified(line),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,

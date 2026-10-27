@@ -15,15 +15,14 @@ import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
+import com.example.xcommandcenter.ui.common.ListLine
+import com.example.xcommandcenter.ui.common.ListLines
 import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-
-/** One checklist item being edited; [key] tells rows apart while their text changes. */
-data class ChecklistLine(val key: Long, val text: String, val done: Boolean = false)
 
 data class TaskForm(
     val title: String = "",
@@ -37,7 +36,7 @@ data class TaskForm(
     val recurrenceType: RecurrenceType? = null,
     val weekdays: Int = 0,
     /** Saved with the rest of the form. Open items don't stop the task from being completed. */
-    val checklist: List<ChecklistLine> = emptyList(),
+    val checklist: List<ListLine> = emptyList(),
 )
 
 class TaskDetailViewModel(
@@ -55,13 +54,13 @@ class TaskDetailViewModel(
     var dayOfMonthText by mutableStateOf("1")
     var intervalText by mutableStateOf("2")
 
-    private var nextLineKey = 0L
+    private val lines = ListLines()
 
     init {
         val id = itemId.value
         if (id != 0L) viewModelScope.launch {
             val task = repository.get(id) ?: return@launch onMissing()
-            val checklist = repository.checklist(id).map { ChecklistLine(nextLineKey++, it.text, it.done) }
+            val checklist = repository.checklist(id).map { lines.line(it.text, it.done) }
             dayOfMonthText = task.dayOfMonth.toString()
             intervalText = task.intervalDays.toString()
             form = TaskForm(
@@ -84,16 +83,15 @@ class TaskDetailViewModel(
     }
 
     fun addChecklistItem(text: String) {
-        if (text.isBlank()) return
-        form = form.copy(checklist = form.checklist + ChecklistLine(nextLineKey++, text.trim()))
+        form = form.copy(checklist = lines.add(form.checklist, text))
     }
 
-    fun updateChecklistItem(key: Long, transform: (ChecklistLine) -> ChecklistLine) {
-        form = form.copy(checklist = form.checklist.map { if (it.key == key) transform(it) else it })
+    fun updateChecklistItem(key: Long, transform: (ListLine) -> ListLine) {
+        form = form.copy(checklist = lines.update(form.checklist, key, transform))
     }
 
     fun removeChecklistItem(key: Long) {
-        form = form.copy(checklist = form.checklist.filterNot { it.key == key })
+        form = form.copy(checklist = lines.remove(form.checklist, key))
     }
 
     fun save(close: Boolean) {

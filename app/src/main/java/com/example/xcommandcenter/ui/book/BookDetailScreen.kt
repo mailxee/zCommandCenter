@@ -10,7 +10,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,8 +34,10 @@ import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
+import com.example.xcommandcenter.ui.common.times
 import sh.calvin.reorderable.ReorderableColumn
 
 @Composable
@@ -44,6 +48,7 @@ fun BookDetailScreen(
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
+    val stored by viewModel.stored.collectAsStateWithLifecycle()
     val book = viewModel.book
     var addingChapter by rememberSaveable { mutableStateOf(false) }
 
@@ -76,8 +81,24 @@ fun BookDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinksInText(book.description)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
+
+        // Like a chapter's progress, applied at once rather than on save.
+        stored?.let { saved ->
+            SectionTitle("Progress")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Read ${times(saved.readCount)}", modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { viewModel.addBookRead(-1) }, enabled = saved.readCount > 0) { Text("−1") }
+                OutlinedButton(onClick = { viewModel.addBookRead(1) }) { Text("+1") }
+                TextButton(onClick = viewModel::clearBookReads, enabled = saved.readCount > 0) { Text("Clear") }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Internalized", modifier = Modifier.weight(1f))
+                Switch(checked = saved.internalized, onCheckedChange = viewModel::setBookInternalized)
+            }
+        }
 
         SectionTitle("Table of contents")
         if (id == 0L) {

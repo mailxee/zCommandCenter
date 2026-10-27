@@ -66,6 +66,10 @@ class ChapterDetailViewModel(
         viewModelScope.launch { repository.addReadCount(itemId.value, delta) }
     }
 
+    fun clearReads() {
+        viewModelScope.launch { repository.clearReadCount(itemId.value) }
+    }
+
     fun setInternalized(internalized: Boolean) {
         viewModelScope.launch { repository.setInternalized(itemId.value, internalized) }
     }
