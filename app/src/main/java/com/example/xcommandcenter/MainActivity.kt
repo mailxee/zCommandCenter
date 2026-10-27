@@ -19,9 +19,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemStyles
+import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.reminder.Notifications
 import com.example.xcommandcenter.ui.common.LocalItemStyles
+import com.example.xcommandcenter.ui.common.LocalTabOrder
 import com.example.xcommandcenter.ui.navigation.AppNavHost
 import com.example.xcommandcenter.ui.theme.AppTheme
 
@@ -44,8 +46,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val styles by (application as XCommandCenterApp).container.itemStyleRepository.styles
                 .collectAsStateWithLifecycle(initialValue = ItemStyles())
+            val tabOrder by (application as XCommandCenterApp).container.tabOrderRepository.order
+                .collectAsStateWithLifecycle(initialValue = TabOrder.default)
             AppTheme {
-                CompositionLocalProvider(LocalItemStyles provides styles) {
+                CompositionLocalProvider(LocalItemStyles provides styles, LocalTabOrder provides tabOrder) {
                     RequestNotificationPermission()
                     AppNavHost(openItem = openItem, onItemOpened = { openItem = null })
                 }

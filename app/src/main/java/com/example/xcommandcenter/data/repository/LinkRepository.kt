@@ -13,14 +13,17 @@ class LinkRepository(private val dao: LinkDao) {
     fun observeLinked(ref: ItemRef): Flow<List<ItemIndexEntry>> = dao.observeLinked(ref.type, ref.id)
 
     /**
-     * For every item that has links, the items it is linked to, as cards list them. A book also
-     * lists what its chapters are linked to, each item once and never the book itself.
+     * For every item that has links, the items it is linked to, as cards list them: a linked
+     * chapter is shown as its book, and a book also lists what its chapters are linked to. Each
+     * item appears once, and never the item itself.
      */
     fun observeLinksByOwner(): Flow<Map<ItemRef, List<ItemIndexEntry>>> =
-        combine(dao.observeAllOwned(), dao.observeChapterLinksByBook()) { rows, chapterRows ->
+        combine(dao.observeAllOwned(), dao.observeChapterLinksByBook(), dao.observeChapterBooks()) { rows, chapterRows, chapterBooks ->
+            val bookOf = chapterBooks.associate { it.chapterId to it.entry }
             (rows + chapterRows)
-                .filter { it.owner != it.entry.ref }
-                .groupBy({ it.owner }, { it.entry })
+                .map { row -> if (row.type == ItemType.CHAPTER) bookOf[row.id]?.let { row.owner to it } ?: (row.owner to row.entry) else row.owner to row.entry }
+                .filter { (owner, entry) -> owner != entry.ref }
+                .groupBy({ it.first }, { it.second })
                 .mapValues { (_, entries) -> entries.distinctBy { it.ref }.sortedBy { it.title.lowercase() } }
         }
 

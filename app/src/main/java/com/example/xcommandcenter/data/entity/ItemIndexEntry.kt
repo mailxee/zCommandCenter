@@ -36,6 +36,11 @@ data class ItemIndexEntry(
     val ref: ItemRef get() = ItemRef(type, id)
 }
 
+/** A chapter's book, for showing a linked chapter as its book on cards. */
+data class ChapterBook(val chapterId: Long, val id: Long, val title: String, val subtitle: String?) {
+    val entry: ItemIndexEntry get() = ItemIndexEntry(ItemType.BOOK, id, title, subtitle)
+}
+
 /** A linked item together with the item it is linked from; feeds the tab lists. */
 data class OwnedLink(
     val ownerType: ItemType,

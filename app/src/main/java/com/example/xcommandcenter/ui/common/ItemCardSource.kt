@@ -110,8 +110,8 @@ class ItemCardSource(
     )
 
     /**
-     * Cards for [entries] (the items linked to [self]), in the same order. Each card's "Linked:"
-     * line leaves out [self], whose page the cards are shown on.
+     * Cards for [entries] (the items linked to [self]), in the same order. Each card's link lines
+     * leave out [self], whose page the cards are shown on.
      */
     fun cardsFor(self: ItemRef, entries: Flow<List<ItemIndexEntry>>): Flow<List<ItemCardData>> =
         combine(entries, parts) { list, (texts, tagsByItem, linksByOwner, reminderLines) ->

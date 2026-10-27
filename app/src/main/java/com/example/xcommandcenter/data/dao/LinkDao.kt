@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.example.xcommandcenter.data.entity.ChapterBook
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.OwnedLink
@@ -56,6 +57,10 @@ interface LinkDao {
         """,
     )
     fun observeChapterLinksByBook(): Flow<List<OwnedLink>>
+
+    /** Each chapter's book, as an index entry, keyed by the chapter's id. */
+    @Query("SELECT c.id AS chapterId, b.id, b.title, NULLIF(b.author, '') AS subtitle FROM chapters c JOIN books b ON b.id = c.bookId")
+    fun observeChapterBooks(): Flow<List<ChapterBook>>
 
     @Query(
         """

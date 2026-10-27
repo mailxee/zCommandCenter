@@ -648,6 +648,15 @@ line what its chapters are linked to as well as what the book is, each item once
 naming the chapters (`LinkDao.observeChapterLinksByBook`, merged in
 `LinkRepository.observeLinksByOwner`).
 
+### 2.35 Links on cards, tab by tab
+
+A card's single "Linked: …" line is now one line per tab, in the user's tab order
+(`LocalTabOrder`, provided at the root like the item styles): "Tasks: A · B", then "Notes: C", the
+tab name and the items in that tab's style. A linked chapter is shown as its book on the "Books:"
+line, and each book only once, however many of its chapters are linked
+(`LinkDao.observeChapterBooks`, applied in `LinkRepository.observeLinksByOwner`); the item's own
+page still lists the chapters in Linked items.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

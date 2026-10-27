@@ -346,7 +346,7 @@ private fun PlanRow(
 ) {
     val plan = row.plan
     val ref = ItemRef(ItemType.PLAN, plan.id)
-    // Linked tasks are rows of their own below the plan, so the "Linked:" line leaves them out.
+    // Linked tasks are rows of their own below the plan, so the link lines leave them out.
     val otherLinks = links[ref].orEmpty().filter { it.type != ItemType.TASK }
     val hidden = listOfNotNull(
         row.subplanCount.takeIf { it > 0 }?.let { if (it == 1) "1 subplan" else "$it subplans" },

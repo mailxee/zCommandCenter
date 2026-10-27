@@ -143,8 +143,9 @@ fun times(count: Int): String = if (count == 1) "once" else "$count times"
 
 /**
  * An item's card: title in its tab's style, detail lines, its [reminder] line (see
- * [reminderLine]; not shown once the item is done), the item's tags, and the titles of everything
- * it is linked to. Used by the tab lists and by the linked items on detail pages.
+ * [reminderLine]; not shown once the item is done), the item's tags, and what it is linked to: a
+ * line per tab, in the user's tab order ("Tasks: …"). Used by the tab lists and by the linked
+ * items on detail pages.
  */
 @Composable
 fun ItemCard(
@@ -199,23 +200,26 @@ fun ItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (links.isNotEmpty()) {
-                    // Each linked item in its own tab's style.
-                    val styles = LocalItemStyles.current
-                    val dark = isDarkSurface()
-                    Text(
-                        buildAnnotatedString {
-                            append("Linked: ")
-                            links.forEachIndexed { index, entry ->
-                                if (index > 0) append(" · ")
-                                withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
-                            }
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                // One line per tab, its name and its items in the tab's style.
+                val styles = LocalItemStyles.current
+                val dark = isDarkSurface()
+                LocalTabOrder.current.forEach { tab ->
+                    val group = links.filter { it.type.tab == tab }
+                    if (group.isNotEmpty()) {
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(styles[tab].toSpanStyle(dark)) { append("${tab.tabLabel}: ") }
+                                group.forEachIndexed { index, entry ->
+                                    if (index > 0) append(" · ")
+                                    withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
+                                }
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
             trailing?.invoke()
