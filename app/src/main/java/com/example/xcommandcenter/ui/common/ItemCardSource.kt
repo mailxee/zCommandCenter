@@ -93,11 +93,9 @@ class ItemCardSource(
     val reminderLines: Flow<Map<ItemRef, String>> =
         combine(reminders.observeAll(), habits.observeAll(), habits.observeAllMarks()) { byItem, habitList, marks ->
             val habitsById = habitList.associateBy { it.id }
-            val today = LocalDate.now()
             byItem.mapNotNull { (ref, times) ->
                 val habit = if (ref.type == ItemType.HABIT) habitsById[ref.id] else null
-                val markedToday = habit != null && today in marks[habit.id].orEmpty()
-                reminderLine(ref.type, times, habit = habit, markedToday = markedToday)?.let { ref to it }
+                reminderLine(ref.type, times, habit = habit, marks = habit?.let { marks[it.id] }.orEmpty())?.let { ref to it }
             }.toMap()
         }
 

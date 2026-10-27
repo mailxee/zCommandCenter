@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
@@ -88,6 +89,14 @@ fun HabitDetailScreen(
             onInterval = { viewModel.intervalText = it },
             intervalHelp = "Counted from the habit's start date.",
         )
+        if (habit.recurrenceType == RecurrenceType.EVERY_N_DAYS) {
+            Text(
+                "If a due day is missed, the habit is due again the next day, and every day until it's done. " +
+                    "The N days then count from the day it was done.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         RemindersSection(viewModel, viewModel::nextReminder)
 
@@ -119,7 +128,7 @@ fun HabitDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                HabitStats.recentOccurrences(saved.recurrence, saved.startDate, today, 21).forEach { date ->
+                HabitStats.recentDueDates(saved.category, saved.recurrence, saved.startDate, marks, today, 21).forEach { date ->
                     FilterChip(
                         selected = date in marks,
                         onClick = { viewModel.toggleMark(date) },

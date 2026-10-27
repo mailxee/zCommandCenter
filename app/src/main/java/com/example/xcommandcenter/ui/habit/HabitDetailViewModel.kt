@@ -51,15 +51,14 @@ class HabitDetailViewModel(
 
     /**
      * When the reminder at [minute] of the day next goes off, by the schedule as edited (saving
-     * keeps it), skipping today once it is marked.
+     * keeps it) and the marks, skipping today once it is marked.
      */
     fun nextReminder(minute: Long): LocalDateTime? {
         val edited = habit.copy(
             dayOfMonth = dayOfMonthText.toIntOrNull() ?: habit.dayOfMonth,
             intervalDays = intervalText.toIntOrNull()?.takeIf { it > 0 } ?: habit.intervalDays,
         )
-        val now = LocalDateTime.now()
-        return edited.nextReminder(minute, now, markedToday = now.toLocalDate() in marks.value)
+        return edited.nextReminder(minute, LocalDateTime.now(), marks.value)
     }
 
     init {

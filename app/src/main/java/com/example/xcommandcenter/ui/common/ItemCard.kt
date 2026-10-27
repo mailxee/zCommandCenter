@@ -56,7 +56,7 @@ fun habitSummary(habit: HabitEntity, marks: Set<LocalDate>, today: LocalDate): H
     habit = habit,
     streak = HabitStats.streak(habit.category, habit.recurrence, habit.startDate, marks, today),
     totalMarks = marks.size,
-    scheduledToday = habit.recurrence.isScheduled(today, habit.startDate),
+    scheduledToday = HabitStats.isDue(habit.category, habit.recurrence, habit.startDate, marks, today),
     markedToday = today in marks,
 )
 

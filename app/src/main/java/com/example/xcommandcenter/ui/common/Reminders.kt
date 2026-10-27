@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.HabitEntity
+import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemType
 import java.time.Instant
 import java.time.LocalDate
@@ -94,31 +95,32 @@ fun reminderText(type: ItemType, time: Long): String =
     }
 
 /**
- * When a habit's reminder at [minute] of the day next goes off and shows: on a scheduled day, at a
- * time still ahead of [now], and not today if today is already marked ([markedToday]).
+ * When a habit's reminder at [minute] of the day next goes off and shows: on a day the habit is
+ * due (given its [marks], see [HabitStats.dueDates]), at a time still ahead of [now], and not
+ * today if today is already marked.
  */
-fun HabitEntity.nextReminder(minute: Long, now: LocalDateTime, markedToday: Boolean): LocalDateTime? {
+fun HabitEntity.nextReminder(minute: Long, now: LocalDateTime, marks: Set<LocalDate>): LocalDateTime? {
     val time = LocalTime.of((minute / 60).toInt(), (minute % 60).toInt())
-    val from = if (markedToday) now.toLocalDate().atTime(LocalTime.MAX) else now
-    return recurrence.nextReminder(startDate, time, from)
+    val from = if (now.toLocalDate() in marks) now.toLocalDate().atTime(LocalTime.MAX) else now
+    return HabitStats.nextReminder(category, recurrence, startDate, marks, time, from)
 }
 
 /**
  * The reminder line on an item's card: a habit's times of day and when the next one is (given the
- * [habit] and whether today is [markedToday]), or the next reminder still to come on anything else
- * (with how many more follow). Null when there is nothing to show.
+ * [habit] and its [marks]), or the next reminder still to come on anything else (with how many
+ * more follow). Null when there is nothing to show.
  */
 fun reminderLine(
     type: ItemType,
     times: List<Long>,
     now: Long = System.currentTimeMillis(),
     habit: HabitEntity? = null,
-    markedToday: Boolean = false,
+    marks: Set<LocalDate> = emptySet(),
 ): String? {
     if (type == ItemType.HABIT) {
         if (times.isEmpty()) return null
         val at = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDateTime()
-        val next = habit?.let { h -> times.mapNotNull { h.nextReminder(it, at, markedToday) }.minOrNull() }
+        val next = habit?.let { h -> times.mapNotNull { h.nextReminder(it, at, marks) }.minOrNull() }
         return (if (times.size == 1) "Reminder " else "Reminders ") + times.sorted().joinToString(", ") { reminderText(type, it) } +
             next?.let { " · next ${it.display()}" }.orEmpty()
     }

@@ -2,6 +2,8 @@ package com.example.xcommandcenter.data.repository
 
 import com.example.xcommandcenter.data.dao.HabitDao
 import com.example.xcommandcenter.data.entity.HabitEntity
+import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -34,7 +36,11 @@ class HabitRepository(
 
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
-    suspend fun toggleMark(habitId: Long, date: LocalDate) = dao.toggleMark(habitId, date)
+    /** Marks can change when an "every N days" habit is next due, so its reminders follow. */
+    suspend fun toggleMark(habitId: Long, date: LocalDate) {
+        dao.toggleMark(habitId, date)
+        reminders.sync(ItemRef(ItemType.HABIT, habitId))
+    }
 
     suspend fun delete(id: Long) {
         dao.delete(id)

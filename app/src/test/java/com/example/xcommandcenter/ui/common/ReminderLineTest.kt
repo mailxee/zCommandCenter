@@ -45,7 +45,7 @@ class ReminderLineTest {
         // Today already marked: tomorrow at 9:00.
         assertEquals(
             "Reminders ${LocalTime.of(9, 0).display()}, ${six.display()} · next ${LocalDateTime.of(2026, 10, 28, 9, 0).display()}",
-            reminderLine(ItemType.HABIT, times, now, habit, markedToday = true),
+            reminderLine(ItemType.HABIT, times, now, habit, marks = setOf(LocalDate.of(2026, 10, 27))),
         )
     }
 }

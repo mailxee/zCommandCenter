@@ -613,6 +613,18 @@ wraps or gains lines.
 - **Settings:** Tab order and Item styles are one Tabs list: drag a row's handle to reorder, tap the
   row (or Style) to edit that tab's look.
 
+### 2.32 Every N days habits catch up after a miss
+
+When an "every N days" habit misses a due day (a positive habit left unmarked, a negative one
+marked as missed), it is due again the next day, and every day until it is done; the N days then
+count from the day it was done (`HabitStats.dueDates`). The missed day still breaks the streak.
+Every other schedule (Daily, Weekly, Monthly, Every N weeks, Every N months) keeps its days.
+Everything that asks whether a habit is due goes through the due days: the streak, the card's
+Done today chip (`isDue`), the history on the habit's page (`recentDueDates`), and the reminders
+(`HabitStats.nextReminder`, which treats today as missed until it is marked, so a reminder is
+also set for tomorrow; marking a day re-sets the habit's alarms). The habit's page explains the
+rule under the schedule.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

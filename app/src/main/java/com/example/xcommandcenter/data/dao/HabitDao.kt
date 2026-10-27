@@ -19,6 +19,9 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE id = :id")
     suspend fun get(id: Long): HabitEntity?
 
+    @Query("SELECT date FROM habit_marks WHERE habitId = :habitId")
+    suspend fun markDates(habitId: Long): List<LocalDate>
+
     /** The sortOrder for a new item: after every other one. */
     @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM habits")
     suspend fun newSortOrder(): Int

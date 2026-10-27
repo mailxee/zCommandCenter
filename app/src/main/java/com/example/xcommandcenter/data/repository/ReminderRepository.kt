@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.dao.HabitDao
 import com.example.xcommandcenter.data.dao.ReminderDao
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
+import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.reminder.ReminderScheduler
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 
 /** What to notify when a reminder goes off. */
@@ -67,16 +69,18 @@ class ReminderRepository(
 
     /**
      * Called when reminder [id]'s alarm goes off. A habit's reminder schedules its next day and
-     * asks to notify only if today is scheduled and has no mark yet; another item's notifies
-     * unless the item is completed. Null when there is nothing to show.
+     * asks to notify only if the habit is due today (see [HabitStats.dueDates]) and today has no
+     * mark yet; another item's notifies unless the item is completed. Null when there is nothing
+     * to show.
      */
     suspend fun fired(id: Long): ReminderNotice? {
         val reminder = dao.get(id) ?: return null
         if (reminder.itemType == ItemType.HABIT) {
             val habit = habits.get(reminder.itemId) ?: return null
-            schedule(reminder, habit)
+            val marks = habits.markDates(habit.id).toSet()
+            schedule(reminder, habit, marks)
             val today = LocalDate.now()
-            val due = habit.recurrence.isScheduled(today, habit.startDate) && habits.markCount(habit.id, today) == 0
+            val due = today !in marks && HabitStats.isDue(habit.category, habit.recurrence, habit.startDate, marks, today)
             return if (due) ReminderNotice.Habit(habit) else null
         }
         val title = dao.title(reminder.itemType, reminder.itemId) ?: return null
@@ -86,7 +90,7 @@ class ReminderRepository(
 
     private suspend fun schedule(reminder: ReminderEntity) {
         if (reminder.itemType == ItemType.HABIT) {
-            habits.get(reminder.itemId)?.let { schedule(reminder, it) } ?: scheduler.cancel(reminder.id)
+            habits.get(reminder.itemId)?.let { schedule(reminder, it, habits.markDates(it.id).toSet()) } ?: scheduler.cancel(reminder.id)
         } else if (reminder.time > System.currentTimeMillis()) {
             scheduler.schedule(reminder.id, reminder.time)
         } else {
@@ -94,8 +98,11 @@ class ReminderRepository(
         }
     }
 
-    private fun schedule(reminder: ReminderEntity, habit: HabitEntity) {
-        val next = habit.recurrence.nextReminder(habit.startDate, reminder.timeOfDay, LocalDateTime.now())
+    /** A habit's alarm goes to its next due day (skipping today once marked), so marks change it too. */
+    private fun schedule(reminder: ReminderEntity, habit: HabitEntity, marks: Set<LocalDate>) {
+        val now = LocalDateTime.now()
+        val from = if (now.toLocalDate() in marks) now.toLocalDate().atTime(LocalTime.MAX) else now
+        val next = HabitStats.nextReminder(habit.category, habit.recurrence, habit.startDate, marks, reminder.timeOfDay, from)
         if (next != null) {
             scheduler.schedule(reminder.id, next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
         } else {
