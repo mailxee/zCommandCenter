@@ -50,7 +50,7 @@ class ChapterDetailViewModel(
         }
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         val current = chapter ?: return
         if (titleText.isBlank()) {
             message = "A title is required"
@@ -58,7 +58,7 @@ class ChapterDetailViewModel(
         }
         viewModelScope.launch {
             repository.renameChapter(current, titleText.trim())
-            onSaved(current.id)
+            onSaved(current.id, close)
         }
     }
 

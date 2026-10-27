@@ -44,7 +44,7 @@ fun NoteDetailScreen(
             minLines = 8,
             modifier = Modifier.fillMaxWidth(),
         )
-        LinkedItemsSection(viewModel, onOpen)
         TagsSection(viewModel)
+        LinkedItemsSection(viewModel, onOpen)
     }
 }

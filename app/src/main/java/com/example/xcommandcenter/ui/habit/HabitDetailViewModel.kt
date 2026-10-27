@@ -69,7 +69,7 @@ class HabitDetailViewModel(
         if (id != 0L) viewModelScope.launch { repository.toggleMark(id, date) }
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         val dayOfMonth = dayOfMonthText.toIntOrNull()
         val interval = intervalText.toIntOrNull()
         val error = if (habit.name.isBlank()) {
@@ -90,7 +90,7 @@ class HabitDetailViewModel(
         viewModelScope.launch {
             val id = repository.save(toSave)
             load(toSave.copy(id = id))
-            onSaved(id)
+            onSaved(id, close)
         }
     }
 

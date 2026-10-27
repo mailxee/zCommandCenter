@@ -45,13 +45,13 @@ class BookDetailViewModel(
         book = transform(book)
     }
 
-    fun save() {
+    fun save(close: Boolean) {
         if (book.title.isBlank()) {
             message = "A title is required"
             return
         }
         val toSave = book.copy(id = itemId.value, title = book.title.trim(), author = book.author.trim())
-        viewModelScope.launch { onSaved(repository.save(toSave)) }
+        viewModelScope.launch { onSaved(repository.save(toSave), close) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }

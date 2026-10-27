@@ -51,7 +51,7 @@ fun QuoteDetailScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        LinkedItemsSection(viewModel, onOpen)
         TagsSection(viewModel)
+        LinkedItemsSection(viewModel, onOpen)
     }
 }

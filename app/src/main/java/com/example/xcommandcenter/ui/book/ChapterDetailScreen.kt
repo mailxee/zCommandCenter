@@ -53,6 +53,7 @@ fun ChapterDetailScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
         if (chapter != null) {
             SectionTitle("Progress")
@@ -66,6 +67,5 @@ fun ChapterDetailScreen(
                 Switch(checked = chapter.internalized, onCheckedChange = viewModel::setInternalized)
             }
         }
-        TagsSection(viewModel)
     }
 }

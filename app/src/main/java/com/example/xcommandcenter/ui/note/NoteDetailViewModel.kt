@@ -35,13 +35,13 @@ class NoteDetailViewModel(
     }
 
     /** The title is optional, but an entirely empty note is not worth keeping. */
-    fun save() {
+    fun save(close: Boolean) {
         if (note.title.isBlank() && note.body.isBlank()) {
             message = "Write something first"
             return
         }
         val toSave = note.copy(id = itemId.value, title = note.title.trim())
-        viewModelScope.launch { onSaved(repository.save(toSave)) }
+        viewModelScope.launch { onSaved(repository.save(toSave), close) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }
