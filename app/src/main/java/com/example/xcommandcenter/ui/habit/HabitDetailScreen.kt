@@ -105,7 +105,6 @@ fun HabitDetailScreen(
             value = habit.notes,
             onValueChange = { v -> viewModel.update { it.copy(notes = v) } },
             label = { Text("Notes") },
-            minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(habit.notes)

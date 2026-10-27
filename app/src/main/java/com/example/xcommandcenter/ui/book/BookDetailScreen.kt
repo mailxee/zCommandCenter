@@ -79,7 +79,6 @@ fun BookDetailScreen(
             value = book.description,
             onValueChange = { v -> viewModel.update { it.copy(description = v) } },
             label = { Text("Description") },
-            minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(book.description)

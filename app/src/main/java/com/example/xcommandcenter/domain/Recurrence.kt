@@ -19,6 +19,8 @@ enum class RecurrenceType(val label: String) {
     WEEKLY("Weekly"),
     MONTHLY("Monthly"),
     EVERY_N_DAYS("Every N days"),
+    EVERY_N_WEEKS("Every N weeks"),
+    EVERY_N_MONTHS("Every N months"),
 }
 
 /**
@@ -29,6 +31,9 @@ sealed interface Recurrence {
     fun isScheduled(date: LocalDate, start: LocalDate): Boolean
 
     fun describe(): String
+
+    /** How far ahead to look for the next scheduled date. */
+    val searchDays: Int get() = 400
 
     data object Daily : Recurrence {
         override fun isScheduled(date: LocalDate, start: LocalDate) = !date.isBefore(start)
@@ -60,12 +65,46 @@ sealed interface Recurrence {
     }
 
     /**
+     * On [days] every [n] weeks (Monday to Sunday), counted from the start date's week: a start on
+     * a Wednesday with n = 2 and Monday and Friday gives that Friday, then Monday and Friday two
+     * weeks later.
+     */
+    data class EveryNWeeks(val n: Int, val days: Set<DayOfWeek>) : Recurrence {
+        override fun isScheduled(date: LocalDate, start: LocalDate) =
+            !date.isBefore(start) && date.dayOfWeek in days &&
+                ChronoUnit.WEEKS.between(start.mondayOfWeek(), date.mondayOfWeek()) % n == 0L
+
+        override fun describe() =
+            (if (n == 1) "Weekly: " else "Every $n weeks: ") + days.sorted().joinToString(", ") { it.shortName() }
+
+        override val searchDays: Int get() = (n + 1) * 7
+
+        private fun LocalDate.mondayOfWeek() = minusDays(dayOfWeek.value - 1L)
+    }
+
+    /**
+     * On [dayOfMonth] (or the last day of a shorter month) every [n] months, counted from the
+     * start date's month: a start in March with n = 3 gives March (if the day isn't already
+     * past), June, September and December.
+     */
+    data class EveryNMonths(val n: Int, val dayOfMonth: Int) : Recurrence {
+        override fun isScheduled(date: LocalDate, start: LocalDate) =
+            !date.isBefore(start) &&
+                ChronoUnit.MONTHS.between(start.withDayOfMonth(1), date.withDayOfMonth(1)) % n == 0L &&
+                date.dayOfMonth == minOf(dayOfMonth, date.lengthOfMonth())
+
+        override fun describe() = if (n == 1) "Monthly on day $dayOfMonth" else "Every $n months on day $dayOfMonth"
+
+        override val searchDays: Int get() = (n + 1) * 31
+    }
+
+    /**
      * The first scheduled date after [date], counting the schedule from [date] itself (so "every
-     * 3 days" gives date + 3). Null when nothing is scheduled within 400 days, e.g. a weekly rule
-     * with no weekdays.
+     * 3 days" gives date + 3). Null when nothing is scheduled within [searchDays], e.g. a weekly
+     * rule with no weekdays.
      */
     fun nextAfter(date: LocalDate): LocalDate? =
-        generateSequence(date.plusDays(1)) { it.plusDays(1) }.take(400).firstOrNull { isScheduled(it, date) }
+        generateSequence(date.plusDays(1)) { it.plusDays(1) }.take(searchDays).firstOrNull { isScheduled(it, date) }
 
     /**
      * Like [nextAfter], but never before [today]: occurrences that have already passed are
@@ -73,27 +112,29 @@ sealed interface Recurrence {
      */
     fun nextFrom(date: LocalDate, today: LocalDate): LocalDate? {
         val first = maxOf(date.plusDays(1), today)
-        return generateSequence(first) { it.plusDays(1) }.take(400).firstOrNull { isScheduled(it, date) }
+        return generateSequence(first) { it.plusDays(1) }.take(searchDays).firstOrNull { isScheduled(it, date) }
     }
 
     /**
      * When a habit with this schedule should next remind at [time]: the first scheduled day, from
-     * [start] on, whose [time] is after [now]. Null when nothing is scheduled within 400 days.
+     * [start] on, whose [time] is after [now]. Null when nothing is scheduled within [searchDays].
      */
     fun nextReminder(start: LocalDate, time: LocalTime, now: LocalDateTime): LocalDateTime? =
         generateSequence(maxOf(now.toLocalDate(), start)) { it.plusDays(1) }
-            .take(400)
+            .take(searchDays)
             .filter { isScheduled(it, start) }
             .map { it.atTime(time) }
             .firstOrNull { it.isAfter(now) }
 
     companion object {
         /** Builds a recurrence from the flat columns that habits and tasks store. */
-        fun of(type: RecurrenceType, weekdays: Int, dayOfMonth: Int, intervalDays: Int): Recurrence = when (type) {
+        fun of(type: RecurrenceType, weekdays: Int, dayOfMonth: Int, interval: Int): Recurrence = when (type) {
             RecurrenceType.DAILY -> Daily
             RecurrenceType.WEEKLY -> Weekly(daysFromMask(weekdays))
             RecurrenceType.MONTHLY -> Monthly(dayOfMonth)
-            RecurrenceType.EVERY_N_DAYS -> EveryNDays(intervalDays)
+            RecurrenceType.EVERY_N_DAYS -> EveryNDays(interval)
+            RecurrenceType.EVERY_N_WEEKS -> EveryNWeeks(interval, daysFromMask(weekdays))
+            RecurrenceType.EVERY_N_MONTHS -> EveryNMonths(interval, dayOfMonth)
         }
 
         /** Bit i of the mask is [DayOfWeek] with value i + 1 (bit 0 = Monday). */

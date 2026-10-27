@@ -44,7 +44,6 @@ fun NoteDetailScreen(
             value = note.body,
             onValueChange = { v -> viewModel.update { it.copy(body = v) } },
             label = { Text("Note") },
-            minLines = 8,
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(note.body)

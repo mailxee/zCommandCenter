@@ -44,6 +44,10 @@ class BackupFormatTest {
             TaskEntity(1, "Water plants", "Balcony", LocalDate.of(2026, 10, 31), created + 3_600_000, Priority.LOW, false, created,
                 RecurrenceType.WEEKLY, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)), 1, 2, false, sortOrder = 3),
             TaskEntity(2, "File taxes", priority = Priority.CRITICAL, completed = true, createdAt = created),
+            TaskEntity(3, "Service the car", dueDate = LocalDate.of(2026, 11, 15), createdAt = created,
+                recurrenceType = RecurrenceType.EVERY_N_MONTHS, dayOfMonth = 15, intervalDays = 6),
+            TaskEntity(4, "Clean filters", dueDate = LocalDate.of(2026, 11, 2), createdAt = created,
+                recurrenceType = RecurrenceType.EVERY_N_WEEKS, weekdays = Recurrence.maskFromDays(setOf(DayOfWeek.MONDAY)), intervalDays = 3),
         ),
         goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created, priority = Priority.CRITICAL)),
         habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created, reminderMinutes = 7 * 60 + 30, priority = Priority.LOW)),
@@ -163,7 +167,7 @@ class BackupFormatTest {
         }
         val error = runCatching { BackupFormat.fromSheets(sheets, zone) }.exceptionOrNull()
         assertTrue(error is ImportException)
-        assertTrue(error!!.message!!, error.message!!.startsWith("\"Tasks\" row 4: Priority \"Urgent\""))
+        assertTrue(error!!.message!!, error.message!!.startsWith("\"Tasks\" row 6: Priority \"Urgent\""))
     }
 
     @Test(expected = ImportException::class)

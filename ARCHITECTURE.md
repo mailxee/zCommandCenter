@@ -114,6 +114,7 @@ tags, then the item. Special cases:
 - Only **scheduled** occurrences count. Unscheduled days are skipped; they neither count nor break a streak.
 - Totals are the number of marks ("done N times" / "missed N times").
 - Monthly on day 29–31 falls on the last day of shorter months. "Every N days" counts from the habit's start date.
+  "Every N weeks" and "Every N months" (see 2.28) count weeks or months from the start date's week or month.
 
 **Storage:** recurrence is stored as flat columns on `habits` (`recurrenceType`, `weekdays`
 bitmask, `dayOfMonth`, `intervalDays`) and exposed as a sealed `Recurrence` type through
@@ -541,6 +542,29 @@ tabs (Low, Medium, High, Critical; any combination, none shows every task). They
 `HomeViewModel.priorityFilters` (keyed by tab) and `priorityFilterChips` with those tabs, and
 combine with the repeat, completed and tag filters. Tasks keep their own sorts (Due date, Priority,
 Custom).
+
+### 2.28 Every N months and every N weeks
+
+Tasks and habits can repeat **Every N months** (N from 1 to 120) on a chosen day of the month
+(`Recurrence.EveryNMonths`). Months are counted from the start date's month: for a task, the due
+date, so a task due 15 March every 3 months comes back on 15 June. As with Monthly, a day past the
+end of a short month falls on its last day, and the next occurrence keeps the chosen day (31 Jan →
+30 Apr → 31 Jul). N is stored in the existing `intervalDays` column, so the database is unchanged.
+The backup has a new "Every N months" column at the end of the Tasks and Habits sheets; older
+backups without it still import. The search for the next date looks ahead `(N + 1) × 31` days
+instead of the usual 400 (`Recurrence.searchDays`).
+
+**Every N weeks** (N from 1 to 104) works the same way on chosen weekdays
+(`Recurrence.EveryNWeeks`): weeks run Monday to Sunday and are counted from the start date's week,
+so a task due on a Wednesday, every 2 weeks on Monday and Friday, comes back that Friday, then on
+Monday and Friday two weeks on. It uses the weekday and `intervalDays` columns and adds an
+"Every N weeks" backup column.
+
+### 2.29 Multi-line boxes start at one line
+
+The longer text boxes (a task's, plan's or book's description, a goal's strategy, a habit's notes,
+a note's body, a quote's text) set no `minLines`, so they start one line high and grow as the text
+wraps or gains lines.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

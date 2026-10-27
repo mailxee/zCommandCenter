@@ -80,7 +80,6 @@ fun PlanDetailScreen(
             value = plan.description,
             onValueChange = { v -> viewModel.update { it.copy(description = v) } },
             label = { Text("Description") },
-            minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(plan.description)

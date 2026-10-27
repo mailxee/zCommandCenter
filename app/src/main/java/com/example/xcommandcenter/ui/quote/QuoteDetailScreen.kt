@@ -36,7 +36,6 @@ fun QuoteDetailScreen(
             value = quote.text,
             onValueChange = { v -> viewModel.update { it.copy(text = v) } },
             label = { Text("Quote") },
-            minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(

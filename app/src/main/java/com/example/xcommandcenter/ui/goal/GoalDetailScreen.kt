@@ -43,7 +43,6 @@ fun GoalDetailScreen(
             value = goal.strategy,
             onValueChange = { v -> viewModel.update { it.copy(strategy = v) } },
             label = { Text("Strategy") },
-            minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(goal.strategy)
