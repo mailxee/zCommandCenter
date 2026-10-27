@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -113,6 +114,7 @@ fun HomeScreen(
                     )
                 }
             }
+            SearchBar(viewModel, selected)
             TagFilterBar(viewModel, selected)
             when (selected) {
                 ItemType.TASK -> TasksTab(viewModel, onOpen)
@@ -129,10 +131,31 @@ fun HomeScreen(
 }
 
 /**
+ * Searches every tab: each shows only the items whose text (title, description, notes, body,
+ * author and so on) contains every word typed. The text stays when switching tabs.
+ */
+@Composable
+private fun SearchBar(viewModel: HomeViewModel, tab: ItemType) {
+    val query by viewModel.searchQuery.collectAsStateWithLifecycle()
+    OutlinedTextField(
+        value = query,
+        onValueChange = viewModel::setSearchQuery,
+        placeholder = { Text("Search ${tab.tabLabel.lowercase()}") },
+        leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
+        trailingIcon = if (query.isEmpty()) null else {
+            { IconButton(onClick = { viewModel.setSearchQuery("") }) { Icon(painterResource(R.drawable.ic_close), contentDescription = "Clear search") } }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+    )
+}
+
+/**
  * One filter for every tab: tap a tag to show only items with it, press and hold it to hide items
- * with it; both stay on when switching tabs. Shows the tags used on [tab]'s items, plus any tag in
- * use by the filter, so it can always be turned off; hidden when that leaves none. The chips wrap
- * onto more lines, so every tag stays on screen.
+ * with it; both stay on when switching tabs. Shows "Untagged" (items without tags) and the tags
+ * used on [tab]'s items, plus any tag in use by the filter, so it can always be turned off; hidden
+ * when there are no tags to offer. The chips wrap onto more lines, so every tag stays on screen.
  */
 @Composable
 private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
@@ -141,7 +164,8 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
     val tabTagIds by viewModel.tabTagIds.collectAsStateWithLifecycle()
     val used = tabTagIds[tab].orEmpty()
     val tags = allTags.filter { it.id in used || it.id in filter.selected || it.id in filter.excluded }
-    if (tags.isEmpty()) return
+    val untagged = TagFilter.UNTAGGED
+    if (tags.isEmpty() && untagged !in filter.selected && untagged !in filter.excluded) return
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -150,6 +174,13 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
         if (filter.active) {
             AssistChip(onClick = viewModel::clearTags, label = { Text("Clear") })
         }
+        TagChip(
+            label = "Untagged",
+            selected = untagged in filter.selected,
+            excluded = untagged in filter.excluded,
+            onClick = { viewModel.toggleTag(untagged) },
+            onLongClick = { viewModel.toggleExcludedTag(untagged) },
+        )
         tags.forEach { tag ->
             TagChip(
                 label = tag.label(),

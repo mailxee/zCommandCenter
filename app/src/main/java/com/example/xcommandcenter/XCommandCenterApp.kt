@@ -14,6 +14,6 @@ class XCommandCenterApp : Application() {
         Notifications.createChannels(this)
         // Opens the database (seeding it on first launch) and makes sure every pending reminder,
         // including seeded ones, has an alarm registered.
-        container.applicationScope.launch { container.taskRepository.rescheduleAllReminders() }
+        container.applicationScope.launch { container.reminderRepository.rescheduleAll() }
     }
 }

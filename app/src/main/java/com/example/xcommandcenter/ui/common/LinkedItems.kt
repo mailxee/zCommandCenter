@@ -100,6 +100,7 @@ private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpe
         links = card.links,
         onClick = { onOpen(card.ref) },
         tags = card.tags,
+        reminder = card.reminder,
         leading = when (control) {
             is CardControl.Task -> {
                 { Checkbox(checked = control.completed, onCheckedChange = { viewModel.setLinkedTaskCompleted(card.ref.id, it) }) }

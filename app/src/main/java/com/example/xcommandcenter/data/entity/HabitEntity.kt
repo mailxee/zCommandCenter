@@ -8,7 +8,6 @@ import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.Recurrence
 import com.example.xcommandcenter.domain.RecurrenceType
 import java.time.LocalDate
-import java.time.LocalTime
 
 /**
  * Recurrence is stored as flat columns; only the ones matching [recurrenceType] are meaningful.
@@ -30,14 +29,9 @@ data class HabitEntity(
     val createdAt: Long = System.currentTimeMillis(),
     /** Position in the tab's list, lowest first; ties keep the tab's default order. Set by reordering. */
     @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
-    /** Time of day to remind on each scheduled day, in minutes after midnight; null for no reminder. */
-    val reminderMinutes: Int? = null,
     /** How important the item is; Medium unless set. Tabs can sort and filter by it. */
     @ColumnInfo(defaultValue = "MEDIUM") val priority: Priority = Priority.MEDIUM,
 ) {
     val recurrence: Recurrence
         get() = Recurrence.of(recurrenceType, weekdays, dayOfMonth, intervalDays)
-
-    val reminderTime: LocalTime?
-        get() = reminderMinutes?.let { LocalTime.of(it / 60, it % 60) }
 }

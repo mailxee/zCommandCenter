@@ -19,8 +19,6 @@ data class TaskEntity(
     val title: String,
     val description: String = "",
     val dueDate: LocalDate? = null,
-    /** Epoch millis of the reminder, or null when there is none. */
-    val reminderAt: Long? = null,
     val priority: Priority = Priority.MEDIUM,
     val completed: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),

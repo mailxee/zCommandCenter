@@ -16,6 +16,7 @@ import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.ReminderEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
@@ -41,7 +42,7 @@ class BackupFormatTest {
 
     private val data = BackupData(
         tasks = listOf(
-            TaskEntity(1, "Water plants", "Balcony", LocalDate.of(2026, 10, 31), created + 3_600_000, Priority.LOW, false, created,
+            TaskEntity(1, "Water plants", "Balcony", LocalDate.of(2026, 10, 31), Priority.LOW, false, created,
                 RecurrenceType.WEEKLY, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)), 1, 2, false, sortOrder = 3),
             TaskEntity(2, "File taxes", priority = Priority.CRITICAL, completed = true, createdAt = created),
             TaskEntity(3, "Service the car", dueDate = LocalDate.of(2026, 11, 15), createdAt = created,
@@ -50,7 +51,7 @@ class BackupFormatTest {
                 recurrenceType = RecurrenceType.EVERY_N_WEEKS, weekdays = Recurrence.maskFromDays(setOf(DayOfWeek.MONDAY)), intervalDays = 3),
         ),
         goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created, priority = Priority.CRITICAL)),
-        habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created, reminderMinutes = 7 * 60 + 30, priority = Priority.LOW)),
+        habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created, priority = Priority.LOW)),
         habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1))),
         plans = listOf(
             PlanEntity(2, "Child", parentId = 1, completed = true, createdAt = created, priority = Priority.HIGH),
@@ -70,6 +71,13 @@ class BackupFormatTest {
         noteListItems = listOf(
             NoteListItemEntity(noteId = 1, position = 0, text = "First"),
             NoteListItemEntity(noteId = 1, position = 1, text = "Second"),
+        ),
+        // In the order the sheet lists them: by type, item and time.
+        reminders = listOf(
+            ReminderEntity(itemType = ItemType.TASK, itemId = 1, time = created + 3_600_000),
+            ReminderEntity(itemType = ItemType.TASK, itemId = 1, time = created + 7_200_000),
+            ReminderEntity(itemType = ItemType.HABIT, itemId = 1, time = 7 * 60 + 30L),
+            ReminderEntity(itemType = ItemType.NOTE, itemId = 1, time = created + 86_400_000),
         ),
     )
 
@@ -92,6 +100,26 @@ class BackupFormatTest {
         assertEquals(setOf(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.CHAPTER, 5)), back.itemTags.map { ItemRef(it.type, it.itemId) }.toSet())
         assertEquals(data.checklistItems, back.checklistItems)
         assertEquals(data.noteListItems, back.noteListItems)
+        assertEquals(data.reminders, back.reminders)
+    }
+
+    @Test
+    fun `a workbook without a Reminders sheet takes the old Reminder columns`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name == "Reminders" }.map { sheet ->
+            when (sheet.name) {
+                "Tasks" -> sheet.copy(rows = sheet.rows.mapIndexed { i, row -> row + if (i == 0) "Reminder" else if (i == 1) "2026-10-20 09:30" else "" })
+                "Habits" -> sheet.copy(rows = sheet.rows.mapIndexed { i, row -> row + if (i == 0) "Reminder" else "07:30" })
+                else -> sheet
+            }
+        }
+        val reminders = BackupFormat.fromSheets(sheets, zone).data.reminders
+        assertEquals(
+            listOf(
+                ReminderEntity(itemType = ItemType.TASK, itemId = 1, time = created + 3_600_000),
+                ReminderEntity(itemType = ItemType.HABIT, itemId = 1, time = 7 * 60 + 30L),
+            ),
+            reminders,
+        )
     }
 
     @Test
@@ -108,14 +136,14 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags", "Reminders"), names)
     }
 
     @Test
     fun `rows typed in Excel import with labels, blank ids and Excel date numbers`() {
         val sheets = BackupFormat.toSheets(BackupData(), TabOrder.default, zone).map { sheet ->
             when (sheet.name) {
-                "Tasks" -> sheet.copy(rows = sheet.rows + listOf(listOf("", "New task", "", "46320", "", "high", "yes", "Every N days", "", "", "3")))
+                "Tasks" -> sheet.copy(rows = sheet.rows + listOf(listOf("", "New task", "", "46320", "high", "yes", "Every N days", "", "", "3")))
                 "Goals" -> sheet.copy(rows = sheet.rows + listOf(listOf("4", "Goal"), listOf("", "Another goal"), listOf("", "", "", "")))
                 else -> sheet
             }
@@ -163,7 +191,7 @@ class BackupFormatTest {
     @Test
     fun `a bad value names the sheet and row`() {
         val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { sheet ->
-            if (sheet.name == "Tasks") sheet.copy(rows = sheet.rows + listOf(listOf("9", "Bad", "", "", "", "Urgent"))) else sheet
+            if (sheet.name == "Tasks") sheet.copy(rows = sheet.rows + listOf(listOf("9", "Bad", "", "", "Urgent"))) else sheet
         }
         val error = runCatching { BackupFormat.fromSheets(sheets, zone) }.exceptionOrNull()
         assertTrue(error is ImportException)

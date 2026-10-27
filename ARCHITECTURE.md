@@ -139,8 +139,8 @@ alarm fires `ReminderReceiver`, which posts the notification without starting an
 with the app closed.
 
 `RescheduleReceiver` re-registers all pending reminders after a reboot, an app update, or the
-exact-alarm permission being granted. The app also does this at every start. Saving, completing
-or deleting a task updates or cancels its alarm (`TaskRepository.syncReminder`).
+exact-alarm permission being granted. The app also does this at every start. Since §2.30 every
+item can have any number of reminders, one alarm each (`ReminderRepository`).
 `POST_NOTIFICATIONS` is requested at launch on Android 13+. Settings shows both permissions'
 status, with buttons to fix them.
 
@@ -425,7 +425,7 @@ chapters, which sit in scrolling columns, use its `ReorderableColumn`.
 ### 2.21 Item styles per tab
 
 **Chosen (asked for by the user):** each tab has an item style (a color from a fixed palette,
-bold, italic, underline, and a font: default, serif, mono or cursive), set in Settings → Item styles.
+bold, italic, underline, and a font: default, serif, mono or cursive), set in Settings → Tabs (Item styles until §2.31).
 An item's title is shown in its tab's style everywhere: its own tab, the tab row label, the "Linked:"
 line on other tabs' rows (each linked title in its own style), linked-item lists on detail pages,
 the link picker, a plan's parent and child lists, and the detail screen's title. Chapters follow
@@ -466,7 +466,7 @@ tab.
 
 ### 2.23 Habit reminders, note lists and priority, book progress, web links
 
-- **Habit reminders:** a habit can have a reminder time (`habits.reminderMinutes`). One alarm per
+- **Habit reminders** (superseded by §2.30, which allows any number): a habit could have a reminder time (`habits.reminderMinutes`). One alarm per
   habit holds its next reminder: the first scheduled day, from its start date, whose time is still
   ahead (`Recurrence.nextReminder`), so an "every N days" habit reminds only on the days a mark is
   due. When the alarm fires, `HabitRepository.reminderFired` schedules the next one and the
@@ -566,6 +566,51 @@ The longer text boxes (a task's, plan's or book's description, a goal's strategy
 a note's body, a quote's text) set no `minLines`, so they start one line high and grow as the text
 wraps or gains lines.
 
+### 2.30 Any number of reminders on any item
+
+- **Data:** reminders have their own table (`ReminderEntity`: item type, item id, time), so every
+  item, chapters included, can have as many as wanted. For a habit, `time` is a minute of the day,
+  used on each scheduled day (unless the day is already marked); for anything else it is a date and
+  time, once. Schema v4 adds the table and copies each task's and habit's single reminder into it
+  (`AppDatabase.CopyReminders`); v5 drops the old `tasks.reminderAt` and `habits.reminderMinutes`
+  columns. Two steps, because Room's auto-migration runs the copy after the schema change, and the
+  copy needs the old columns. Checked by replaying the generated migration SQL on a v3 database
+  with sample data: reminders and checklists kept, tables equal to `5.json`.
+- **Alarms:** one per reminder, keyed by its id (`ReminderScheduler`). When one fires,
+  `ReminderRepository.fired` decides what to show: a habit's reminder schedules its next day and
+  notifies only if today is scheduled and unmarked; anything else's notifies with the item's title
+  unless it is a completed task or plan. Alarms are set even for completed items, so reopening one
+  needs no rescheduling. A notification opens the item; an item's later reminder replaces its
+  earlier notification. Alarms from older versions use other intent actions and are ignored; the
+  app re-registers every reminder at start.
+- **Editing:** every detail page has a Reminders section (`RemindersSection`): a list with a
+  remove button per reminder, and Add reminder (a time for a habit, a date and then a time for
+  anything else). The list belongs to the form: `ItemDetailViewModel` loads it, counts changes to
+  it as unsaved, and stores it on save (`onSaved`), except for tasks, whose repository stores it
+  before completing the task, so a repeating task's next occurrence gets the new reminders.
+- **Repeating tasks:** the next occurrence gets a copy of every reminder, each moved by the same
+  number of days as the due date (`TaskDao.complete`).
+- **Deleting:** each repository's delete removes the reminders (and alarms) of whatever is gone,
+  including subplans and chapters (`ReminderRepository.removeOrphans`).
+- **Cards:** a habit's card lists its reminder times; any other card shows the next reminder still
+  to come and how many more follow (`reminderLine`); a done item shows none.
+- **Backup:** a Reminders sheet (Type, ID, Title, Reminder). A workbook without it (from an older
+  version) takes the single Reminder column of its Tasks and Habits sheets instead.
+
+### 2.31 Search, Untagged, and one Tabs list in Settings
+
+- **Search:** a search box under the tabs. Every tab shows only the items whose text contains each
+  word typed, ignoring case (`Search.matches`): a task's title and description, a goal's title and
+  strategy, a habit's name and notes, a plan's title and description, a note's title and body, a
+  book's title, author and description, a quote's text, author and source. The text stays when
+  switching tabs and combines with the other filters. On the Plans tab it works like the tag filter:
+  matching plans and tasks show, with the plans above them.
+- **Untagged:** the first chip of the tag bar. Tap it to show only items without tags; press and
+  hold to hide them. It is a pseudo-tag (`TagFilter.UNTAGGED`, id -1) that an item without tags
+  carries, so it combines with tags like any other.
+- **Settings:** Tab order and Item styles are one Tabs list: drag a row's handle to reorder, tap the
+  row (or Style) to edit that tab's look.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -599,7 +644,7 @@ file changed; template files left as they were (backup rules, Gradle wrapper,
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
 | `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
-| `app/schemas/.../AppDatabase/1.json`, `2.json` (created, generated) | Exported Room schemas: version 1 since the reset in §2.17; v2 adds the columns and table of §2.23, v3 the priorities of §2.25, both via auto-migration. |
+| `app/schemas/.../AppDatabase/1.json` … `5.json` (created, generated) | Exported Room schemas: version 1 since the reset in §2.17; v2 adds the columns and table of §2.23, v3 the priorities of §2.25, v4 and v5 the reminders table of §2.30, all via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
 | `ARCHITECTURE.md` (created) | This document. |
 

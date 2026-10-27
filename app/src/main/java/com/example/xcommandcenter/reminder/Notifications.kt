@@ -21,14 +21,18 @@ object Notifications {
     private const val CHANNEL_REMINDERS = "task_reminders"
     private const val CHANNEL_HABITS = "habit_reminders"
 
-    /** Habit notifications use their own tag, so a habit's id can't replace a task's notification. */
-    private const val TAG_HABIT = "habit"
+    /**
+     * Notifications are tagged with the item's type and keyed by its id, so items of different
+     * types never replace each other's, and an item's later reminder replaces its earlier one.
+     */
+    private fun tag(type: ItemType) = type.name
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_REMINDERS, "Task reminders", NotificationManager.IMPORTANCE_HIGH)
-                .apply { description = "Reminders you set on tasks" },
+            // The id dates from when only tasks had reminders; the name shown is updated.
+            NotificationChannel(CHANNEL_REMINDERS, "Reminders", NotificationManager.IMPORTANCE_HIGH)
+                .apply { description = "Reminders you set on tasks, plans, notes and other items" },
         )
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_HABITS, "Habit reminders", NotificationManager.IMPORTANCE_HIGH)
@@ -40,20 +44,21 @@ object Notifications {
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ||
             android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU
 
-    fun showTaskReminder(context: Context, taskId: Long, title: String) {
+    fun showItemReminder(context: Context, ref: ItemRef, title: String) {
         if (!hasPermission(context)) return
-        val open = openItem(context, ItemRef(ItemType.TASK, taskId))
+        val open = openItem(context, ref)
+        val label = "${ref.type.singular} reminder"
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title.ifBlank { "Task reminder" })
-            .setContentText("Task reminder")
+            .setContentTitle(title.ifBlank { label })
+            .setContentText(label)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
         try {
-            NotificationManagerCompat.from(context).notify(taskId.toInt(), notification)
+            NotificationManagerCompat.from(context).notify(tag(ref.type), ref.id.toInt(), notification)
         } catch (_: SecurityException) {
             // Permission revoked between the check and the call; nothing else to do.
         }
@@ -76,7 +81,7 @@ object Notifications {
             .setAutoCancel(true)
             .build()
         try {
-            NotificationManagerCompat.from(context).notify(TAG_HABIT, habit.id.toInt(), notification)
+            NotificationManagerCompat.from(context).notify(tag(ItemType.HABIT), habit.id.toInt(), notification)
         } catch (_: SecurityException) {
             // Permission revoked between the check and the call; nothing else to do.
         }

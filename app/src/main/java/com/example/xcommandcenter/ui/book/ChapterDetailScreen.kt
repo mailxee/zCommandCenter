@@ -20,6 +20,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
 
@@ -56,6 +57,7 @@ fun ChapterDetailScreen(
         )
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
+        RemindersSection(viewModel)
         if (chapter != null) {
             SectionTitle("Progress")
             Row(verticalAlignment = Alignment.CenterVertically) {

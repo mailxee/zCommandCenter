@@ -12,6 +12,7 @@ import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.ReminderEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
@@ -46,6 +47,7 @@ data class BackupData(
     val itemTags: List<ItemTagEntity> = emptyList(),
     val checklistItems: List<ChecklistItemEntity> = emptyList(),
     val noteListItems: List<NoteListItemEntity> = emptyList(),
+    val reminders: List<ReminderEntity> = emptyList(),
 ) {
     val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size
 }
@@ -55,7 +57,7 @@ class ImportException(message: String) : Exception(message)
 
 /**
  * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists, Chapters,
- * Habit history, Links and Tags, so that an import restores everything. Columns are found by header name, so
+ * Habit history, Links, Tags and Reminders, so that an import restores everything. Columns are found by header name, so
  * reordering columns in Excel is fine. Ids tie rows together; a blank id gets a new one.
  * Enums are written as their labels ("Medium", "Every N days") and read by label or name.
  */
@@ -66,6 +68,7 @@ object BackupFormat {
     const val TAGS = "Tags"
     const val CHECKLISTS = "Checklists"
     const val NOTE_LISTS = "Note lists"
+    const val REMINDERS = "Reminders"
 
     private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val clock = DateTimeFormatter.ofPattern("HH:mm")
@@ -83,10 +86,10 @@ object BackupFormat {
         val tabSheets = mapOf(
             ItemType.TASK to Sheet(
                 ItemType.TASK.tabLabel,
-                listOf(listOf("ID", "Title", "Description", "Due date", "Reminder", "Priority", "Completed", "Repeat", "Weekdays", "Day of month", "Every N days", "Next created", "Created", "Order", "Every N months", "Every N weeks")) +
+                listOf(listOf("ID", "Title", "Description", "Due date", "Priority", "Completed", "Repeat", "Weekdays", "Day of month", "Every N days", "Next created", "Created", "Order", "Every N months", "Every N weeks")) +
                     data.tasks.map {
                         listOf(
-                            it.id.toString(), it.title, it.description, it.dueDate?.toString().orEmpty(), time(it.reminderAt),
+                            it.id.toString(), it.title, it.description, it.dueDate?.toString().orEmpty(),
                             it.priority.label, bool(it.completed), it.recurrenceType?.label.orEmpty(),
                             if (it.recurrenceType.usesWeekdays()) days(it.weekdays) else "",
                             if (it.recurrenceType.usesDayOfMonth()) it.dayOfMonth.toString() else "",
@@ -104,7 +107,7 @@ object BackupFormat {
             ),
             ItemType.HABIT to Sheet(
                 ItemType.HABIT.tabLabel,
-                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Reminder", "Priority", "Every N months", "Every N weeks")) +
+                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Priority", "Every N months", "Every N weeks")) +
                     data.habits.map {
                         listOf(
                             it.id.toString(), it.name, it.category.label, it.recurrenceType.label,
@@ -112,7 +115,7 @@ object BackupFormat {
                             if (it.recurrenceType.usesDayOfMonth()) it.dayOfMonth.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_DAYS) it.intervalDays.toString() else "",
                             it.startDate.toString(), it.notes, time(it.createdAt), it.sortOrder.toString(),
-                            it.reminderTime?.format(clock).orEmpty(), it.priority.label,
+                            it.priority.label,
                             if (it.recurrenceType == RecurrenceType.EVERY_N_MONTHS) it.intervalDays.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_WEEKS) it.intervalDays.toString() else "",
                         )
@@ -200,7 +203,16 @@ object BackupFormat {
                     listOf(ref.type.singular, ref.id.toString(), title(ref), tagNames[it.tagId].orEmpty())
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags)
+        val reminders = Sheet(
+            REMINDERS,
+            listOf(listOf("Type", "ID", "Title", "Reminder")) +
+                data.reminders.sortedWith(compareBy({ it.itemType }, { it.itemId }, { it.time })).map {
+                    // A habit's reminder is a time of day; anything else's a date and time.
+                    val at = if (it.itemType == ItemType.HABIT) it.timeOfDay.format(clock) else time(it.time)
+                    listOf(it.itemType.singular, it.itemId.toString(), title(it.ref), at)
+                },
+        )
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags, reminders)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -229,11 +241,12 @@ object BackupFormat {
         }
         var skipped = 0
 
-        val tasks = sheet(ItemType.TASK.tabLabel, true)!!.items("Title") { r ->
+        val taskSheet = sheet(ItemType.TASK.tabLabel, true)!!
+        val tasks = taskSheet.items("Title") { r ->
             val type = r.enum("Repeat", RecurrenceType.entries) { it.label }
             TaskEntity(
                 id = r.id(), title = r.required("Title"), description = r.text("Description"), dueDate = r.date("Due date"),
-                reminderAt = r.dateTime("Reminder"), priority = r.enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM,
+                priority = r.enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM,
                 completed = r.bool("Completed"), createdAt = r.dateTime("Created") ?: now,
                 recurrenceType = type, weekdays = r.weekdays("Weekdays"), dayOfMonth = r.int("Day of month", 1, 1..31),
                 intervalDays = r.interval(type), nextCreated = r.bool("Next created"), sortOrder = r.order(),
@@ -244,7 +257,8 @@ object BackupFormat {
             GoalEntity(id = r.id(), title = r.required("Title"), strategy = r.text("Strategy"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(), priority = r.priority())
         }.withIds("Goals") { g, id -> g.copy(id = id) }
 
-        val habits = sheet(ItemType.HABIT.tabLabel, true)!!.items("Name") { r ->
+        val habitSheet = sheet(ItemType.HABIT.tabLabel, true)!!
+        val habits = habitSheet.items("Name") { r ->
             val type = r.enum("Repeat", RecurrenceType.entries) { it.label } ?: RecurrenceType.DAILY
             HabitEntity(
                 id = r.id(), name = r.required("Name"),
@@ -252,7 +266,7 @@ object BackupFormat {
                 recurrenceType = type, weekdays = r.weekdays("Weekdays"), dayOfMonth = r.int("Day of month", 1, 1..31),
                 intervalDays = r.interval(type),
                 startDate = r.date("Start date") ?: LocalDate.now(zone), notes = r.text("Notes"), createdAt = r.dateTime("Created") ?: now,
-                sortOrder = r.order(), reminderMinutes = r.time("Reminder")?.let { it.hour * 60 + it.minute }, priority = r.priority(),
+                sortOrder = r.order(), priority = r.priority(),
             ).also { if (it.recurrenceType.usesWeekdays() && it.weekdays == 0) r.fail("A weekly habit needs at least one weekday") }
         }.withIds("Habits") { h, id -> h.copy(id = id) }
 
@@ -355,8 +369,35 @@ object BackupFormat {
             ItemTagEntity(ref.type, ref.id, tag.id)
         }.distinct()
 
+        val reminderSheet = sheet(REMINDERS, false)
+        val reminders = if (reminderSheet != null) {
+            reminderSheet.rows("Reminder").mapNotNull { r ->
+                val ref = ItemRef(r.itemType("Type"), r.long("ID") ?: r.fail("ID is required"))
+                if (ref !in existing) return@mapNotNull null.also { skipped++ }
+                val time = if (ref.type == ItemType.HABIT) {
+                    r.time("Reminder")?.let { it.hour * 60L + it.minute }
+                } else {
+                    r.dateTime("Reminder")
+                } ?: r.fail("Reminder is required")
+                ReminderEntity(itemType = ref.type, itemId = ref.id, time = time)
+            }.distinctBy { Triple(it.itemType, it.itemId, it.time) }
+        } else {
+            // Workbooks from before the Reminders sheet kept one reminder in each task's and habit's row.
+            // Their rows line up with the items, as every row with a title or name became one.
+            val taskReminders = taskSheet.rows("Title").zip(tasks).mapNotNull { (r, task) ->
+                r.dateTime("Reminder")?.let { ReminderEntity(itemType = ItemType.TASK, itemId = task.id, time = it) }
+            }
+            val habitReminders = habitSheet.rows("Name").zip(habits).mapNotNull { (r, habit) ->
+                r.time("Reminder")?.let { ReminderEntity(itemType = ItemType.HABIT, itemId = habit.id, time = it.hour * 60L + it.minute) }
+            }
+            taskReminders + habitReminders
+        }
+
         return ImportResult(
-            BackupData(tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems, noteListItems),
+            BackupData(
+                tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
+                noteListItems, reminders,
+            ),
             skipped,
         )
     }

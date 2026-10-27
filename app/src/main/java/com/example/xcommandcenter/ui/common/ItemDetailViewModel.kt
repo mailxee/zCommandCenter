@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -26,8 +27,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Shared behavior of every detail screen: which item is shown, its linked items and tags, linking
- * and tagging, and one-shot messages. An id of 0 means "new item, not saved yet"; links can be
+ * Shared behavior of every detail screen: which item is shown, its linked items, tags and
+ * reminders, linking and tagging, and one-shot messages. An id of 0 means "new item, not saved yet"; links can be
  * added once it has been saved and has a real id. The check mark saves and closes the screen, back
  * to where it was opened from; the save button saves and stays.
  */
@@ -37,6 +38,7 @@ abstract class ItemDetailViewModel(
     private val links: LinkRepository,
     private val tagRepository: TagRepository,
     private val cards: ItemCardSource,
+    private val reminderRepository: ReminderRepository,
 ) : ViewModel() {
 
     private val _itemId = MutableStateFlow(savedStateHandle.get<Long>(Routes.ARG_ID) ?: 0L)
@@ -101,6 +103,36 @@ abstract class ItemDetailViewModel(
         viewModelScope.launch { tagRepository.remove(ref, tagId) }
     }
 
+    /**
+     * The item's reminders, earliest first: epoch millis, or for a habit minutes of the day (see
+     * `ReminderEntity.time`). Edited with the form and saved with it, as many as wanted.
+     */
+    var reminders by mutableStateOf<List<Long>>(emptyList())
+        private set
+
+    /** The reminders as last loaded or saved; null while loading. */
+    private var cleanReminders by mutableStateOf<List<Long>?>(null)
+
+    init {
+        val id = _itemId.value
+        if (id == 0L) {
+            cleanReminders = emptyList()
+        } else {
+            viewModelScope.launch {
+                reminders = reminderRepository.times(ItemRef(type, id))
+                cleanReminders = reminders
+            }
+        }
+    }
+
+    fun addReminder(time: Long) {
+        reminders = (reminders + time).distinct().sorted()
+    }
+
+    fun removeReminder(time: Long) {
+        reminders = reminders - time
+    }
+
     /** Shown once in a snackbar, then cleared by the screen. */
     var message by mutableStateOf<String?>(null)
         protected set
@@ -124,8 +156,13 @@ abstract class ItemDetailViewModel(
         viewModelScope.launch { links.unlink(ref, target) }
     }
 
-    /** After a save: [close] for the check mark, which also leaves the screen; the save button stays. */
-    protected fun onSaved(id: Long, close: Boolean) {
+    /**
+     * After a save: stores the reminders (unless the screen's repository already did, [remindersSaved]),
+     * then [close] for the check mark, which also leaves the screen; the save button stays.
+     */
+    protected suspend fun onSaved(id: Long, close: Boolean, remindersSaved: Boolean = false) {
+        if (!remindersSaved) reminderRepository.replace(ItemRef(type, id), reminders)
+        cleanReminders = reminders
         _itemId.value = id
         // A new item now exists; a restored screen must reopen it, not a blank form.
         savedStateHandle[Routes.ARG_ID] = id
@@ -136,7 +173,7 @@ abstract class ItemDetailViewModel(
     /**
      * The screen's editable fields as one comparable value (data classes and strings), so a change
      * can be told from what was loaded or saved. What is saved at once (tags, links, read counts) is
-     * not part of it.
+     * not part of it; the reminders are compared separately.
      */
     protected abstract fun formState(): Any
 
@@ -150,7 +187,7 @@ abstract class ItemDetailViewModel(
 
     /** True when the form differs from what was last loaded or saved; leaving then asks first. */
     val hasUnsavedChanges: Boolean
-        get() = cleanForm.let { it != null && it != formState() }
+        get() = cleanForm.let { it != null && it != formState() } || cleanReminders.let { it != null && it != reminders }
 
     protected fun onMissing() {
         closed = true

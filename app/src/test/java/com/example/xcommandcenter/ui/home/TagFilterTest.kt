@@ -34,6 +34,19 @@ class TagFilterTest {
     }
 
     @Test
+    fun untaggedSelectedShowsOnlyItemsWithoutTags() {
+        assertEquals(listOf(c), shown(TagFilter(byItem, selected = setOf(TagFilter.UNTAGGED))))
+        // No item both has the home tag and has no tags.
+        assertEquals(emptyList<ItemRef>(), shown(TagFilter(byItem, selected = setOf(1, TagFilter.UNTAGGED))))
+    }
+
+    @Test
+    fun untaggedExcludedHidesItemsWithoutTags() {
+        assertEquals(listOf(a, b), shown(TagFilter(byItem, excluded = setOf(TagFilter.UNTAGGED))))
+        assertEquals(listOf(a), shown(TagFilter(byItem, excluded = setOf(2, TagFilter.UNTAGGED))))
+    }
+
+    @Test
     fun bothTogether() {
         assertEquals(listOf(a), shown(TagFilter(byItem, selected = setOf(1), excluded = setOf(2))))
     }

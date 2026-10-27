@@ -19,9 +19,6 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE id = :id")
     suspend fun get(id: Long): HabitEntity?
 
-    @Query("SELECT * FROM habits WHERE reminderMinutes IS NOT NULL")
-    suspend fun withReminders(): List<HabitEntity>
-
     /** The sortOrder for a new item: after every other one. */
     @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM habits")
     suspend fun newSortOrder(): Int

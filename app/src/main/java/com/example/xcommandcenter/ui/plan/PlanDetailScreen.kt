@@ -36,6 +36,7 @@ import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.PriorityField
 import com.example.xcommandcenter.ui.common.SectionTitle
@@ -84,6 +85,7 @@ fun PlanDetailScreen(
         )
         LinksInText(plan.description)
         PriorityField(plan.priority) { p -> viewModel.update { it.copy(priority = p) } }
+        RemindersSection(viewModel)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
         if (id != 0L) {

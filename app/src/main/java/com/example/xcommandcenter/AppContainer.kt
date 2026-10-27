@@ -14,6 +14,7 @@ import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
 import com.example.xcommandcenter.data.repository.PlanRepository
 import com.example.xcommandcenter.data.repository.QuoteRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.reminder.ReminderScheduler
@@ -35,16 +36,17 @@ class AppContainer(context: Context) {
     val collapsedPlansRepository = CollapsedPlansRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
     val tagRepository = TagRepository(database.tagDao())
-    val taskRepository = TaskRepository(database.taskDao(), reminderScheduler)
-    val goalRepository = GoalRepository(database.goalDao())
-    val habitRepository = HabitRepository(database.habitDao(), reminderScheduler)
-    val planRepository = PlanRepository(database.planDao())
-    val noteRepository = NoteRepository(database.noteDao())
-    val bookRepository = BookRepository(database.bookDao())
-    val quoteRepository = QuoteRepository(database.quoteDao())
+    val reminderRepository = ReminderRepository(database.reminderDao(), database.habitDao(), reminderScheduler)
+    val taskRepository = TaskRepository(database.taskDao(), reminderRepository)
+    val goalRepository = GoalRepository(database.goalDao(), reminderRepository)
+    val habitRepository = HabitRepository(database.habitDao(), reminderRepository)
+    val planRepository = PlanRepository(database.planDao(), reminderRepository)
+    val noteRepository = NoteRepository(database.noteDao(), reminderRepository)
+    val bookRepository = BookRepository(database.bookDao(), reminderRepository)
+    val quoteRepository = QuoteRepository(database.quoteDao(), reminderRepository)
     val itemCardSource = ItemCardSource(
         taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
-        linkRepository, tagRepository,
+        linkRepository, tagRepository, reminderRepository,
     )
-    val backupRepository = BackupRepository(context, database.backupDao(), taskRepository, habitRepository, reminderScheduler, tabOrderRepository)
+    val backupRepository = BackupRepository(context, database.backupDao(), reminderRepository, tabOrderRepository)
 }

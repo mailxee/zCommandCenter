@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -114,11 +115,13 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionTitle("Tab order")
+            SectionTitle("Tabs")
             Text(
-                "Drag tabs by their handle to change the order. It is saved and used on the main screen.",
+                "Drag tabs by their handle to change their order on the main screen. Tap a tab to give its items their own look; " +
+                    "it is used wherever an item is shown, including where other tabs list it as linked.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            val styles = LocalItemStyles.current
             Card(Modifier.fillMaxWidth()) {
                 // A local copy follows the drag; it is replaced when the stored order changes.
                 var tabs by remember(order) { mutableStateOf(order) }
@@ -134,14 +137,19 @@ fun SettingsScreen(
                             ListItem(
                                 colors = clearListItemColors(),
                                 headlineContent = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
+                                supportingContent = { Text(styles[tab].summary) },
                                 leadingContent = { Text("${index + 1}") },
                                 trailingContent = {
-                                    DragHandle(
-                                        Modifier.draggableHandle(),
-                                        onMoveUp = if (index > 0) ({ viewModel.move(index, index - 1) }) else null,
-                                        onMoveDown = if (index < tabs.lastIndex) ({ viewModel.move(index, index + 1) }) else null,
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        TextButton(onClick = { editingStyle = tab.name }) { Text("Style") }
+                                        DragHandle(
+                                            Modifier.draggableHandle(),
+                                            onMoveUp = if (index > 0) ({ viewModel.move(index, index - 1) }) else null,
+                                            onMoveDown = if (index < tabs.lastIndex) ({ viewModel.move(index, index + 1) }) else null,
+                                        )
+                                    }
                                 },
+                                modifier = Modifier.clickable { editingStyle = tab.name },
                             )
                         }
                     }
@@ -149,28 +157,10 @@ fun SettingsScreen(
             }
             TextButton(onClick = viewModel::reset) { Text("Reset to default order") }
 
-            SectionTitle("Item styles")
-            Text(
-                "Give each tab's items their own look. It is used wherever an item is shown, including where other tabs list it as linked.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            val styles = LocalItemStyles.current
-            Card(Modifier.fillMaxWidth()) {
-                order.forEach { tab ->
-                    ListItem(
-                        colors = clearListItemColors(),
-                        headlineContent = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
-                        supportingContent = { Text(styles[tab].summary) },
-                        trailingContent = { TextButton(onClick = { editingStyle = tab.name }) { Text("Edit") } },
-                        modifier = Modifier.clickable { editingStyle = tab.name },
-                    )
-                }
-            }
-
             SectionTitle("Reminders")
             Text(
                 if (notificationsAllowed) "Notifications are allowed."
-                else "Notifications are off, so task reminders cannot be shown.",
+                else "Notifications are off, so reminders cannot be shown.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (!notificationsAllowed) {
@@ -196,7 +186,7 @@ fun SettingsScreen(
 
             SectionTitle("Data")
             Text(
-                "Export saves everything to an Excel workbook: one sheet per tab, plus chapters, habit history, links and tags. " +
+                "Export saves everything to an Excel workbook: one sheet per tab, plus chapters, habit history, links, tags and reminders. " +
                     "Importing a workbook replaces all current data.",
                 style = MaterialTheme.typography.bodyMedium,
             )

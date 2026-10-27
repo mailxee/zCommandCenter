@@ -24,8 +24,7 @@ class RescheduleReceiver : BroadcastReceiver() {
         val pending = goAsync()
         container.applicationScope.launch {
             try {
-                container.taskRepository.rescheduleAllReminders()
-                container.habitRepository.rescheduleAllReminders()
+                container.reminderRepository.rescheduleAll()
             } finally {
                 pending.finish()
             }

@@ -4,7 +4,7 @@ import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import kotlinx.coroutines.flow.Flow
 
-class QuoteRepository(private val dao: QuoteDao) {
+class QuoteRepository(private val dao: QuoteDao, private val reminders: ReminderRepository) {
     fun observeAll(): Flow<List<QuoteEntity>> = dao.observeAll()
 
     suspend fun get(id: Long): QuoteEntity? = dao.get(id)
@@ -19,5 +19,9 @@ class QuoteRepository(private val dao: QuoteDao) {
 
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    /** Also removes the reminders of what was deleted. */
+    suspend fun delete(id: Long) {
+        dao.delete(id)
+        reminders.removeOrphans()
+    }
 }

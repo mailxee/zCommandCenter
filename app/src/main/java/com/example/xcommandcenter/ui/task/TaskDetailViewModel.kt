@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.domain.ItemType
@@ -19,16 +20,12 @@ import com.example.xcommandcenter.ui.common.ListLine
 import com.example.xcommandcenter.ui.common.ListLines
 import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
 
 data class TaskForm(
     val title: String = "",
     val description: String = "",
     val dueDate: LocalDate? = null,
-    val reminder: LocalDateTime? = null,
     val priority: Priority = Priority.MEDIUM,
     val completed: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
@@ -45,7 +42,8 @@ class TaskDetailViewModel(
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-) : ItemDetailViewModel(savedStateHandle, ItemType.TASK, links, tags, cards) {
+    reminders: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.TASK, links, tags, cards, reminders) {
 
     var form by mutableStateOf(TaskForm())
         private set
@@ -67,7 +65,6 @@ class TaskDetailViewModel(
                 title = task.title,
                 description = task.description,
                 dueDate = task.dueDate,
-                reminder = task.reminderAt?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime() },
                 priority = task.priority,
                 completed = task.completed,
                 createdAt = task.createdAt,
@@ -113,13 +110,11 @@ class TaskDetailViewModel(
             message = error
             return
         }
-        val reminderAt = f.reminder?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
         val task = TaskEntity(
             id = itemId.value,
             title = f.title.trim(),
             description = f.description.trim(),
             dueDate = f.dueDate,
-            reminderAt = reminderAt,
             priority = f.priority,
             completed = f.completed,
             createdAt = f.createdAt,
@@ -131,7 +126,7 @@ class TaskDetailViewModel(
         // Blank items are dropped; the rest keep their order.
         val checklist = f.checklist.filter { it.text.isNotBlank() }
             .map { ChecklistItemEntity(taskId = itemId.value, position = 0, text = it.text.trim(), done = it.done) }
-        viewModelScope.launch { onSaved(repository.save(task, checklist), close) }
+        viewModelScope.launch { onSaved(repository.save(task, checklist, reminders), close, remindersSaved = true) }
     }
 
     fun delete() = deleteThen { repository.delete(it) }
