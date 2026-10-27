@@ -125,6 +125,7 @@ fun BookDetailScreen(
                                     number = index + 1,
                                     onOpen = { onOpen(ItemRef(ItemType.CHAPTER, chapter.id)) },
                                     onRead = { viewModel.addRead(chapter.id) },
+                                    onClearReads = { viewModel.clearReads(chapter.id) },
                                     onInternalized = { viewModel.setInternalized(chapter.id, it) },
                                     dragHandle = {
                                         DragHandle(
@@ -171,6 +172,7 @@ private fun ChapterRow(
     number: Int,
     onOpen: () -> Unit,
     onRead: () -> Unit,
+    onClearReads: () -> Unit,
     onInternalized: (Boolean) -> Unit,
     dragHandle: @Composable () -> Unit,
 ) {
@@ -183,6 +185,7 @@ private fun ChapterRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Read ${chapter.readCount}×", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onRead) { Text("+1") }
+            if (chapter.readCount > 0) TextButton(onClick = onClearReads) { Text("Clear") }
             Checkbox(checked = chapter.internalized, onCheckedChange = onInternalized)
             Text("Internalized", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             dragHandle()

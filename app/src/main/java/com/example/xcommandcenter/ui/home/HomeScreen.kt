@@ -64,8 +64,9 @@ fun HomeScreen(
                         IconButton(
                             onClick = {
                                 viewModel.setReorderMode(true)
-                                // Tasks can only be moved in their custom order.
+                                // Tasks and notes can only be moved in their custom order.
                                 if (selected == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
+                                if (selected == ItemType.NOTE) viewModel.setNoteSort(NoteSort.CUSTOM)
                             },
                         ) {
                             Icon(painterResource(R.drawable.ic_reorder), contentDescription = "Reorder")
@@ -91,6 +92,7 @@ fun HomeScreen(
                         onClick = {
                             selectedName = tab.name
                             if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
+                            if (reorder && tab == ItemType.NOTE) viewModel.setNoteSort(NoteSort.CUSTOM)
                         },
                         text = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
                     )

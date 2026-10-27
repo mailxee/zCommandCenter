@@ -15,6 +15,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
+import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.ui.common.HabitSummary
@@ -33,6 +34,9 @@ import java.time.LocalDate
 
 /** [CUSTOM] is the user's own order, set by reordering; the only sort in which tasks can be moved. */
 enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priority"), CUSTOM("Custom") }
+
+/** [CUSTOM] is the user's own order, the only one in which notes can be moved; [PRIORITY] puts Critical first. */
+enum class NoteSort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
 
 enum class RepeatFilter(val label: String) {
     ALL("All"),
@@ -121,9 +125,15 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     val repeatFilter = MutableStateFlow(RepeatFilter.ALL)
 
+    /** Whether the Tasks tab lists completed tasks; kept across launches. */
+    val showCompletedTasks: StateFlow<Boolean> = taskSortRepo.showCompleted.stateIn(true)
+
+    /** All completed tasks, whatever the filters: for the toggle's label and "Delete completed". */
+    val completedTaskCount: StateFlow<Int> = tasksRepo.observeAll().map { all -> all.count { it.completed } }.stateIn(0)
+
     /** Open tasks first, then by the chosen key; Critical is the highest priority. */
     val tasks: StateFlow<List<TaskEntity>> =
-        combine(tasksRepo.observeAll(), taskSort, repeatFilter, tagFilter) { tasks, sort, repeat, tags ->
+        combine(tasksRepo.observeAll(), taskSort, combine(repeatFilter, showCompletedTasks, ::Pair), tagFilter) { tasks, sort, (repeat, showCompleted), tags ->
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -131,7 +141,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 TaskSort.PRIORITY -> byPriority.then(byDue)
                 TaskSort.CUSTOM -> compareBy { it.sortOrder }
             }
-            tasks.filter { repeat.matches(it) && tags.matches(ItemRef(ItemType.TASK, it.id)) }
+            tasks.filter { (showCompleted || !it.completed) && repeat.matches(it) && tags.matches(ItemRef(ItemType.TASK, it.id)) }
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
 
@@ -210,7 +220,17 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** Set when ticking a plan was refused because of open subplans. */
     val blockedCompletion = MutableStateFlow<BlockedCompletion?>(null)
 
-    val notes: StateFlow<List<NoteEntity>> = notesRepo.observeAll().filteredByTags(ItemType.NOTE) { it.id }
+    val noteSort = MutableStateFlow(NoteSort.CUSTOM)
+
+    /** Priorities to show on the Notes tab; empty shows every note. */
+    val notePriorities = MutableStateFlow<Set<Priority>>(emptySet())
+
+    val notes: StateFlow<List<NoteEntity>> =
+        combine(notesRepo.observeAll(), noteSort, notePriorities, tagFilter) { notes, sort, priorities, tags ->
+            val shown = notes.filter { (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.NOTE, it.id)) }
+            // A stable sort, so notes of the same priority keep their custom order.
+            if (sort == NoteSort.PRIORITY) shown.sortedByDescending { it.priority.ordinal } else shown
+        }.stateIn(emptyList())
 
     /** List items per note id, for the "list of 3 items" line. */
     val noteListCounts: StateFlow<Map<Long, Int>> = notesRepo.observeListCounts().stateIn(emptyMap())
@@ -226,6 +246,14 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     fun clearTags() {
         selectedTagIds.value = emptySet()
+    }
+
+    fun setShowCompletedTasks(show: Boolean) {
+        viewModelScope.launch { taskSortRepo.setShowCompleted(show) }
+    }
+
+    fun deleteCompletedTasks() {
+        viewModelScope.launch { tasksRepo.deleteCompleted() }
     }
 
     fun setTaskSort(sort: TaskSort) {
@@ -302,6 +330,14 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.BOOK -> booksRepo.reorder(ids)
         ItemType.QUOTE -> quotesRepo.reorder(ids)
         ItemType.CHAPTER -> Unit
+    }
+
+    fun setNoteSort(sort: NoteSort) {
+        noteSort.value = sort
+    }
+
+    fun toggleNotePriority(priority: Priority) {
+        notePriorities.value = notePriorities.value.let { if (priority in it) it - priority else it + priority }
     }
 
     fun setRepeatFilter(filter: RepeatFilter) {
