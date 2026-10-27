@@ -75,8 +75,12 @@ class TaskDetailViewModel(
                 weekdays = task.weekdays,
                 checklist = checklist,
             )
+            markClean()
         }
+        markClean()
     }
+
+    override fun formState(): Any = Triple(form, dayOfMonthText, intervalText)
 
     fun update(transform: (TaskForm) -> TaskForm) {
         form = transform(form)
@@ -92,6 +96,10 @@ class TaskDetailViewModel(
 
     fun removeChecklistItem(key: Long) {
         form = form.copy(checklist = lines.remove(form.checklist, key))
+    }
+
+    fun moveChecklistItem(from: Int, to: Int) {
+        form = form.copy(checklist = lines.move(form.checklist, from, to))
     }
 
     fun save(close: Boolean) {

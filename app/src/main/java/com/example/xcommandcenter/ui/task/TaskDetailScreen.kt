@@ -100,6 +100,7 @@ private fun ChecklistSection(viewModel: TaskDetailViewModel) {
         onAdd = viewModel::addChecklistItem,
         onUpdate = viewModel::updateChecklistItem,
         onRemove = viewModel::removeChecklistItem,
+        onMove = viewModel::moveChecklistItem,
     )
     if (items.isNotEmpty()) {
         Text(

@@ -27,8 +27,14 @@ class GoalDetailViewModel(
 
     init {
         val id = itemId.value
-        if (id != 0L) viewModelScope.launch { goal = repository.get(id) ?: return@launch onMissing() }
+        if (id != 0L) viewModelScope.launch {
+            goal = repository.get(id) ?: return@launch onMissing()
+            markClean()
+        }
+        markClean()
     }
+
+    override fun formState(): Any = goal
 
     fun update(transform: (GoalEntity) -> GoalEntity) {
         goal = transform(goal)

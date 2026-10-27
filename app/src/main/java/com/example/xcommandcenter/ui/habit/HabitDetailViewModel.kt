@@ -50,8 +50,12 @@ class HabitDetailViewModel(
         if (id != 0L) viewModelScope.launch {
             val loaded = repository.get(id) ?: return@launch onMissing()
             load(loaded)
+            markClean()
         }
+        markClean()
     }
+
+    override fun formState(): Any = Triple(habit, dayOfMonthText, intervalText)
 
     private fun load(loaded: HabitEntity) {
         habit = loaded

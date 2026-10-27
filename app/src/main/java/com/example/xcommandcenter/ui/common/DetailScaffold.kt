@@ -1,8 +1,10 @@
 package com.example.xcommandcenter.ui.common
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -33,7 +35,8 @@ import com.example.xcommandcenter.R
 /**
  * Frame shared by all detail screens: back, delete, save (stays) and save-and-close actions, a snackbar for the view
  * model's messages, and a scrolling column for the content. Navigates back once [closed], which a
- * successful save or a delete sets.
+ * successful save or a delete sets. Leaving with unsaved changes (back arrow or system back) asks
+ * whether to save or discard them first.
  */
 @Composable
 fun DetailScaffold(
@@ -47,6 +50,10 @@ fun DetailScaffold(
 ) {
     val snackbar = remember { SnackbarHostState() }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var confirmLeave by rememberSaveable { mutableStateOf(false) }
+    val unsaved = onSave != null && viewModel.hasUnsavedChanges
+    val leave = { if (unsaved) confirmLeave = true else onBack() }
+    BackHandler(enabled = unsaved) { confirmLeave = true }
 
     LaunchedEffect(viewModel.closed) { if (viewModel.closed) onBack() }
     LaunchedEffect(viewModel.message) {
@@ -61,7 +68,7 @@ fun DetailScaffold(
             TopAppBar(
                 title = { Text(title, style = itemTextStyle(viewModel.type, LocalTextStyle.current)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = leave) {
                         Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
                     }
                 },
@@ -105,6 +112,24 @@ fun DetailScaffold(
                 TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (confirmLeave && onSave != null) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text("Unsaved changes") },
+            text = { Text("Save your changes before leaving?") },
+            // Save closes the screen once saved; if the form is invalid, its message shows and the screen stays.
+            confirmButton = {
+                TextButton(onClick = { confirmLeave = false; onSave(true) }) { Text("Save") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { confirmLeave = false }) { Text("Keep editing") }
+                    TextButton(onClick = { confirmLeave = false; onBack() }) { Text("Discard") }
+                }
+            },
         )
     }
 }

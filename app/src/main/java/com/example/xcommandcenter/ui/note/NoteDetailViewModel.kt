@@ -39,8 +39,12 @@ class NoteDetailViewModel(
         if (id != 0L) viewModelScope.launch {
             note = repository.get(id) ?: return@launch onMissing()
             list = repository.listItems(id).map { lines.line(it.text) }
+            markClean()
         }
+        markClean()
     }
+
+    override fun formState(): Any = note to list
 
     fun update(transform: (NoteEntity) -> NoteEntity) {
         note = transform(note)
@@ -56,6 +60,10 @@ class NoteDetailViewModel(
 
     fun removeListItem(key: Long) {
         list = lines.remove(list, key)
+    }
+
+    fun moveListItem(from: Int, to: Int) {
+        list = lines.move(list, from, to)
     }
 
     /** The title is optional, but an entirely empty note is not worth keeping. */
