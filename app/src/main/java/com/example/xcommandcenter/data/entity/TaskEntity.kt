@@ -26,10 +26,10 @@ data class TaskEntity(
     val createdAt: Long = System.currentTimeMillis(),
     /** Null for a one-off task. */
     val recurrenceType: RecurrenceType? = null,
-    /** Weekday bitmask for WEEKLY, see [Recurrence.daysFromMask]. */
+    /** Weekday bitmask for WEEKLY and EVERY_N_WEEKS, see [Recurrence.daysFromMask]. */
     @ColumnInfo(defaultValue = "0") val weekdays: Int = 0,
     @ColumnInfo(defaultValue = "1") val dayOfMonth: Int = 1,
-    /** N for EVERY_N_DAYS (days) and EVERY_N_MONTHS (months). */
+    /** N for EVERY_N_DAYS (days), EVERY_N_WEEKS (weeks) and EVERY_N_MONTHS (months). */
     @ColumnInfo(defaultValue = "2") val intervalDays: Int = 2,
     /** Set once completing this occurrence has created the next one, so unticking and ticking again doesn't make another. */
     @ColumnInfo(defaultValue = "0") val nextCreated: Boolean = false,

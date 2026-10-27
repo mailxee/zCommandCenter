@@ -44,18 +44,13 @@ fun RecurrenceFields(
     }
     when (type) {
         null, RecurrenceType.DAILY -> Unit
-        RecurrenceType.WEEKLY -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            val days = Recurrence.daysFromMask(weekdays)
-            DayOfWeek.entries.forEach { day ->
-                FilterChip(
-                    selected = day in days,
-                    onClick = { onWeekdays(Recurrence.maskFromDays(if (day in days) days - day else days + day)) },
-                    label = { Text(day.shortName()) },
-                )
-            }
-        }
+        RecurrenceType.WEEKLY -> WeekdayChips(weekdays, onWeekdays)
         RecurrenceType.MONTHLY -> DayOfMonthField(dayOfMonthText, onDayOfMonth)
         RecurrenceType.EVERY_N_DAYS -> NumberField("N (days)", intervalText, onInterval, help = intervalHelp)
+        RecurrenceType.EVERY_N_WEEKS -> {
+            NumberField("N (weeks)", intervalText, onInterval, help = intervalHelp)
+            WeekdayChips(weekdays, onWeekdays)
+        }
         RecurrenceType.EVERY_N_MONTHS -> {
             NumberField("N (months)", intervalText, onInterval, help = intervalHelp)
             DayOfMonthField(dayOfMonthText, onDayOfMonth)
@@ -68,12 +63,27 @@ fun recurrenceError(type: RecurrenceType?, weekdays: Int, dayOfMonthText: String
     val dayOfMonth = dayOfMonthText.toIntOrNull()
     val interval = intervalText.toIntOrNull()
     return when {
-        type == RecurrenceType.WEEKLY && weekdays == 0 -> "Pick at least one weekday"
+        (type == RecurrenceType.WEEKLY || type == RecurrenceType.EVERY_N_WEEKS) && weekdays == 0 -> "Pick at least one weekday"
         (type == RecurrenceType.MONTHLY || type == RecurrenceType.EVERY_N_MONTHS) && (dayOfMonth == null || dayOfMonth !in 1..31) ->
             "Day of month must be between 1 and 31"
         type == RecurrenceType.EVERY_N_DAYS && (interval == null || interval !in 1..365) -> "N must be between 1 and 365"
+        type == RecurrenceType.EVERY_N_WEEKS && (interval == null || interval !in 1..104) -> "N must be between 1 and 104"
         type == RecurrenceType.EVERY_N_MONTHS && (interval == null || interval !in 1..120) -> "N must be between 1 and 120"
         else -> null
+    }
+}
+
+@Composable
+private fun WeekdayChips(weekdays: Int, onWeekdays: (Int) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val days = Recurrence.daysFromMask(weekdays)
+        DayOfWeek.entries.forEach { day ->
+            FilterChip(
+                selected = day in days,
+                onClick = { onWeekdays(Recurrence.maskFromDays(if (day in days) days - day else days + day)) },
+                label = { Text(day.shortName()) },
+            )
+        }
     }
 }
 

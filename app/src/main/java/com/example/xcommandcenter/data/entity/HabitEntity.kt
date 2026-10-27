@@ -20,7 +20,7 @@ data class HabitEntity(
     val name: String,
     val category: HabitCategory = HabitCategory.POSITIVE,
     val recurrenceType: RecurrenceType = RecurrenceType.DAILY,
-    /** Weekday bitmask for WEEKLY, see [Recurrence.daysFromMask]. */
+    /** Weekday bitmask for WEEKLY and EVERY_N_WEEKS, see [Recurrence.daysFromMask]. */
     val weekdays: Int = 0,
     val dayOfMonth: Int = 1,
     val intervalDays: Int = 2,

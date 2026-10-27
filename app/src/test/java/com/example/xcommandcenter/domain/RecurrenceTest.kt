@@ -38,6 +38,19 @@ class RecurrenceTest {
     }
 
     @Test
+    fun `every N weeks counts weeks from the start date's week`() {
+        val mondayAndFriday = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY)
+        val fortnightly = Recurrence.EveryNWeeks(2, mondayAndFriday)
+        val wed = LocalDate.of(2026, 10, 28)
+        // Friday of the same week, then Monday two weeks after that week's Monday.
+        assertEquals(LocalDate.of(2026, 10, 30), fortnightly.nextAfter(wed))
+        assertEquals(LocalDate.of(2026, 11, 9), fortnightly.nextAfter(LocalDate.of(2026, 10, 30)))
+        // Every 10 weeks is still found.
+        assertEquals(wed.plusWeeks(10), Recurrence.EveryNWeeks(10, setOf(DayOfWeek.WEDNESDAY)).nextAfter(wed))
+        assertEquals(Recurrence.EveryNWeeks(3, mondayAndFriday), Recurrence.of(RecurrenceType.EVERY_N_WEEKS, Recurrence.maskFromDays(mondayAndFriday), 1, 3))
+    }
+
+    @Test
     fun `every N months keeps its day of month`() {
         val quarterly = Recurrence.EveryNMonths(3, 31)
         // From Jan 31: Apr 30 (April is short), then Jul 31, not Jul 30.

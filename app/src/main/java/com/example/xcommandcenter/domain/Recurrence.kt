@@ -19,6 +19,7 @@ enum class RecurrenceType(val label: String) {
     WEEKLY("Weekly"),
     MONTHLY("Monthly"),
     EVERY_N_DAYS("Every N days"),
+    EVERY_N_WEEKS("Every N weeks"),
     EVERY_N_MONTHS("Every N months"),
 }
 
@@ -61,6 +62,24 @@ sealed interface Recurrence {
             !date.isBefore(start) && ChronoUnit.DAYS.between(start, date) % n == 0L
 
         override fun describe() = if (n == 1) "Every day" else "Every $n days"
+    }
+
+    /**
+     * On [days] every [n] weeks (Monday to Sunday), counted from the start date's week: a start on
+     * a Wednesday with n = 2 and Monday and Friday gives that Friday, then Monday and Friday two
+     * weeks later.
+     */
+    data class EveryNWeeks(val n: Int, val days: Set<DayOfWeek>) : Recurrence {
+        override fun isScheduled(date: LocalDate, start: LocalDate) =
+            !date.isBefore(start) && date.dayOfWeek in days &&
+                ChronoUnit.WEEKS.between(start.mondayOfWeek(), date.mondayOfWeek()) % n == 0L
+
+        override fun describe() =
+            (if (n == 1) "Weekly: " else "Every $n weeks: ") + days.sorted().joinToString(", ") { it.shortName() }
+
+        override val searchDays: Int get() = (n + 1) * 7
+
+        private fun LocalDate.mondayOfWeek() = minusDays(dayOfWeek.value - 1L)
     }
 
     /**
@@ -114,6 +133,7 @@ sealed interface Recurrence {
             RecurrenceType.WEEKLY -> Weekly(daysFromMask(weekdays))
             RecurrenceType.MONTHLY -> Monthly(dayOfMonth)
             RecurrenceType.EVERY_N_DAYS -> EveryNDays(interval)
+            RecurrenceType.EVERY_N_WEEKS -> EveryNWeeks(interval, daysFromMask(weekdays))
             RecurrenceType.EVERY_N_MONTHS -> EveryNMonths(interval, dayOfMonth)
         }
 

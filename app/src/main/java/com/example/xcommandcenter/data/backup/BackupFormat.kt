@@ -83,16 +83,17 @@ object BackupFormat {
         val tabSheets = mapOf(
             ItemType.TASK to Sheet(
                 ItemType.TASK.tabLabel,
-                listOf(listOf("ID", "Title", "Description", "Due date", "Reminder", "Priority", "Completed", "Repeat", "Weekdays", "Day of month", "Every N days", "Next created", "Created", "Order", "Every N months")) +
+                listOf(listOf("ID", "Title", "Description", "Due date", "Reminder", "Priority", "Completed", "Repeat", "Weekdays", "Day of month", "Every N days", "Next created", "Created", "Order", "Every N months", "Every N weeks")) +
                     data.tasks.map {
                         listOf(
                             it.id.toString(), it.title, it.description, it.dueDate?.toString().orEmpty(), time(it.reminderAt),
                             it.priority.label, bool(it.completed), it.recurrenceType?.label.orEmpty(),
-                            if (it.recurrenceType == RecurrenceType.WEEKLY) days(it.weekdays) else "",
+                            if (it.recurrenceType.usesWeekdays()) days(it.weekdays) else "",
                             if (it.recurrenceType.usesDayOfMonth()) it.dayOfMonth.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_DAYS) it.intervalDays.toString() else "",
                             bool(it.nextCreated), time(it.createdAt), it.sortOrder.toString(),
                             if (it.recurrenceType == RecurrenceType.EVERY_N_MONTHS) it.intervalDays.toString() else "",
+                            if (it.recurrenceType == RecurrenceType.EVERY_N_WEEKS) it.intervalDays.toString() else "",
                         )
                     },
             ),
@@ -103,16 +104,17 @@ object BackupFormat {
             ),
             ItemType.HABIT to Sheet(
                 ItemType.HABIT.tabLabel,
-                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Reminder", "Priority", "Every N months")) +
+                listOf(listOf("ID", "Name", "Category", "Repeat", "Weekdays", "Day of month", "Every N days", "Start date", "Notes", "Created", "Order", "Reminder", "Priority", "Every N months", "Every N weeks")) +
                     data.habits.map {
                         listOf(
                             it.id.toString(), it.name, it.category.label, it.recurrenceType.label,
-                            if (it.recurrenceType == RecurrenceType.WEEKLY) days(it.weekdays) else "",
+                            if (it.recurrenceType.usesWeekdays()) days(it.weekdays) else "",
                             if (it.recurrenceType.usesDayOfMonth()) it.dayOfMonth.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_DAYS) it.intervalDays.toString() else "",
                             it.startDate.toString(), it.notes, time(it.createdAt), it.sortOrder.toString(),
                             it.reminderTime?.format(clock).orEmpty(), it.priority.label,
                             if (it.recurrenceType == RecurrenceType.EVERY_N_MONTHS) it.intervalDays.toString() else "",
+                            if (it.recurrenceType == RecurrenceType.EVERY_N_WEEKS) it.intervalDays.toString() else "",
                         )
                     },
             ),
@@ -251,7 +253,7 @@ object BackupFormat {
                 intervalDays = r.interval(type),
                 startDate = r.date("Start date") ?: LocalDate.now(zone), notes = r.text("Notes"), createdAt = r.dateTime("Created") ?: now,
                 sortOrder = r.order(), reminderMinutes = r.time("Reminder")?.let { it.hour * 60 + it.minute }, priority = r.priority(),
-            ).also { if (it.recurrenceType == RecurrenceType.WEEKLY && it.weekdays == 0) r.fail("A weekly habit needs at least one weekday") }
+            ).also { if (it.recurrenceType.usesWeekdays() && it.weekdays == 0) r.fail("A weekly habit needs at least one weekday") }
         }.withIds("Habits") { h, id -> h.copy(id = id) }
 
         val rawPlans = sheet(ItemType.PLAN.tabLabel, true)!!.items("Title") { r ->
@@ -432,9 +434,12 @@ object BackupFormat {
             return v.toInt()
         }
 
-        /** N for the schedule: "Every N months" for a monthly interval, else "Every N days". */
-        fun interval(type: RecurrenceType?): Int =
-            if (type == RecurrenceType.EVERY_N_MONTHS) int("Every N months", 2, 1..120) else int("Every N days", 2, 1..365)
+        /** N for the schedule, from the column for its unit: "Every N weeks", "Every N months", else "Every N days". */
+        fun interval(type: RecurrenceType?): Int = when (type) {
+            RecurrenceType.EVERY_N_WEEKS -> int("Every N weeks", 2, 1..104)
+            RecurrenceType.EVERY_N_MONTHS -> int("Every N months", 2, 1..120)
+            else -> int("Every N days", 2, 1..365)
+        }
 
         /** The optional "Priority" column; Medium when blank. */
         fun priority(): Priority = enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM
@@ -505,3 +510,5 @@ object BackupFormat {
 data class ImportResult(val data: BackupData, val skipped: Int)
 
 private fun RecurrenceType?.usesDayOfMonth() = this == RecurrenceType.MONTHLY || this == RecurrenceType.EVERY_N_MONTHS
+
+private fun RecurrenceType?.usesWeekdays() = this == RecurrenceType.WEEKLY || this == RecurrenceType.EVERY_N_WEEKS

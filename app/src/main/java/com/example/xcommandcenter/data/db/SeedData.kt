@@ -113,6 +113,7 @@ internal object SeedData {
                     is Recurrence.Weekly -> RecurrenceType.WEEKLY
                     is Recurrence.Monthly -> RecurrenceType.MONTHLY
                     is Recurrence.EveryNDays -> RecurrenceType.EVERY_N_DAYS
+                    is Recurrence.EveryNWeeks -> RecurrenceType.EVERY_N_WEEKS
                     is Recurrence.EveryNMonths -> RecurrenceType.EVERY_N_MONTHS
                 },
                 "weekdays" to ((recurrence as? Recurrence.Weekly)?.let { Recurrence.maskFromDays(it.days) } ?: 0),
