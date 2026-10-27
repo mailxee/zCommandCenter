@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,7 +26,8 @@ class HabitDetailViewModel(
     private val repository: HabitRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.HABIT, links, tags) {
+    cards: ItemCardSource,
+) : ItemDetailViewModel(savedStateHandle, ItemType.HABIT, links, tags, cards) {
 
     /** The habit being edited. */
     var habit by mutableStateOf(HabitEntity(name = ""))

@@ -50,7 +50,6 @@ fun PlanDetailScreen(
     viewModel: PlanDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val all by viewModel.allPlans.collectAsStateWithLifecycle()
     val plan = viewModel.plan
     var choosingParent by rememberSaveable { mutableStateOf(false) }
@@ -82,6 +81,7 @@ fun PlanDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
         if (id != 0L) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = completed, onCheckedChange = viewModel::setCompleted)
@@ -132,7 +132,6 @@ fun PlanDetailScreen(
         }
 
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 
     viewModel.blockedCompletion?.let {

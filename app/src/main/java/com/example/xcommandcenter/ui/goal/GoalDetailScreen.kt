@@ -21,7 +21,6 @@ fun GoalDetailScreen(
     viewModel: GoalDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val goal = viewModel.goal
 
     DetailScaffold(
@@ -45,7 +44,7 @@ fun GoalDetailScreen(
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 }

@@ -2,8 +2,6 @@ package com.example.xcommandcenter.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,13 +13,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -32,37 +28,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.PlanEntity
-import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
-import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
-import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
-import com.example.xcommandcenter.ui.common.LocalItemStyles
-import com.example.xcommandcenter.ui.common.display
-import com.example.xcommandcenter.ui.common.isDarkSurface
-import com.example.xcommandcenter.ui.common.itemTextStyle
-import com.example.xcommandcenter.ui.common.label
-import com.example.xcommandcenter.ui.common.toSpanStyle
+import com.example.xcommandcenter.ui.common.ItemCard
+import com.example.xcommandcenter.ui.common.bookCardText
+import com.example.xcommandcenter.ui.common.goalCardText
+import com.example.xcommandcenter.ui.common.habitCardText
+import com.example.xcommandcenter.ui.common.noteCardText
+import com.example.xcommandcenter.ui.common.planCardText
+import com.example.xcommandcenter.ui.common.quoteCardText
+import com.example.xcommandcenter.ui.common.taskCardText
 import com.example.xcommandcenter.ui.plan.CompletePlanDialog
-import java.time.Instant
-import java.time.ZoneId
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyListState
@@ -120,19 +107,10 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             ReorderableItem(drag.state, key = task.id, enabled = movable && draggingCompleted.let { it == null || it == task.completed }) {
                 ItemCard(
                     ItemType.TASK,
-                    title = task.title,
-                    lines = listOfNotNull(
-                        "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
-                        task.recurrence?.let { "Repeats: ${it.describe()}" },
-                        checklistLine(checklists[task.id]),
-                        task.reminderAt?.takeIf { !task.completed && it > System.currentTimeMillis() }
-                            ?.let { "Reminder ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().display()}" },
-                    ),
+                    text = taskCardText(task, checklists[task.id]),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
-                    done = task.completed,
-                    emphasis = task.priority == Priority.CRITICAL && !task.completed,
                     leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
                     trailing = dragHandleIf(
                         reorder = movable,
@@ -165,8 +143,7 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             ReorderableItem(drag.state, key = goal.id, enabled = reorder) {
                 ItemCard(
                     ItemType.GOAL,
-                    goal.title,
-                    listOfNotNull(goal.strategy.ifBlank { null }),
+                    goalCardText(goal),
                     links[ref].orEmpty(),
                     { onOpen(ref) },
                     tags = tagFilter.tagsOf(ref),
@@ -191,16 +168,10 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
         itemsIndexed(rows, key = { _, summary -> summary.habit.id }) { index, summary ->
             val habit = summary.habit
             val ref = ItemRef(ItemType.HABIT, habit.id)
-            val positive = habit.category == HabitCategory.POSITIVE
             ReorderableItem(drag.state, key = habit.id, enabled = reorder) {
                 ItemCard(
                     ItemType.HABIT,
-                    title = habit.name,
-                    lines = listOf(
-                        "${habit.category.label} · ${habit.recurrence.describe()}",
-                        if (positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
-                        else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
-                    ),
+                    text = habitCardText(summary),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
@@ -211,7 +182,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                             FilterChip(
                                 selected = summary.markedToday,
                                 onClick = { viewModel.toggleHabitToday(habit.id) },
-                                label = { Text(if (positive) "Done today" else "Missed today") },
+                                label = { Text(if (summary.positive) "Done today" else "Missed today") },
                             )
                         }
                     },
@@ -329,15 +300,10 @@ private fun PlanRow(
     )
     ItemCard(
         ItemType.PLAN,
-        title = plan.title,
-        lines = listOfNotNull(
-            plan.description.ifBlank { null },
-            hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden"),
-        ),
+        text = planCardText(plan, hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden")),
         links = otherLinks,
         tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
-        done = plan.completed,
         leading = {
             Checkbox(checked = plan.completed, onCheckedChange = { viewModel.setPlanCompleted(plan, it) })
         },
@@ -360,17 +326,10 @@ private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: Check
     val ref = ItemRef(ItemType.TASK, task.id)
     ItemCard(
         ItemType.TASK,
-        title = task.title,
-        lines = listOfNotNull(
-            "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
-            task.recurrence?.let { "Repeats: ${it.describe()}" },
-            checklistLine(checklist),
-        ),
+        text = taskCardText(task, checklist, showReminder = false),
         links = emptyList(),
         tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
-        done = task.completed,
-        emphasis = task.priority == Priority.CRITICAL && !task.completed,
         outlined = true,
         leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
     )
@@ -390,8 +349,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             ReorderableItem(drag.state, key = note.id, enabled = reorder) {
                 ItemCard(
                     ItemType.NOTE,
-                    title = note.title.ifBlank { "Untitled" },
-                    lines = listOfNotNull(note.body.ifBlank { null }),
+                    text = noteCardText(note),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
@@ -418,11 +376,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             ReorderableItem(drag.state, key = item.book.id, enabled = reorder) {
                 ItemCard(
                     ItemType.BOOK,
-                    title = item.book.title,
-                    lines = listOfNotNull(
-                        item.book.author.ifBlank { null },
-                        "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
-                    ),
+                    text = bookCardText(item),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
@@ -446,12 +400,10 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active, state = drag.listState) {
         itemsIndexed(rows, key = { _, quote -> quote.id }) { index, quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
-            val attribution = listOf(quote.author, quote.source).filter { it.isNotBlank() }.joinToString(", ")
             ReorderableItem(drag.state, key = quote.id, enabled = reorder) {
                 ItemCard(
                     ItemType.QUOTE,
-                    title = "“${quote.text}”",
-                    lines = listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }),
+                    text = quoteCardText(quote),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
@@ -489,82 +441,6 @@ private fun ItemList(
                 )
             }
         }
-    }
-}
-
-/** A list row: title, detail lines, the item's tags, and the titles of everything it is linked to. */
-@Composable
-private fun ItemCard(
-    type: ItemType,
-    title: String,
-    lines: List<String>,
-    links: List<ItemIndexEntry>,
-    onClick: () -> Unit,
-    tags: List<TagEntity> = emptyList(),
-    done: Boolean = false,
-    emphasis: Boolean = false,
-    outlined: Boolean = false,
-    leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    val content: @Composable ColumnScope.() -> Unit = {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            leading?.invoke()
-            Column(Modifier.weight(1f).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                // The tab's style, except that a critical task stays red and a done item is struck through.
-                val titleStyle = itemTextStyle(type, MaterialTheme.typography.titleMedium)
-                Text(
-                    title,
-                    style = titleStyle,
-                    textDecoration = TextDecoration.combine(listOfNotNull(titleStyle.textDecoration, TextDecoration.LineThrough.takeIf { done })),
-                    color = if (emphasis) MaterialTheme.colorScheme.error else titleStyle.color.takeOrElse { MaterialTheme.colorScheme.onSurface },
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                lines.forEach { line ->
-                    Text(
-                        line,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (tags.isNotEmpty()) {
-                    Text(
-                        tags.joinToString("  ") { it.label() },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (links.isNotEmpty()) {
-                    // Each linked item in its own tab's style.
-                    val styles = LocalItemStyles.current
-                    val dark = isDarkSurface()
-                    Text(
-                        buildAnnotatedString {
-                            append("Linked: ")
-                            links.forEachIndexed { index, entry ->
-                                if (index > 0) append(" · ")
-                                withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
-                            }
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            trailing?.invoke()
-        }
-    }
-    if (outlined) {
-        OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
-    } else {
-        Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
 
@@ -635,13 +511,4 @@ private fun withoutRowsUnder(rows: List<PlanTreeItem>, planId: Long): List<PlanT
     var end = start + 1
     while (end < rows.size && rows[end].depth > rows[start].depth) end++
     return rows.subList(0, start + 1) + rows.subList(end, rows.size)
-}
-
-private fun checklistLine(count: ChecklistCount?): String? = count?.let { "Checklist ${it.done}/${it.total}" }
-
-fun times(count: Int): String = if (count == 1) "once" else "$count times"
-
-private fun linkLabel(entry: ItemIndexEntry): String {
-    val title = entry.title.let { if (it.length > 40) it.take(39) + "…" else it }
-    return if (entry.type == ItemType.CHAPTER) "$title (${entry.subtitle})" else title
 }

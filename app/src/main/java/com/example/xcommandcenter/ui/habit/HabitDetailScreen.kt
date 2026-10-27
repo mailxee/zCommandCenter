@@ -25,7 +25,7 @@ import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.RecurrenceFields
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
-import com.example.xcommandcenter.ui.home.times
+import com.example.xcommandcenter.ui.common.times
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -38,7 +38,6 @@ fun HabitDetailScreen(
     viewModel: HabitDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val marks by viewModel.marks.collectAsStateWithLifecycle()
     val habit = viewModel.habit
 
@@ -94,6 +93,7 @@ fun HabitDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
 
         viewModel.saved?.let { saved ->
             val today = LocalDate.now()
@@ -123,6 +123,5 @@ fun HabitDetailScreen(
         }
 
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 }

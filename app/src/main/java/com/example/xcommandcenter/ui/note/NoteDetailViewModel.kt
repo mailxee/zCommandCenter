@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.launch
 
@@ -18,7 +19,8 @@ class NoteDetailViewModel(
     private val repository: NoteRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags) {
+    cards: ItemCardSource,
+) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags, cards) {
 
     var note by mutableStateOf(NoteEntity())
         private set

@@ -43,7 +43,6 @@ fun BookDetailScreen(
     viewModel: BookDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
     val book = viewModel.book
     var addingChapter by rememberSaveable { mutableStateOf(false) }
@@ -77,6 +76,7 @@ fun BookDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
 
         SectionTitle("Table of contents")
         if (id == 0L) {
@@ -123,7 +123,6 @@ fun BookDetailScreen(
         }
 
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 
     if (addingChapter) {

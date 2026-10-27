@@ -13,6 +13,7 @@ import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.RecurrenceType
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.launch
@@ -44,7 +45,8 @@ class TaskDetailViewModel(
     private val repository: TaskRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.TASK, links, tags) {
+    cards: ItemCardSource,
+) : ItemDetailViewModel(savedStateHandle, ItemType.TASK, links, tags, cards) {
 
     var form by mutableStateOf(TaskForm())
         private set

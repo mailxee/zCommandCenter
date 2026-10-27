@@ -21,7 +21,6 @@ fun NoteDetailScreen(
     viewModel: NoteDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val note = viewModel.note
 
     DetailScaffold(
@@ -45,7 +44,7 @@ fun NoteDetailScreen(
             minLines = 8,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 }
