@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
 import com.example.xcommandcenter.data.prefs.CollapsedPlansRepository
+import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.TaskSortRepository
 import com.example.xcommandcenter.data.repository.BookRepository
@@ -29,6 +30,7 @@ class AppContainer(context: Context) {
     val reminderScheduler = ReminderScheduler(context)
     val tabOrderRepository = TabOrderRepository(context)
     val taskSortRepository = TaskSortRepository(context)
+    val itemStyleRepository = ItemStyleRepository(context)
     val collapsedPlansRepository = CollapsedPlansRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
     val tagRepository = TagRepository(database.tagDao())

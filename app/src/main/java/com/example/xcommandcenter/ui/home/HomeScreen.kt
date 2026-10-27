@@ -13,6 +13,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -34,6 +35,7 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
+import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
 
 @Composable
@@ -92,7 +94,7 @@ fun HomeScreen(
                             selectedName = tab.name
                             if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
                         },
-                        text = { Text(tab.tabLabel) },
+                        text = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
                     )
                 }
             }

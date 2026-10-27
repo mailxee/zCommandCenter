@@ -421,6 +421,27 @@ chapters, which sit in scrolling columns, use its `ReorderableColumn`.
 | Writing the drag gesture by hand over `LazyColumn` | Auto-scroll at the edges, item offsets and animations are a lot of code to get right; the library is small, Compose-only and widely used. |
 | Long-press anywhere on a row to drag | Clashes with tapping a row to open it and with the row's checkboxes and chips. |
 
+### 2.21 Item styles per tab
+
+**Chosen (asked for by the user):** each tab has an item style (a color from a fixed palette,
+bold, italic, underline, and a font: default, serif, mono or cursive), set in Settings → Item styles.
+An item's title is shown in its tab's style everywhere: its own tab, the tab row label, the "Linked:"
+line on other tabs' rows (each linked title in its own style), linked-item lists on detail pages,
+the link picker, a plan's parent and child lists, and the detail screen's title. Chapters follow
+the Books style. Quotes keep italics as their default. Two things stay on top of a style: a done
+item is struck through, and a critical open task is shown in red.
+- `ItemStyle` (domain) is stored per tab in DataStore (`ItemStyleRepository`, one key per tab, so
+  "Delete everything" resets them) and provided once at the root through `LocalItemStyles`, so no
+  view model has to pass styles around.
+- Each palette color has a darker shade for light surfaces and a lighter one for dark surfaces
+  (`StyleColor.toColor`), so text stays readable in both themes and with wallpaper colors.
+
+| Alternative | Why rejected |
+|---|---|
+| A free color picker | Any color can be unreadable on one of the themes; a fixed palette with two shades each can't. |
+| Font size per tab | Rows of different heights make the lists and "Linked:" lines uneven. |
+| Styles in the Room database | They are display settings, like the tab order, not data to export or link. |
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -476,6 +497,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/Priority.kt` | Low < Medium < High < Critical; ordinal is the sort rank. |
 | `domain/Recurrence.kt` | `HabitCategory`, `RecurrenceType`, sealed `Recurrence` with `isScheduled` and `nextAfter`, `Recurrence.of` from stored columns, weekday bitmask helpers. |
 | `domain/HabitStats.kt` | Streak rules for positive/negative habits; recent scheduled occurrences. |
+| `domain/ItemStyle.kt` | A tab's item style (color, bold, italic, underline, font), its stored form and summary, and `ItemStyles` for all tabs (§2.21). |
 | `domain/ManualOrder.kt` | Applying a new order to the visible rows of a list while hidden rows keep their slots, one-step moves, and moving a plan with the rows under it (§2.18, §2.20). |
 | `domain/PlanTree.kt` | Flatten a plan tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
@@ -523,6 +545,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below; clearing all settings or the collapsed set. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedPlansRepository.kt` | Which plans are collapsed in the Plans tab. |
+| `data/prefs/ItemStyleRepository.kt` | Each tab's item style (§2.21). |
 | `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18). |
 
 ### data/repository/
@@ -554,6 +577,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/navigation/Routes.kt` | Route strings: home, settings, `item/{type}/{id}?parent=`. |
 | `ui/navigation/AppNavHost.kt` | Navigation graph; dispatches the item route to the right detail screen; opens a task from a reminder. |
 | `ui/common/DragHandle.kt` | The drag handle shown while reordering, with Move up / Move down accessibility actions. |
+| `ui/common/ItemStyleUi.kt` | `LocalItemStyles`, and turning a style into Compose text styles with light/dark color shades. |
 | `ui/common/ItemDetailViewModel.kt` | Base ViewModel: current id, linked items and tags, link/unlink, tag/untag, picker search, messages, close-after-delete. |
 | `ui/common/Tags.kt` | "Tags" card of every detail screen and its add-tag dialog with suggestions. |
 | `ui/common/RecurrenceFields.kt` | Schedule editor and its validation, shared by habits and tasks. |
@@ -564,7 +588,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
 | `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Plans is a collapsible outline with linked tasks. In reorder mode every row gets a drag handle. |
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status; export, import and delete with a busy flag and result messages. |
-| `ui/settings/SettingsScreen.kt` | Reorder tabs (drag and drop, reset); notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
+| `ui/settings/SettingsScreen.kt`, `ItemStyleDialog.kt` | Reorder tabs (drag and drop, reset); item styles per tab; notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
 | `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; tags; links. |
 | `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; tags; links. |
@@ -591,6 +615,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TabOrderTest.kt` | Default order (Quotes last), parsing, round trip, unknown/missing tabs, moves. |
 | `domain/RecurrenceTest.kt` | Next occurrence for each schedule type, month-end clamping, empty weekly rule, building from columns. |
 | `domain/PlanTreeTest.kt` | Depth-first flattening (with collapsed nodes), subtree and ancestor computation. |
+| `domain/ItemStyleTest.kt` | Style round trip, fallbacks for unreadable values, defaults (italic quotes, chapters as books), summaries. |
 | `domain/ManualOrderTest.kt` | Dragged orders and one-step moves around hidden rows, refusing moves past the ends, moving a plan with its rows. |
 | `data/XlsxTest.kt` | Workbook round trip (escaping, blanks, leading zeros), reading Excel-style shared strings and gaps, column letters. |
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |

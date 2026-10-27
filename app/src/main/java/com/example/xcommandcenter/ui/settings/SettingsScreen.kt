@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -47,12 +49,15 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
+import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.reminder.Notifications
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DragHandle
+import com.example.xcommandcenter.ui.common.LocalItemStyles
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.clearListItemColors
+import com.example.xcommandcenter.ui.common.itemTextStyle
 import sh.calvin.reorderable.ReorderableColumn
 
 @Composable
@@ -65,6 +70,7 @@ fun SettingsScreen(
     val snackbar = remember { SnackbarHostState() }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var editingStyle by rememberSaveable { mutableStateOf<String?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(XLSX_MIME)) { uri ->
         uri?.let(viewModel::export)
     }
@@ -127,7 +133,7 @@ fun SettingsScreen(
                         ReorderableItem {
                             ListItem(
                                 colors = clearListItemColors(),
-                                headlineContent = { Text(tab.tabLabel) },
+                                headlineContent = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
                                 leadingContent = { Text("${index + 1}") },
                                 trailingContent = {
                                     DragHandle(
@@ -142,6 +148,24 @@ fun SettingsScreen(
                 }
             }
             TextButton(onClick = viewModel::reset) { Text("Reset to default order") }
+
+            SectionTitle("Item styles")
+            Text(
+                "Give each tab's items their own look. It is used wherever an item is shown, including where other tabs list it as linked.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            val styles = LocalItemStyles.current
+            Card(Modifier.fillMaxWidth()) {
+                order.forEach { tab ->
+                    ListItem(
+                        colors = clearListItemColors(),
+                        headlineContent = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
+                        supportingContent = { Text(styles[tab].summary) },
+                        trailingContent = { TextButton(onClick = { editingStyle = tab.name }) { Text("Edit") } },
+                        modifier = Modifier.clickable { editingStyle = tab.name },
+                    )
+                }
+            }
 
             SectionTitle("Reminders")
             Text(
@@ -210,6 +234,16 @@ fun SettingsScreen(
                 TextButton(onClick = { pendingImport = null; viewModel.import(uri) }) { Text("Replace") }
             },
             dismissButton = { TextButton(onClick = { pendingImport = null }) { Text("Cancel") } },
+        )
+    }
+
+    ItemType.tabs.firstOrNull { it.name == editingStyle }?.let { tab ->
+        ItemStyleDialog(
+            tab = tab,
+            style = LocalItemStyles.current[tab],
+            onChange = { viewModel.setStyle(tab, it) },
+            onReset = { viewModel.resetStyle(tab) },
+            onDismiss = { editingStyle = null },
         )
     }
 

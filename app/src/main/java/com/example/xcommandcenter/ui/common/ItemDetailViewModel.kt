@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
  */
 abstract class ItemDetailViewModel(
     private val savedStateHandle: SavedStateHandle,
-    private val type: ItemType,
+    val type: ItemType,
     private val links: LinkRepository,
     private val tagRepository: TagRepository,
 ) : ViewModel() {

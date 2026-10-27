@@ -34,10 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
@@ -52,8 +54,12 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
+import com.example.xcommandcenter.ui.common.LocalItemStyles
 import com.example.xcommandcenter.ui.common.display
+import com.example.xcommandcenter.ui.common.isDarkSurface
+import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
+import com.example.xcommandcenter.ui.common.toSpanStyle
 import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import java.time.Instant
 import java.time.ZoneId
@@ -113,6 +119,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             val ref = ItemRef(ItemType.TASK, task.id)
             ReorderableItem(drag.state, key = task.id, enabled = movable && draggingCompleted.let { it == null || it == task.completed }) {
                 ItemCard(
+                    ItemType.TASK,
                     title = task.title,
                     lines = listOfNotNull(
                         "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
@@ -157,6 +164,7 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             val ref = ItemRef(ItemType.GOAL, goal.id)
             ReorderableItem(drag.state, key = goal.id, enabled = reorder) {
                 ItemCard(
+                    ItemType.GOAL,
                     goal.title,
                     listOfNotNull(goal.strategy.ifBlank { null }),
                     links[ref].orEmpty(),
@@ -186,6 +194,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             val positive = habit.category == HabitCategory.POSITIVE
             ReorderableItem(drag.state, key = habit.id, enabled = reorder) {
                 ItemCard(
+                    ItemType.HABIT,
                     title = habit.name,
                     lines = listOf(
                         "${habit.category.label} · ${habit.recurrence.describe()}",
@@ -319,6 +328,7 @@ private fun PlanRow(
         row.taskCount.takeIf { it > 0 }?.let { if (it == 1) "1 task" else "$it tasks" },
     )
     ItemCard(
+        ItemType.PLAN,
         title = plan.title,
         lines = listOfNotNull(
             plan.description.ifBlank { null },
@@ -349,6 +359,7 @@ private fun PlanRow(
 private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: ChecklistCount?, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val ref = ItemRef(ItemType.TASK, task.id)
     ItemCard(
+        ItemType.TASK,
         title = task.title,
         lines = listOfNotNull(
             "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
@@ -378,6 +389,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             val ref = ItemRef(ItemType.NOTE, note.id)
             ReorderableItem(drag.state, key = note.id, enabled = reorder) {
                 ItemCard(
+                    ItemType.NOTE,
                     title = note.title.ifBlank { "Untitled" },
                     lines = listOfNotNull(note.body.ifBlank { null }),
                     links = links[ref].orEmpty(),
@@ -405,6 +417,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             val ref = ItemRef(ItemType.BOOK, item.book.id)
             ReorderableItem(drag.state, key = item.book.id, enabled = reorder) {
                 ItemCard(
+                    ItemType.BOOK,
                     title = item.book.title,
                     lines = listOfNotNull(
                         item.book.author.ifBlank { null },
@@ -436,12 +449,12 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             val attribution = listOf(quote.author, quote.source).filter { it.isNotBlank() }.joinToString(", ")
             ReorderableItem(drag.state, key = quote.id, enabled = reorder) {
                 ItemCard(
+                    ItemType.QUOTE,
                     title = "“${quote.text}”",
                     lines = listOfNotNull(attribution.ifBlank { null }?.let { "— $it" }),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
-                    italicTitle = true,
                     trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {
                         viewModel.reorder(ItemType.QUOTE, drag.rows.map { it.id })
                     },
@@ -482,6 +495,7 @@ private fun ItemList(
 /** A list row: title, detail lines, the item's tags, and the titles of everything it is linked to. */
 @Composable
 private fun ItemCard(
+    type: ItemType,
     title: String,
     lines: List<String>,
     links: List<ItemIndexEntry>,
@@ -489,7 +503,6 @@ private fun ItemCard(
     tags: List<TagEntity> = emptyList(),
     done: Boolean = false,
     emphasis: Boolean = false,
-    italicTitle: Boolean = false,
     outlined: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -498,12 +511,13 @@ private fun ItemCard(
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             leading?.invoke()
             Column(Modifier.weight(1f).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                // The tab's style, except that a critical task stays red and a done item is struck through.
+                val titleStyle = itemTextStyle(type, MaterialTheme.typography.titleMedium)
                 Text(
                     title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontStyle = if (italicTitle) FontStyle.Italic else null,
-                    textDecoration = if (done) TextDecoration.LineThrough else null,
-                    color = if (emphasis) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    style = titleStyle,
+                    textDecoration = TextDecoration.combine(listOfNotNull(titleStyle.textDecoration, TextDecoration.LineThrough.takeIf { done })),
+                    color = if (emphasis) MaterialTheme.colorScheme.error else titleStyle.color.takeOrElse { MaterialTheme.colorScheme.onSurface },
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -526,8 +540,17 @@ private fun ItemCard(
                     )
                 }
                 if (links.isNotEmpty()) {
+                    // Each linked item in its own tab's style.
+                    val styles = LocalItemStyles.current
+                    val dark = isDarkSurface()
                     Text(
-                        "Linked: " + links.joinToString(" · ") { linkLabel(it) },
+                        buildAnnotatedString {
+                            append("Linked: ")
+                            links.forEachIndexed { index, entry ->
+                                if (index > 0) append(" · ")
+                                withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
+                            }
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 2,
