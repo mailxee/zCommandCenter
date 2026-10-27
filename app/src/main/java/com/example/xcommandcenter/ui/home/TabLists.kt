@@ -2,8 +2,10 @@ package com.example.xcommandcenter.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -22,12 +25,15 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -40,6 +46,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
+import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
@@ -64,6 +71,9 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val checklists by viewModel.checklistCounts.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    val showCompleted by viewModel.showCompletedTasks.collectAsStateWithLifecycle()
+    val completedCount by viewModel.completedTaskCount.collectAsStateWithLifecycle()
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     // Tasks can only be moved in the custom order; in the others their place follows from their fields.
     val movable = reorder && sort == TaskSort.CUSTOM
     val drag = rememberDragOrder(tasks, key = { it.id })
@@ -75,7 +85,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(
         empty = tasks.isEmpty(),
         emptyText = "No tasks yet.",
-        filtered = tagFilter.active || repeat != RepeatFilter.ALL,
+        filtered = tagFilter.active || repeat != RepeatFilter.ALL || (!showCompleted && completedCount > 0),
         state = drag.listState,
     ) {
         item {
@@ -99,6 +109,20 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                         shape = SegmentedButtonDefaults.itemShape(index, RepeatFilter.entries.size),
                         label = { Text(option.label, maxLines = 1) },
                     )
+                }
+            }
+        }
+        if (completedCount > 0) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(
+                        selected = showCompleted,
+                        onClick = { viewModel.setShowCompletedTasks(!showCompleted) },
+                        label = { Text("Completed tasks ($completedCount)") },
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { confirmDelete = true }) { Text("Delete completed") }
                 }
             }
         }
@@ -126,6 +150,22 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 )
             }
         }
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete completed tasks?") },
+            text = {
+                Text(
+                    "This deletes all $completedCount completed tasks, including any hidden by the filters, with their links, " +
+                        "tags and checklists. Open tasks, including the next occurrence of repeating ones, stay.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; viewModel.deleteCompletedTasks() }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -342,19 +382,52 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    val sort by viewModel.noteSort.collectAsStateWithLifecycle()
+    val priorities by viewModel.notePriorities.collectAsStateWithLifecycle()
+    // Like tasks, notes can only be moved in their custom order.
+    val movable = reorder && sort == NoteSort.CUSTOM
     val drag = rememberDragOrder(notes, key = { it.id })
     val rows = drag.rows
-    ItemList(empty = notes.isEmpty(), emptyText = "No notes yet.", filtered = tagFilter.active, state = drag.listState) {
+    ItemList(
+        empty = notes.isEmpty(),
+        emptyText = "No notes yet.",
+        filtered = tagFilter.active || priorities.isNotEmpty(),
+        state = drag.listState,
+    ) {
+        item {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                NoteSort.entries.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = sort == option,
+                        onClick = { viewModel.setNoteSort(option) },
+                        shape = SegmentedButtonDefaults.itemShape(index, NoteSort.entries.size),
+                        label = { Text(option.label, maxLines = 1) },
+                    )
+                }
+            }
+        }
+        // Any combination of priorities; none selected shows every note.
+        item {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Priority.entries.forEach { priority ->
+                    FilterChip(
+                        selected = priority in priorities,
+                        onClick = { viewModel.toggleNotePriority(priority) },
+                        label = { Text(priority.label) },
+                    )
+                }
+            }
+        }
         itemsIndexed(rows, key = { _, note -> note.id }) { index, note ->
             val ref = ItemRef(ItemType.NOTE, note.id)
-            ReorderableItem(drag.state, key = note.id, enabled = reorder) {
+            ReorderableItem(drag.state, key = note.id, enabled = movable) {
                 ItemCard(
                     ItemType.NOTE,
                     text = noteCardText(note, listCounts[note.id] ?: 0),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
                     onClick = { onOpen(ref) },
-                    trailing = dragHandleIf(reorder, index, rows.size, { viewModel.move(ItemType.NOTE, note.id, it) }) {
+                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.NOTE, note.id, it) }) {
                         viewModel.reorder(ItemType.NOTE, drag.rows.map { it.id })
                     },
                 )

@@ -63,6 +63,11 @@ class TaskRepository(
         dao.delete(id)
     }
 
+    /** Deletes every completed task; a repeating task's open next occurrence is not completed, so it stays. */
+    suspend fun deleteCompleted() {
+        dao.deleteCompleted().forEach(reminders::cancel)
+    }
+
     /** Alarms do not survive reboots or app updates; re-register every pending one. */
     suspend fun rescheduleAllReminders() {
         dao.pendingReminders(System.currentTimeMillis()).forEach(::syncReminder)

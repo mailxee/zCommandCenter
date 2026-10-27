@@ -82,6 +82,10 @@ class BookDetailViewModel(
         viewModelScope.launch { repository.addReadCount(chapterId, 1) }
     }
 
+    fun clearReads(chapterId: Long) {
+        viewModelScope.launch { repository.clearReadCount(chapterId) }
+    }
+
     fun setInternalized(chapterId: Long, internalized: Boolean) {
         viewModelScope.launch { repository.setInternalized(chapterId, internalized) }
     }

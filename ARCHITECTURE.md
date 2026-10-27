@@ -489,6 +489,19 @@ tab.
 - Schema v2 adds these columns and the table through `AutoMigration(1 → 2)`; the Excel workbook
   gains a "Note lists" sheet and Priority, Reminder, Read count and Internalized columns.
 
+### 2.24 Completed tasks and the Notes filters
+
+- **Completed tasks:** the Tasks tab has a "Completed tasks (n)" chip that shows or hides them;
+  the choice is kept in DataStore with the task sort. "Delete completed" (after a confirmation)
+  deletes every completed task, including any hidden by the filters, with its links, tags and
+  checklist, in one transaction (`TaskDao.deleteCompleted`). A repeating task's open next
+  occurrence is not completed, so it stays.
+- **Notes:** a sort (Custom, or Priority with Critical first; notes of the same priority keep their
+  custom order) and priority filter chips (any combination; none shows every note). As with tasks,
+  notes can only be dragged in the custom order, and turning on reorder mode on the Notes tab
+  switches to it. Both are in memory, like the repeat filter.
+- **Chapters:** the read count can also be cleared from the book page's chapter rows.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -594,7 +607,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedPlansRepository.kt` | Which plans are collapsed in the Plans tab. |
 | `data/prefs/ItemStyleRepository.kt` | Each tab's item style (§2.21). |
-| `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18). |
+| `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18) and whether it shows completed tasks (§2.24). |
 
 ### data/repository/
 | File | Purpose |

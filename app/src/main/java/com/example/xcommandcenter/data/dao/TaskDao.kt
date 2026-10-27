@@ -137,4 +137,11 @@ interface TaskDao {
         deleteTags(id)
         deleteRow(id)
     }
+
+    @Query("SELECT id FROM tasks WHERE completed = 1")
+    suspend fun completedIds(): List<Long>
+
+    /** Deletes every completed task, with its links, tags and checklist, all or nothing. Returns the ids. */
+    @Transaction
+    suspend fun deleteCompleted(): List<Long> = completedIds().onEach { delete(it) }
 }
