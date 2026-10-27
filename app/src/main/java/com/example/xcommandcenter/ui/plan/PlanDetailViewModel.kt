@@ -37,8 +37,14 @@ class PlanDetailViewModel(
 
     init {
         val id = itemId.value
-        if (id != 0L) viewModelScope.launch { plan = repository.get(id) ?: return@launch onMissing() }
+        if (id != 0L) viewModelScope.launch {
+            plan = repository.get(id) ?: return@launch onMissing()
+            markClean()
+        }
+        markClean()
     }
+
+    override fun formState(): Any = plan
 
     fun update(transform: (PlanEntity) -> PlanEntity) {
         plan = transform(plan)

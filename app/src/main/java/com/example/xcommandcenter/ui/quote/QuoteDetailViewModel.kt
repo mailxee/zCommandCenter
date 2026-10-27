@@ -27,8 +27,14 @@ class QuoteDetailViewModel(
 
     init {
         val id = itemId.value
-        if (id != 0L) viewModelScope.launch { quote = repository.get(id) ?: return@launch onMissing() }
+        if (id != 0L) viewModelScope.launch {
+            quote = repository.get(id) ?: return@launch onMissing()
+            markClean()
+        }
+        markClean()
     }
+
+    override fun formState(): Any = quote
 
     fun update(transform: (QuoteEntity) -> QuoteEntity) {
         quote = transform(quote)

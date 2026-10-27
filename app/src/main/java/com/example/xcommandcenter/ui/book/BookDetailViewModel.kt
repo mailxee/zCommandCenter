@@ -55,8 +55,14 @@ class BookDetailViewModel(
 
     init {
         val id = itemId.value
-        if (id != 0L) viewModelScope.launch { book = repository.get(id) ?: return@launch onMissing() }
+        if (id != 0L) viewModelScope.launch {
+            book = repository.get(id) ?: return@launch onMissing()
+            markClean()
+        }
+        markClean()
     }
+
+    override fun formState(): Any = book
 
     fun update(transform: (BookEntity) -> BookEntity) {
         book = transform(book)

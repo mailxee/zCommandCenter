@@ -44,11 +44,18 @@ class ChapterDetailViewModel(
         viewModelScope.launch {
             chapterFlow.collect { current ->
                 if (current == null) return@collect onMissing()
-                if (chapter == null) titleText = current.title
+                if (chapter == null) {
+                    titleText = current.title
+                    chapter = current
+                    markClean()
+                }
                 chapter = current
             }
         }
+        markClean()
     }
+
+    override fun formState(): Any = titleText
 
     fun save(close: Boolean) {
         val current = chapter ?: return

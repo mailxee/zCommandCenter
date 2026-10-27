@@ -55,6 +55,7 @@ fun NoteDetailScreen(
             onAdd = viewModel::addListItem,
             onUpdate = viewModel::updateListItem,
             onRemove = viewModel::removeListItem,
+            onMove = viewModel::moveListItem,
         )
         PriorityField(note.priority) { p -> viewModel.update { it.copy(priority = p) } }
         TagsSection(viewModel)

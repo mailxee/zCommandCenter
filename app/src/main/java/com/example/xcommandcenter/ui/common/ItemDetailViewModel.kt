@@ -129,8 +129,28 @@ abstract class ItemDetailViewModel(
         _itemId.value = id
         // A new item now exists; a restored screen must reopen it, not a blank form.
         savedStateHandle[Routes.ARG_ID] = id
+        markClean()
         if (close) closed = true else message = "Saved"
     }
+
+    /**
+     * The screen's editable fields as one comparable value (data classes and strings), so a change
+     * can be told from what was loaded or saved. What is saved at once (tags, links, read counts) is
+     * not part of it.
+     */
+    protected abstract fun formState(): Any
+
+    /** The form as last loaded or saved; null until the screen has called [markClean]. */
+    private var cleanForm by mutableStateOf<Any?>(null)
+
+    /** Records the current form as saved: at the end of each screen's init, after loading, and after a save. */
+    protected fun markClean() {
+        cleanForm = formState()
+    }
+
+    /** True when the form differs from what was last loaded or saved; leaving then asks first. */
+    val hasUnsavedChanges: Boolean
+        get() = cleanForm.let { it != null && it != formState() }
 
     protected fun onMissing() {
         closed = true

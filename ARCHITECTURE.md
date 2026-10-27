@@ -522,6 +522,18 @@ tab.
   draws its own (`TagChip`), with a long-press label for accessibility services. On Plans, a plan with
   a hidden tag is not shown for its tasks' sake, only as the parent of another match.
 
+### 2.26 Reordering lists, and leaving with unsaved changes
+
+- **Lists:** a task's checklist and a note's list can be reordered by dragging a handle on each
+  item (`ListEditor`, with the library's `ReorderableColumn`, as for chapters); the order is part of
+  the form and saved with it. The handle offers Move up / Move down to accessibility services.
+- **Unsaved changes:** each detail view model returns its editable fields as one comparable value
+  (`formState`); `ItemDetailViewModel` keeps the value last loaded or saved (`markClean`) and
+  compares (`hasUnsavedChanges`). Leaving with a difference, by the back arrow or system back
+  (`BackHandler`), asks: Save (saves and closes, or shows why it can't), Discard, or Keep editing.
+  What is saved at once (tags, links, read counts, a plan's completion) is not part of the form, so
+  it never counts as unsaved.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

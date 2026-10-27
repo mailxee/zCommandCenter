@@ -25,14 +25,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.xcommandcenter.R
+import sh.calvin.reorderable.ReorderableColumn
 
 /** One item of a list being edited; [key] tells rows apart while their text changes. */
 data class ListLine(val key: Long, val text: String, val done: Boolean = false)
 
 /**
- * A bulleted list edited in place: edit or remove items, and add new ones at the end. With
- * [checkable], each item has a checkbox instead of a bullet (a task's checklist); without, items
- * are plain bullets (a note's list).
+ * A bulleted list edited in place: edit, remove or drag items to a new place, and add new ones at
+ * the end. With [checkable], each item has a checkbox instead of a bullet (a task's checklist);
+ * without, items are plain bullets (a note's list). [onMove] gets the item's old and new index.
  */
 @Composable
 fun ListEditor(
@@ -42,6 +43,7 @@ fun ListEditor(
     onAdd: (String) -> Unit,
     onUpdate: (key: Long, transform: (ListLine) -> ListLine) -> Unit,
     onRemove: (key: Long) -> Unit,
+    onMove: (from: Int, to: Int) -> Unit,
 ) {
     var newItem by rememberSaveable { mutableStateOf("") }
     val add = {
@@ -49,27 +51,34 @@ fun ListEditor(
         newItem = ""
     }
     SectionTitle(title)
-    lines.forEach { line ->
+    ReorderableColumn(list = lines, onSettle = onMove) { index, line, _ ->
         key(line.key) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (checkable) {
-                    Checkbox(checked = line.done, onCheckedChange = { done -> onUpdate(line.key) { it.copy(done = done) } })
-                } else {
-                    Text("•", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 12.dp))
-                }
-                val struck = checkable && line.done
-                BasicTextField(
-                    value = line.text,
-                    onValueChange = { text -> onUpdate(line.key) { it.copy(text = text) } },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = if (struck) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                        textDecoration = if (struck) TextDecoration.LineThrough else null,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { onRemove(line.key) }) {
-                    Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove item")
+            ReorderableItem {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (checkable) {
+                        Checkbox(checked = line.done, onCheckedChange = { done -> onUpdate(line.key) { it.copy(done = done) } })
+                    } else {
+                        Text("•", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 12.dp))
+                    }
+                    val struck = checkable && line.done
+                    BasicTextField(
+                        value = line.text,
+                        onValueChange = { text -> onUpdate(line.key) { it.copy(text = text) } },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = if (struck) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            textDecoration = if (struck) TextDecoration.LineThrough else null,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { onRemove(line.key) }) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove item")
+                    }
+                    DragHandle(
+                        Modifier.draggableHandle(),
+                        onMoveUp = if (index > 0) ({ onMove(index, index - 1) }) else null,
+                        onMoveDown = if (index < lines.lastIndex) ({ onMove(index, index + 1) }) else null,
+                    )
                 }
             }
         }
@@ -102,4 +111,7 @@ class ListLines {
         lines.map { if (it.key == key) transform(it) else it }
 
     fun remove(lines: List<ListLine>, key: Long): List<ListLine> = lines.filterNot { it.key == key }
+
+    fun move(lines: List<ListLine>, from: Int, to: Int): List<ListLine> =
+        if (from in lines.indices && to in lines.indices) lines.toMutableList().apply { add(to, removeAt(from)) } else lines
 }
