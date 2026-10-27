@@ -9,6 +9,7 @@ import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemCardSource
@@ -27,7 +28,8 @@ class ChapterDetailViewModel(
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-) : ItemDetailViewModel(savedStateHandle, ItemType.CHAPTER, links, tags, cards) {
+    reminders: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.CHAPTER, links, tags, cards, reminders) {
 
     var chapter by mutableStateOf<ChapterEntity?>(null)
         private set

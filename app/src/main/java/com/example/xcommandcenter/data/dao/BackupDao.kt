@@ -17,6 +17,7 @@ import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.ReminderEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 
@@ -37,11 +38,13 @@ interface BackupDao {
     @Query("SELECT * FROM links ORDER BY id") suspend fun links(): List<LinkEntity>
     @Query("SELECT * FROM tags ORDER BY name") suspend fun tags(): List<TagEntity>
     @Query("SELECT * FROM item_tags") suspend fun itemTags(): List<ItemTagEntity>
+    @Query("SELECT * FROM reminders ORDER BY itemType, itemId, time") suspend fun reminders(): List<ReminderEntity>
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
+        reminders(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -58,9 +61,11 @@ interface BackupDao {
     @Insert suspend fun insertLinks(rows: List<LinkEntity>)
     @Insert suspend fun insertTags(rows: List<TagEntity>)
     @Insert suspend fun insertItemTags(rows: List<ItemTagEntity>)
+    @Insert suspend fun insertReminders(rows: List<ReminderEntity>)
 
     // Children before parents, so foreign keys never point at a deleted row mid-way.
     @Query("DELETE FROM item_tags") suspend fun deleteItemTags()
+    @Query("DELETE FROM reminders") suspend fun deleteReminders()
     @Query("DELETE FROM tags") suspend fun deleteTags()
     @Query("DELETE FROM links") suspend fun deleteLinks()
     @Query("DELETE FROM habit_marks") suspend fun deleteHabitMarks()
@@ -78,6 +83,7 @@ interface BackupDao {
     @Transaction
     suspend fun deleteAll() {
         deleteItemTags()
+        deleteReminders()
         deleteTags()
         deleteLinks()
         deleteHabitMarks()
@@ -115,5 +121,6 @@ interface BackupDao {
         insertLinks(data.links)
         insertTags(data.tags)
         insertItemTags(data.itemTags)
+        insertReminders(data.reminders)
     }
 }

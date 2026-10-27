@@ -4,14 +4,15 @@ import com.example.xcommandcenter.data.dao.TaskDao
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
-import com.example.xcommandcenter.reminder.ReminderScheduler
+import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** Owns tasks and keeps their alarms in step with what is stored. */
+/** Owns tasks; a repeating task's next occurrence gets its reminders' alarms set here. */
 class TaskRepository(
     private val dao: TaskDao,
-    private val reminders: ReminderScheduler,
+    private val reminders: ReminderRepository,
 ) {
     fun observeAll(): Flow<List<TaskEntity>> = dao.observeAll()
 
@@ -26,12 +27,13 @@ class TaskRepository(
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
     /**
-     * Inserts when [TaskEntity.id] is 0, otherwise updates, and stores [checklist] as the task's
-     * checklist. A change to `completed` goes through [setCompleted], so completing a repeating
-     * task from its form also creates the next one (after the checklist is written, so the next
-     * one gets a copy). Returns the task's id.
+     * Inserts when [TaskEntity.id] is 0, otherwise updates, and stores [checklist] and
+     * [reminderTimes] as the task's checklist and reminders. A change to `completed` goes through
+     * [setCompleted], so completing a repeating task from its form also creates the next one
+     * (after the checklist and reminders are written, so the next one gets copies). Returns the
+     * task's id.
      */
-    suspend fun save(task: TaskEntity, checklist: List<ChecklistItemEntity>): Long {
+    suspend fun save(task: TaskEntity, checklist: List<ChecklistItemEntity>, reminderTimes: List<Long>): Long {
         val stored = if (task.id == 0L) null else dao.get(task.id)
         val wasCompleted = stored?.completed ?: false
         val toWrite = task.copy(
@@ -41,7 +43,8 @@ class TaskRepository(
         )
         val id = if (task.id == 0L) dao.insert(toWrite) else task.id.also { dao.update(toWrite) }
         dao.replaceChecklist(id, checklist)
-        if (task.completed != wasCompleted) setCompleted(id, task.completed) else dao.get(id)?.let(::syncReminder)
+        reminders.replace(ItemRef(ItemType.TASK, id), reminderTimes)
+        if (task.completed != wasCompleted) setCompleted(id, task.completed)
         return id
     }
 
@@ -53,32 +56,18 @@ class TaskRepository(
             dao.setCompleted(id, false)
             null
         }
-        dao.get(id)?.let(::syncReminder)
-        nextId?.let { dao.get(it) }?.let(::syncReminder)
+        nextId?.let { reminders.sync(ItemRef(ItemType.TASK, it)) }
         return nextId
     }
 
     suspend fun delete(id: Long) {
-        reminders.cancel(id)
         dao.delete(id)
+        reminders.removeOrphans()
     }
 
     /** Deletes every completed task; a repeating task's open next occurrence is not completed, so it stays. */
     suspend fun deleteCompleted() {
-        dao.deleteCompleted().forEach(reminders::cancel)
-    }
-
-    /** Alarms do not survive reboots or app updates; re-register every pending one. */
-    suspend fun rescheduleAllReminders() {
-        dao.pendingReminders(System.currentTimeMillis()).forEach(::syncReminder)
-    }
-
-    private fun syncReminder(task: TaskEntity) {
-        val at = task.reminderAt
-        if (!task.completed && at != null && at > System.currentTimeMillis()) {
-            reminders.schedule(task.id, task.title, at)
-        } else {
-            reminders.cancel(task.id)
-        }
+        dao.deleteCompleted()
+        reminders.removeOrphans()
     }
 }

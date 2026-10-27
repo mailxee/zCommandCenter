@@ -86,7 +86,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(
         empty = tasks.isEmpty(),
         emptyText = "No tasks yet.",
-        filtered = tagFilter.active || repeat != RepeatFilter.ALL || priorityView.filtered || (!showCompleted && completedCount > 0),
+        filtered = viewModel.filtering(tagFilter) || repeat != RepeatFilter.ALL || priorityView.filtered || (!showCompleted && completedCount > 0),
         state = drag.listState,
     ) {
         item {
@@ -136,6 +136,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     text = taskCardText(task, checklists[task.id]),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
                     trailing = dragHandleIf(
@@ -181,7 +182,7 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.GOAL)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
         priorityControls(ItemType.GOAL, view, viewModel)
         itemsIndexed(rows, key = { _, goal -> goal.id }) { index, goal ->
             val ref = ItemRef(ItemType.GOAL, goal.id)
@@ -192,6 +193,7 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     links[ref].orEmpty(),
                     { onOpen(ref) },
                     tags = tagFilter.tagsOf(ref),
+                    reminder = viewModel.reminderOf(ref),
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.GOAL, goal.id, it) }) {
                         viewModel.reorder(ItemType.GOAL, drag.rows.map { it.id })
                     },
@@ -211,7 +213,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.HABIT)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
         priorityControls(ItemType.HABIT, view, viewModel)
         itemsIndexed(rows, key = { _, summary -> summary.habit.id }) { index, summary ->
             val habit = summary.habit
@@ -222,6 +224,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     text = habitCardText(summary),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.HABIT, habit.id, it) }) {
                         viewModel.reorder(ItemType.HABIT, drag.rows.map { it.habit.id })
@@ -264,7 +267,7 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
-        filtered = tagFilter.active || view.filtered,
+        filtered = viewModel.filtering(tagFilter) || view.filtered,
         state = drag.listState,
     ) {
         priorityControls(ItemType.PLAN, view, viewModel)
@@ -343,7 +346,7 @@ private fun PlanRow(
 ) {
     val plan = row.plan
     val ref = ItemRef(ItemType.PLAN, plan.id)
-    // Linked tasks are rows of their own below the plan, so the "Linked:" line leaves them out.
+    // Linked tasks are rows of their own below the plan, so the link lines leave them out.
     val otherLinks = links[ref].orEmpty().filter { it.type != ItemType.TASK }
     val hidden = listOfNotNull(
         row.subplanCount.takeIf { it > 0 }?.let { if (it == 1) "1 subplan" else "$it subplans" },
@@ -354,6 +357,7 @@ private fun PlanRow(
         text = planCardText(plan, hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden")),
         links = otherLinks,
         tags = tagFilter.tagsOf(ref),
+        reminder = viewModel.reminderOf(ref),
         onClick = { onOpen(ref) },
         leading = {
             Checkbox(checked = plan.completed, onCheckedChange = { viewModel.setPlanCompleted(plan, it) })
@@ -377,7 +381,7 @@ private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: Check
     val ref = ItemRef(ItemType.TASK, task.id)
     ItemCard(
         ItemType.TASK,
-        text = taskCardText(task, checklist, showReminder = false),
+        text = taskCardText(task, checklist),
         links = emptyList(),
         tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
@@ -400,7 +404,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     ItemList(
         empty = notes.isEmpty(),
         emptyText = "No notes yet.",
-        filtered = tagFilter.active || view.filtered,
+        filtered = viewModel.filtering(tagFilter) || view.filtered,
         state = drag.listState,
     ) {
         priorityControls(ItemType.NOTE, view, viewModel)
@@ -412,6 +416,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     text = noteCardText(note, listCounts[note.id] ?: 0),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.NOTE, note.id, it) }) {
                         viewModel.reorder(ItemType.NOTE, drag.rows.map { it.id })
@@ -432,7 +437,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.BOOK)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
         priorityControls(ItemType.BOOK, view, viewModel)
         itemsIndexed(rows, key = { _, item -> item.book.id }) { index, item ->
             val ref = ItemRef(ItemType.BOOK, item.book.id)
@@ -442,6 +447,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     text = bookCardText(item),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.BOOK, item.book.id, it) }) {
                         viewModel.reorder(ItemType.BOOK, drag.rows.map { it.book.id })
@@ -462,7 +468,7 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.QUOTE)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = tagFilter.active || view.filtered, state = drag.listState) {
+    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
         priorityControls(ItemType.QUOTE, view, viewModel)
         itemsIndexed(rows, key = { _, quote -> quote.id }) { index, quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
@@ -472,6 +478,7 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     text = quoteCardText(quote),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {
                         viewModel.reorder(ItemType.QUOTE, drag.rows.map { it.id })
@@ -480,6 +487,20 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
             }
         }
     }
+}
+
+/** Whether a filter or the search is hiding items, so an empty list says "no matches". */
+@Composable
+private fun HomeViewModel.filtering(tagFilter: TagFilter): Boolean {
+    val query by searchQuery.collectAsStateWithLifecycle()
+    return tagFilter.active || query.isNotBlank()
+}
+
+/** The item's reminder line for its card. */
+@Composable
+private fun HomeViewModel.reminderOf(ref: ItemRef): String? {
+    val lines by reminderLines.collectAsStateWithLifecycle()
+    return lines[ref]
 }
 
 /** A tab's sort and priority filter, as the tab's controls show them. */

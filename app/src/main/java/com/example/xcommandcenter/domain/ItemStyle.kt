@@ -20,7 +20,7 @@ enum class StyleFont(val label: String) { DEFAULT("Default"), SERIF("Serif"), MO
 
 /**
  * How the titles of one tab's items look, set per tab in Settings and used wherever those items
- * are listed: in their own tab, in "Linked:" lines and linked-item lists of other tabs, and in the
+ * are listed: in their own tab, in the link lines of cards and linked-item lists of other tabs, and in the
  * link picker.
  */
 data class ItemStyle(

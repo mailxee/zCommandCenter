@@ -15,9 +15,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DateField
-import com.example.xcommandcenter.ui.common.DateTimeField
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.ListEditor
 import com.example.xcommandcenter.ui.common.PriorityField
@@ -60,7 +60,7 @@ fun TaskDetailScreen(
         ChecklistSection(viewModel)
         PriorityField(form.priority) { p -> viewModel.update { it.copy(priority = p) } }
         DateField("Due date", form.dueDate) { date -> viewModel.update { it.copy(dueDate = date) } }
-        DateTimeField("Reminder", form.reminder) { time -> viewModel.update { it.copy(reminder = time) } }
+        RemindersSection(viewModel)
         SectionTitle("Repeat")
         RecurrenceFields(
             type = form.recurrenceType,

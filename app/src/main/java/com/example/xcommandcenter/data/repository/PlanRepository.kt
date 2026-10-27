@@ -6,7 +6,7 @@ import com.example.xcommandcenter.domain.PlanTree
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
-class PlanRepository(private val dao: PlanDao) {
+class PlanRepository(private val dao: PlanDao, private val reminders: ReminderRepository) {
     fun observeAll(): Flow<List<PlanEntity>> = dao.observeAll()
 
     suspend fun get(id: Long): PlanEntity? = dao.get(id)
@@ -33,5 +33,9 @@ class PlanRepository(private val dao: PlanDao) {
     /** Also reopens completed ancestors, since a completed plan can't have open subplans. */
     suspend fun reopen(id: Long) = dao.reopen(id)
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    /** Also removes the reminders of what was deleted. */
+    suspend fun delete(id: Long) {
+        dao.delete(id)
+        reminders.removeOrphans()
+    }
 }

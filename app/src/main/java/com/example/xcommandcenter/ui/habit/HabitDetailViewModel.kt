@@ -8,10 +8,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
+import com.example.xcommandcenter.ui.common.nextReminder
 import com.example.xcommandcenter.ui.common.recurrenceError
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class HabitDetailViewModel(
     savedStateHandle: SavedStateHandle,
@@ -27,7 +30,8 @@ class HabitDetailViewModel(
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-) : ItemDetailViewModel(savedStateHandle, ItemType.HABIT, links, tags, cards) {
+    reminders: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.HABIT, links, tags, cards, reminders) {
 
     /** The habit being edited. */
     var habit by mutableStateOf(HabitEntity(name = ""))
@@ -44,6 +48,18 @@ class HabitDetailViewModel(
     val marks: StateFlow<Set<LocalDate>> = itemId
         .flatMapLatest { id -> if (id == 0L) flowOf(emptySet()) else repository.observeMarks(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /**
+     * When the reminder at [minute] of the day next goes off, by the schedule as edited (saving
+     * keeps it) and the marks, skipping today once it is marked.
+     */
+    fun nextReminder(minute: Long): LocalDateTime? {
+        val edited = habit.copy(
+            dayOfMonth = dayOfMonthText.toIntOrNull() ?: habit.dayOfMonth,
+            intervalDays = intervalText.toIntOrNull()?.takeIf { it > 0 } ?: habit.intervalDays,
+        )
+        return edited.nextReminder(minute, LocalDateTime.now(), marks.value)
+    }
 
     init {
         val id = itemId.value

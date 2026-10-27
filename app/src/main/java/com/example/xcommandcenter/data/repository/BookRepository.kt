@@ -7,7 +7,7 @@ import com.example.xcommandcenter.data.entity.ChapterEntity
 import kotlinx.coroutines.flow.Flow
 
 /** Books and their table of contents. */
-class BookRepository(private val dao: BookDao) {
+class BookRepository(private val dao: BookDao, private val reminders: ReminderRepository) {
     fun observeAllWithProgress(): Flow<List<BookWithProgress>> = dao.observeAllWithProgress()
 
     fun observe(id: Long): Flow<BookEntity?> = dao.observe(id)
@@ -35,7 +35,11 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    /** Also removes the reminders of what was deleted. */
+    suspend fun delete(id: Long) {
+        dao.delete(id)
+        reminders.removeOrphans()
+    }
 
     fun observeChapters(bookId: Long): Flow<List<ChapterEntity>> = dao.observeChapters(bookId)
 
@@ -51,5 +55,8 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun moveChapter(chapterId: Long, offset: Int) = dao.moveChapter(chapterId, offset)
 
-    suspend fun deleteChapter(chapterId: Long) = dao.deleteChapter(chapterId)
+    suspend fun deleteChapter(chapterId: Long) {
+        dao.deleteChapter(chapterId)
+        reminders.removeOrphans()
+    }
 }

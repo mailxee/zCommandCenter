@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
@@ -23,7 +24,8 @@ class NoteDetailViewModel(
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags, cards) {
+    reminders: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags, cards, reminders) {
 
     var note by mutableStateOf(NoteEntity())
         private set

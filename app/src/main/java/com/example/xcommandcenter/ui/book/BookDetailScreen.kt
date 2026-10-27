@@ -33,7 +33,9 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.DragHandle
+import com.example.xcommandcenter.ui.common.LinkedCardsGroup
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.PriorityField
 import com.example.xcommandcenter.ui.common.SectionTitle
@@ -83,8 +85,16 @@ fun BookDetailScreen(
         )
         LinksInText(book.description)
         PriorityField(book.priority) { p -> viewModel.update { it.copy(priority = p) } }
+        RemindersSection(viewModel)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
+        val chapterLinks by viewModel.chapterLinks.collectAsStateWithLifecycle()
+        if (chapterLinks.isNotEmpty()) {
+            SectionTitle("Linked to chapters")
+            chapterLinks.forEach { (chapter, cards) ->
+                LinkedCardsGroup("${chapter.position + 1}. ${chapter.title}", cards, viewModel, onOpen)
+            }
+        }
 
         // Like a chapter's progress, applied at once rather than on save.
         stored?.let { saved ->
@@ -96,7 +106,7 @@ fun BookDetailScreen(
                 TextButton(onClick = viewModel::clearBookReads, enabled = saved.readCount > 0) { Text("Clear") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Internalized", modifier = Modifier.weight(1f))
+                Text("Done", modifier = Modifier.weight(1f))
                 Switch(checked = saved.internalized, onCheckedChange = viewModel::setBookInternalized)
             }
         }
@@ -188,7 +198,7 @@ private fun ChapterRow(
             TextButton(onClick = onRead) { Text("+1") }
             if (chapter.readCount > 0) TextButton(onClick = onClearReads) { Text("Clear") }
             Checkbox(checked = chapter.internalized, onCheckedChange = onInternalized)
-            Text("Internalized", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("Done", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             dragHandle()
         }
     }

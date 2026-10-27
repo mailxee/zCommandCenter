@@ -3,12 +3,11 @@ package com.example.xcommandcenter.data.backup
 import android.content.Context
 import android.net.Uri
 import com.example.xcommandcenter.data.dao.BackupDao
+import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.clearCollapsedPlans
 import com.example.xcommandcenter.data.prefs.clearSettings
-import com.example.xcommandcenter.data.repository.HabitRepository
-import com.example.xcommandcenter.data.repository.TaskRepository
-import com.example.xcommandcenter.reminder.ReminderScheduler
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -20,15 +19,14 @@ import kotlinx.coroutines.withContext
 class BackupRepository(
     private val context: Context,
     private val dao: BackupDao,
-    private val tasks: TaskRepository,
-    private val habits: HabitRepository,
-    private val reminders: ReminderScheduler,
+    private val reminders: ReminderRepository,
     private val tabOrder: TabOrderRepository,
+    private val itemStyles: ItemStyleRepository,
 ) {
     /** Writes the whole database to [uri]; returns how many items (across the seven tabs) went in. */
     suspend fun export(uri: Uri): Int = withContext(Dispatchers.IO) {
         val data = dao.snapshot()
-        val sheets = BackupFormat.toSheets(data, tabOrder.order.first())
+        val sheets = BackupFormat.toSheets(data, tabOrder.order.first(), styles = itemStyles.styles.first())
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Can't write to the chosen file")
         out.use { Xlsx.write(sheets, it) }
         data.itemCount
@@ -48,23 +46,21 @@ class BackupRepository(
             throw ImportException("This file couldn't be read as an Excel workbook (.xlsx). Nothing was imported.")
         }
         val result = BackupFormat.fromSheets(sheets)
-        cancelAllReminders()
+        reminders.cancelAll()
         dao.replaceAll(result.data)
         clearCollapsedPlans(context)
-        tasks.rescheduleAllReminders()
-        habits.rescheduleAllReminders()
+        reminders.rescheduleAll()
+        result.settings?.let { settings ->
+            tabOrder.setOrder(settings.tabOrder)
+            settings.styles.forEach { (tab, style) -> itemStyles.setStyle(tab, style) }
+        }
         result
     }
 
     /** Deletes every item, link, tag and habit mark, every saved setting and every pending reminder. */
     suspend fun deleteEverything() = withContext(Dispatchers.IO) {
-        cancelAllReminders()
+        reminders.cancelAll()
         dao.deleteAll()
         clearSettings(context)
-    }
-
-    private suspend fun cancelAllReminders() {
-        dao.tasks().filter { it.reminderAt != null }.forEach { reminders.cancel(it.id) }
-        dao.habits().filter { it.reminderMinutes != null }.forEach { reminders.cancelHabit(it.id) }
     }
 }

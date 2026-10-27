@@ -33,9 +33,7 @@ import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * The text of an item's card. Built by the functions below, so an item reads the same in its own
@@ -58,19 +56,16 @@ fun habitSummary(habit: HabitEntity, marks: Set<LocalDate>, today: LocalDate): H
     habit = habit,
     streak = HabitStats.streak(habit.category, habit.recurrence, habit.startDate, marks, today),
     totalMarks = marks.size,
-    scheduledToday = habit.recurrence.isScheduled(today, habit.startDate),
+    scheduledToday = HabitStats.isDue(habit.category, habit.recurrence, habit.startDate, marks, today),
     markedToday = today in marks,
 )
 
-/** [showReminder] is off under a plan, where the outline stays compact. */
-fun taskCardText(task: TaskEntity, checklist: ChecklistCount?, showReminder: Boolean = true) = CardText(
+fun taskCardText(task: TaskEntity, checklist: ChecklistCount?) = CardText(
     title = task.title,
     lines = listOfNotNull(
         "${task.priority.label} priority" + (task.dueDate?.let { " · due ${it.display()}" } ?: ""),
         task.recurrence?.let { "Repeats: ${it.describe()}" },
         checklist?.let { "Checklist ${it.done}/${it.total}" },
-        task.reminderAt?.takeIf { showReminder && !task.completed && it > System.currentTimeMillis() }
-            ?.let { "Reminder ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().display()}" },
     ),
     done = task.completed,
     emphasis = task.priority == Priority.CRITICAL && !task.completed,
@@ -91,8 +86,7 @@ fun habitCardText(summary: HabitSummary) = CardText(
     title = summary.habit.name,
     lines = listOf(
         priorityLine(summary.habit.priority),
-        "${summary.habit.category.label} · ${summary.habit.recurrence.describe()}" +
-            (summary.habit.reminderTime?.let { " · reminder ${it.display()}" } ?: ""),
+        "${summary.habit.category.label} · ${summary.habit.recurrence.describe()}",
         if (summary.positive) "Streak ${summary.streak} · done ${times(summary.totalMarks)}"
         else "Clean streak ${summary.streak} · missed ${times(summary.totalMarks)}",
     ),
@@ -124,10 +118,10 @@ fun bookCardText(item: BookWithProgress) = CardText(
     lines = listOfNotNull(
         priorityLine(item.book.priority),
         item.book.author.ifBlank { null },
-        "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
+        "${item.chapterCount} chapters · ${item.internalizedCount} done",
         listOfNotNull(
             "Read ${times(item.book.readCount)}".takeIf { item.book.readCount > 0 },
-            "Book internalized".takeIf { item.book.internalized },
+            "Book done".takeIf { item.book.internalized },
         ).joinToString(" · ").ifEmpty { null },
     ),
     emphasis = critical(item.book.priority),
@@ -148,8 +142,10 @@ fun chapterCardText(entry: ItemIndexEntry) = CardText(entry.title, listOfNotNull
 fun times(count: Int): String = if (count == 1) "once" else "$count times"
 
 /**
- * An item's card: title in its tab's style, detail lines, the item's tags, and the titles of
- * everything it is linked to. Used by the tab lists and by the linked items on detail pages.
+ * An item's card: title in its tab's style, detail lines, its [reminder] line (see
+ * [reminderLine]; not shown once the item is done), the item's tags, and what it is linked to: a
+ * line per tab, in the user's tab order ("Tasks: …"). Used by the tab lists and by the linked
+ * items on detail pages.
  */
 @Composable
 fun ItemCard(
@@ -158,6 +154,7 @@ fun ItemCard(
     links: List<ItemIndexEntry>,
     onClick: () -> Unit,
     tags: List<TagEntity> = emptyList(),
+    reminder: String? = null,
     outlined: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -185,6 +182,15 @@ fun ItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                if (reminder != null && !text.done) {
+                    Text(
+                        reminder,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (tags.isNotEmpty()) {
                     Text(
                         tags.joinToString("  ") { it.label() },
@@ -194,23 +200,26 @@ fun ItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (links.isNotEmpty()) {
-                    // Each linked item in its own tab's style.
-                    val styles = LocalItemStyles.current
-                    val dark = isDarkSurface()
-                    Text(
-                        buildAnnotatedString {
-                            append("Linked: ")
-                            links.forEachIndexed { index, entry ->
-                                if (index > 0) append(" · ")
-                                withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
-                            }
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                // One line per tab, its name and its items in the tab's style.
+                val styles = LocalItemStyles.current
+                val dark = isDarkSurface()
+                LocalTabOrder.current.forEach { tab ->
+                    val group = links.filter { it.type.tab == tab }
+                    if (group.isNotEmpty()) {
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(styles[tab].toSpanStyle(dark)) { append("${tab.tabLabel}: ") }
+                                group.forEachIndexed { index, entry ->
+                                    if (index > 0) append(" · ")
+                                    withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
+                                }
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
             trailing?.invoke()

@@ -6,7 +6,7 @@ import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class NoteRepository(private val dao: NoteDao) {
+class NoteRepository(private val dao: NoteDao, private val reminders: ReminderRepository) {
     fun observeAll(): Flow<List<NoteEntity>> = dao.observeAll()
 
     suspend fun get(id: Long): NoteEntity? = dao.get(id)
@@ -30,5 +30,9 @@ class NoteRepository(private val dao: NoteDao) {
 
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    /** Also removes the reminders of what was deleted. */
+    suspend fun delete(id: Long) {
+        dao.delete(id)
+        reminders.removeOrphans()
+    }
 }

@@ -81,60 +81,8 @@ fun PriorityField(priority: Priority, onChange: (Priority) -> Unit) {
     }
 }
 
-/** A labelled time of day with a picker and a clear button. */
 @Composable
-fun TimeField(label: String, time: LocalTime?, onChange: (LocalTime?) -> Unit) {
-    var picking by rememberSaveable { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { picking = true }) { Text(time?.display() ?: "Set") }
-        if (time != null) TextButton(onClick = { onChange(null) }) { Text("Clear") }
-    }
-    if (picking) {
-        TimePickerDialog(time ?: LocalTime.of(9, 0), onDismiss = { picking = false }) {
-            picking = false
-            onChange(it)
-        }
-    }
-}
-
-/** A labelled date and time: picks the date first, then the time. */
-@Composable
-fun DateTimeField(label: String, value: LocalDateTime?, onChange: (LocalDateTime?) -> Unit) {
-    var pickedDate by rememberSaveable { mutableStateOf<LocalDate?>(null) }
-    var pickingDate by rememberSaveable { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { pickingDate = true }) { Text(value?.display() ?: "Set") }
-        if (value != null) TextButton(onClick = { onChange(null) }) { Text("Clear") }
-    }
-    if (pickingDate) {
-        DatePickerDialogFor(value?.toLocalDate() ?: LocalDate.now(), onDismiss = { pickingDate = false }) {
-            pickingDate = false
-            pickedDate = it
-        }
-    }
-    pickedDate?.let { date ->
-        TimePickerDialog(
-            initial = value?.toLocalTime() ?: LocalTime.now().plusMinutes(5).withSecond(0).withNano(0),
-            onDismiss = { pickedDate = null },
-        ) { time ->
-            pickedDate = null
-            onChange(LocalDateTime.of(date, time))
-        }
-    }
-}
-
-@Composable
-private fun DatePickerDialogFor(initial: LocalDate, onDismiss: () -> Unit, onPicked: (LocalDate) -> Unit) {
+internal fun DatePickerDialogFor(initial: LocalDate, onDismiss: () -> Unit, onPicked: (LocalDate) -> Unit) {
     // The Material date picker works in UTC midnight millis.
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
@@ -154,7 +102,7 @@ private fun DatePickerDialogFor(initial: LocalDate, onDismiss: () -> Unit, onPic
 }
 
 @Composable
-private fun TimePickerDialog(initial: LocalTime, onDismiss: () -> Unit, onPicked: (LocalTime) -> Unit) {
+internal fun TimePickerDialog(initial: LocalTime, onDismiss: () -> Unit, onPicked: (LocalTime) -> Unit) {
     val is24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
     val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = is24Hour)
     AlertDialog(

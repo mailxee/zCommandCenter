@@ -9,14 +9,19 @@ import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
+import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.common.ItemCardData
 import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,7 +31,8 @@ class BookDetailViewModel(
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-) : ItemDetailViewModel(savedStateHandle, ItemType.BOOK, links, tags, cards) {
+    reminders: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.BOOK, links, tags, cards, reminders) {
 
     var book by mutableStateOf(BookEntity(title = ""))
         private set
@@ -51,6 +57,19 @@ class BookDetailViewModel(
     /** Table of contents, in order. Chapter changes are saved immediately. */
     val chapters: StateFlow<List<ChapterEntity>> = itemId
         .flatMapLatest { id -> if (id == 0L) flowOf(emptyList()) else repository.observeChapters(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The items linked to each chapter, as cards, in table-of-contents order; chapters with none are left out. */
+    val chapterLinks: StateFlow<List<Pair<ChapterEntity, List<ItemCardData>>>> = chapters
+        .flatMapLatest { list ->
+            if (list.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(list.map { chapter -> linkedCardsOf(ItemRef(ItemType.CHAPTER, chapter.id)).map { chapter to it } }) { pairs ->
+                    pairs.filter { (_, cards) -> cards.isNotEmpty() }
+                }
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {

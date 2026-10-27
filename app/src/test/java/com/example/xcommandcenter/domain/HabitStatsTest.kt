@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 
 class HabitStatsTest {
     // A Wednesday.
@@ -94,5 +95,53 @@ class HabitStatsTest {
     fun `weekday mask round trips`() {
         val days = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY, DayOfWeek.SUNDAY)
         assertEquals(days, Recurrence.daysFromMask(Recurrence.maskFromDays(days)))
+    }
+
+    @Test
+    fun `every N days is due daily after a miss, then counts from the day it was done`() {
+        val every3 = Recurrence.EveryNDays(3)
+        val start = LocalDate.of(2026, 10, 1)
+        val now = LocalDate.of(2026, 10, 12)
+        // Due 1st (done), 4th (missed), so 5th (missed) and 6th (done), then 9th (done), 12th.
+        val marks = setOf(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 9))
+        val due = HabitStats.dueDates(HabitCategory.POSITIVE, every3, start, marks, now, until = now)
+        assertEquals(listOf(1, 4, 5, 6, 9, 12), due.map { it.dayOfMonth })
+        // The 4th and 5th were missed: the streak runs from the 6th (12th not yet marked).
+        assertEquals(2, HabitStats.streak(HabitCategory.POSITIVE, every3, start, marks, now))
+        assertTrue(HabitStats.isDue(HabitCategory.POSITIVE, every3, start, marks, LocalDate.of(2026, 10, 5)))
+        assertFalse(HabitStats.isDue(HabitCategory.POSITIVE, every3, start, marks, LocalDate.of(2026, 10, 7)))
+    }
+
+    @Test
+    fun `a negative every N days habit marked missed is due the next day`() {
+        val every3 = Recurrence.EveryNDays(3)
+        val start = LocalDate.of(2026, 10, 1)
+        // Missed on the 4th: due the 5th (clean), then the 8th.
+        val due = HabitStats.dueDates(HabitCategory.NEGATIVE, every3, start, setOf(LocalDate.of(2026, 10, 4)), LocalDate.of(2026, 10, 9), LocalDate.of(2026, 10, 9))
+        assertEquals(listOf(1, 4, 5, 8), due.map { it.dayOfMonth })
+    }
+
+    @Test
+    fun `other schedules keep their days after a miss`() {
+        val weekly = Recurrence.Weekly(setOf(DayOfWeek.MONDAY))
+        val due = HabitStats.dueDates(HabitCategory.POSITIVE, weekly, LocalDate.of(2026, 10, 5), emptySet(), today, until = today)
+        assertEquals(listOf(5, 12, 19), due.map { it.dayOfMonth })
+    }
+
+    @Test
+    fun `the next reminder of an unmarked every N days habit is tomorrow once today's time has passed`() {
+        val every3 = Recurrence.EveryNDays(3)
+        val start = LocalDate.of(2026, 10, 1)
+        val nine = LocalTime.of(9, 0)
+        val noon = LocalDate.of(2026, 10, 4).atTime(12, 0)
+        val marks = setOf(LocalDate.of(2026, 10, 1))
+        // Due today (the 4th), not done, 9:00 passed: tomorrow, as it will be due again if still not done.
+        assertEquals(LocalDate.of(2026, 10, 5).atTime(nine), HabitStats.nextReminder(HabitCategory.POSITIVE, every3, start, marks, nine, noon))
+        // Done today (asked from the end of the day, as the app does once today is marked): three days on.
+        val endOfDay = LocalDate.of(2026, 10, 4).atTime(LocalTime.MAX)
+        assertEquals(
+            LocalDate.of(2026, 10, 7).atTime(nine),
+            HabitStats.nextReminder(HabitCategory.POSITIVE, every3, start, marks + LocalDate.of(2026, 10, 4), nine, endOfDay),
+        )
     }
 }

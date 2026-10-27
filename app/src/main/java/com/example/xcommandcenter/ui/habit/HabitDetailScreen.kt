@@ -19,15 +19,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.PriorityField
 import com.example.xcommandcenter.ui.common.RecurrenceFields
 import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
-import com.example.xcommandcenter.ui.common.TimeField
 import com.example.xcommandcenter.ui.common.times
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -88,18 +89,16 @@ fun HabitDetailScreen(
             onInterval = { viewModel.intervalText = it },
             intervalHelp = "Counted from the habit's start date.",
         )
-
-        SectionTitle("Reminder")
-        TimeField("Remind me at", habit.reminderTime) { time ->
-            viewModel.update { it.copy(reminderMinutes = time?.let { t -> t.hour * 60 + t.minute }) }
-        }
-        if (habit.reminderTime != null) {
+        if (habit.recurrenceType == RecurrenceType.EVERY_N_DAYS) {
             Text(
-                "On each scheduled day, unless the day is already marked.",
+                "If a due day is missed, the habit is due again the next day, and every day until it's done. " +
+                    "The N days then count from the day it was done.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        RemindersSection(viewModel, viewModel::nextReminder)
 
         OutlinedTextField(
             value = habit.notes,
@@ -129,7 +128,7 @@ fun HabitDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                HabitStats.recentOccurrences(saved.recurrence, saved.startDate, today, 21).forEach { date ->
+                HabitStats.recentDueDates(saved.category, saved.recurrence, saved.startDate, marks, today, 21).forEach { date ->
                     FilterChip(
                         selected = date in marks,
                         onClick = { viewModel.toggleMark(date) },

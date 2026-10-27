@@ -16,9 +16,13 @@ import com.example.xcommandcenter.domain.ItemStyles
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.StyleColor
 import com.example.xcommandcenter.domain.StyleFont
+import com.example.xcommandcenter.domain.TabOrder
 
 /** Every tab's item style, provided once at the root so any screen can style an item's title. */
 val LocalItemStyles = compositionLocalOf { ItemStyles() }
+
+/** The user's tab order, provided at the root; cards list linked items tab by tab in it. */
+val LocalTabOrder = compositionLocalOf { TabOrder.default }
 
 /** True when the theme's surface is dark, so styles pick their light shades. */
 @Composable

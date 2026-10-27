@@ -7,6 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.PlanRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
@@ -24,7 +25,8 @@ class PlanDetailViewModel(
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-) : ItemDetailViewModel(savedStateHandle, ItemType.PLAN, links, tags, cards) {
+    reminders: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.PLAN, links, tags, cards, reminders) {
 
     var plan by mutableStateOf(
         PlanEntity(title = "", parentId = savedStateHandle.get<Long>(Routes.ARG_PARENT)?.takeIf { it != 0L }),

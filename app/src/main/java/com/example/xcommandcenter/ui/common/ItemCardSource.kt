@@ -13,6 +13,7 @@ import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
 import com.example.xcommandcenter.data.repository.PlanRepository
 import com.example.xcommandcenter.data.repository.QuoteRepository
+import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.domain.ItemRef
@@ -38,6 +39,7 @@ data class ItemCardData(
     val tags: List<TagEntity> = emptyList(),
     val links: List<ItemIndexEntry> = emptyList(),
     val control: CardControl? = null,
+    val reminder: String? = null,
 ) {
     val ref: ItemRef get() = entry.ref
 }
@@ -57,6 +59,7 @@ class ItemCardSource(
     private val quotes: QuoteRepository,
     private val links: LinkRepository,
     private val tags: TagRepository,
+    private val reminders: ReminderRepository,
 ) {
     private val texts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
         combine(tasks.observeAll(), tasks.observeChecklistCounts(), goals.observeAll(), ::Triple),
@@ -86,15 +89,32 @@ class ItemCardSource(
         val quotes: List<QuoteEntity>,
     )
 
-    /** Text, control, tags and links per item; the entry is filled in by [cardsFor]. */
-    private val parts = combine(texts, tags.observeTagsByItem(), links.observeLinksByOwner(), ::Triple)
+    /** Each item's reminder line (see [reminderLine]); a habit's names its next reminder, so it needs the habit and its marks. */
+    val reminderLines: Flow<Map<ItemRef, String>> =
+        combine(reminders.observeAll(), habits.observeAll(), habits.observeAllMarks()) { byItem, habitList, marks ->
+            val habitsById = habitList.associateBy { it.id }
+            byItem.mapNotNull { (ref, times) ->
+                val habit = if (ref.type == ItemType.HABIT) habitsById[ref.id] else null
+                reminderLine(ref.type, times, habit = habit, marks = habit?.let { marks[it.id] }.orEmpty())?.let { ref to it }
+            }.toMap()
+        }
+
+    /** Text, control, tags, links and reminder lines per item; the entry is filled in by [cardsFor]. */
+    private val parts = combine(texts, tags.observeTagsByItem(), links.observeLinksByOwner(), reminderLines, ::CardParts)
+
+    private data class CardParts(
+        val texts: Map<ItemRef, Pair<CardText, CardControl?>>,
+        val tagsByItem: Map<ItemRef, List<TagEntity>>,
+        val linksByOwner: Map<ItemRef, List<ItemIndexEntry>>,
+        val reminderLines: Map<ItemRef, String>,
+    )
 
     /**
-     * Cards for [entries] (the items linked to [self]), in the same order. Each card's "Linked:"
-     * line leaves out [self], whose page the cards are shown on.
+     * Cards for [entries] (the items linked to [self]), in the same order. Each card's link lines
+     * leave out [self], whose page the cards are shown on.
      */
     fun cardsFor(self: ItemRef, entries: Flow<List<ItemIndexEntry>>): Flow<List<ItemCardData>> =
-        combine(entries, parts) { list, (texts, tagsByItem, linksByOwner) ->
+        combine(entries, parts) { list, (texts, tagsByItem, linksByOwner, reminderLines) ->
             list.map { entry ->
                 val (text, control) = texts[entry.ref] ?: (chapterCardText(entry) to null)
                 ItemCardData(
@@ -103,6 +123,7 @@ class ItemCardSource(
                     tags = tagsByItem[entry.ref].orEmpty(),
                     links = linksByOwner[entry.ref].orEmpty().filter { it.ref != self },
                     control = control,
+                    reminder = reminderLines[entry.ref],
                 )
             }
         }

@@ -12,6 +12,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
+import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
 import com.example.xcommandcenter.ui.common.ListEditor
 import com.example.xcommandcenter.ui.common.PriorityField
@@ -57,6 +58,7 @@ fun NoteDetailScreen(
             onMove = viewModel::moveListItem,
         )
         PriorityField(note.priority) { p -> viewModel.update { it.copy(priority = p) } }
+        RemindersSection(viewModel)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
     }

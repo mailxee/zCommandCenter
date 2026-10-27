@@ -80,19 +80,25 @@ internal object SeedData {
         // Tasks
         val reminder = today.plusDays(1).atTime(LocalTime.of(9, 0)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         row("tasks", "id" to 1L, "title" to "Write the Room entities", "description" to "One entity per tab plus the link table.",
-            "dueDate" to today.plusDays(1), "reminderAt" to null, "priority" to Priority.HIGH, "completed" to true)
+            "dueDate" to today.plusDays(1), "priority" to Priority.HIGH, "completed" to true)
         row("tasks", "id" to 2L, "title" to "Design the tab layout", "description" to "Scrollable tab row, list per tab, FAB to add.",
-            "dueDate" to today.plusDays(4), "reminderAt" to null, "priority" to Priority.MEDIUM, "completed" to false)
+            "dueDate" to today.plusDays(4), "priority" to Priority.MEDIUM, "completed" to false)
         row("tasks", "id" to 3L, "title" to "Finish chapter 3 of Atomic Habits", "description" to "",
-            "dueDate" to today.plusDays(3), "reminderAt" to null, "priority" to Priority.LOW, "completed" to false)
+            "dueDate" to today.plusDays(3), "priority" to Priority.LOW, "completed" to false)
         row("tasks", "id" to 4L, "title" to "Buy paint samples", "description" to "Three shades of light green.",
-            "dueDate" to today.plusDays(2), "reminderAt" to reminder, "priority" to Priority.MEDIUM, "completed" to false)
+            "dueDate" to today.plusDays(2), "priority" to Priority.MEDIUM, "completed" to false)
         row("tasks", "id" to 5L, "title" to "Register for the half marathon", "description" to "Early-bird price ends soon.",
-            "dueDate" to today.plusDays(7), "reminderAt" to null, "priority" to Priority.CRITICAL, "completed" to false)
+            "dueDate" to today.plusDays(7), "priority" to Priority.CRITICAL, "completed" to false)
         row("tasks", "id" to 6L, "title" to "Water the plants", "description" to "Kitchen herbs and the balcony.",
-            "dueDate" to today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)), "reminderAt" to null,
+            "dueDate" to today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)),
             "priority" to Priority.LOW, "completed" to false,
             "recurrenceType" to RecurrenceType.WEEKLY, "weekdays" to Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)))
+        // Reminders have no createdAt column, so not through row().
+        db.insert("reminders", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
+            put("itemType", TASK.name)
+            put("itemId", 4L)
+            put("time", reminder)
+        })
 
         // Habits, started a month ago so streaks have history.
         val start = today.minusDays(30)

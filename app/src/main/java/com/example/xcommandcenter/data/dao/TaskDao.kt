@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
+import com.example.xcommandcenter.data.entity.ReminderEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -28,9 +29,6 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun get(id: Long): TaskEntity?
-
-    @Query("SELECT * FROM tasks WHERE completed = 0 AND reminderAt > :now")
-    suspend fun pendingReminders(now: Long): List<TaskEntity>
 
     /** The sortOrder for a new item: after every other one. */
     @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM tasks")
@@ -66,6 +64,12 @@ interface TaskDao {
     @Query("INSERT OR IGNORE INTO item_tags (type, itemId, tagId) SELECT type, :toId, tagId FROM item_tags WHERE type = 'TASK' AND itemId = :fromId")
     suspend fun copyTags(fromId: Long, toId: Long)
 
+    @Query("SELECT * FROM reminders WHERE itemType = 'TASK' AND itemId = :taskId")
+    suspend fun reminders(taskId: Long): List<ReminderEntity>
+
+    @Insert
+    suspend fun insertReminders(reminders: List<ReminderEntity>)
+
     @Query("DELETE FROM tasks WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
@@ -97,8 +101,8 @@ interface TaskDao {
     /**
      * Marks the task completed. A repeating task also gets its next occurrence, once: a copy due
      * on the next scheduled date after this one's due date (today if it has none), skipping dates
-     * that have already passed, with the reminder moved by the same number of days (so it keeps its
-     * time and its distance from the due date), the same links and tags, and the same checklist
+     * that have already passed, with each reminder moved by the same number of days (so it keeps
+     * its time and its distance from the due date), the same links and tags, and the same checklist
      * with every item unticked. The completed task stays as history. Returns the new task's id, or null if none was created.
      */
     @Transaction
@@ -111,11 +115,8 @@ interface TaskDao {
         val from = task.dueDate ?: today
         val next = recurrence.nextFrom(from, today) ?: return null
         val days = ChronoUnit.DAYS.between(from, next)
-        val reminder = task.reminderAt?.let {
-            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).plusDays(days).toInstant().toEpochMilli()
-        }
         val newId = insert(
-            task.copy(id = 0, dueDate = next, reminderAt = reminder, completed = false, nextCreated = false, createdAt = System.currentTimeMillis()),
+            task.copy(id = 0, dueDate = next, completed = false, nextCreated = false, createdAt = System.currentTimeMillis()),
         )
         markNextCreated(id)
         val self = ItemRef(ItemType.TASK, id)
@@ -127,6 +128,12 @@ interface TaskDao {
         )
         copyTags(id, newId)
         insertChecklist(checklist(id).map { it.copy(id = 0, taskId = newId, done = false) })
+        insertReminders(
+            reminders(id).map {
+                val moved = Instant.ofEpochMilli(it.time).atZone(ZoneId.systemDefault()).plusDays(days).toInstant().toEpochMilli()
+                it.copy(id = 0, itemId = newId, time = moved)
+            },
+        )
         return newId
     }
 

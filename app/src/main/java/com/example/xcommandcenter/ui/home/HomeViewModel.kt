@@ -17,6 +17,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.PlanTree
+import com.example.xcommandcenter.domain.Search
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.ui.common.HabitSummary
 import com.example.xcommandcenter.ui.common.habitSummary
@@ -60,7 +61,8 @@ enum class RepeatFilter(val label: String) {
 
 /**
  * The tag filter shared by every tab: an item shows only if it carries all [selected] tags and none
- * of the [excluded] ones (tags pressed and held in the filter bar).
+ * of the [excluded] ones (tags pressed and held in the filter bar). [UNTAGGED] stands for "no
+ * tags": selected, it shows only items without tags; excluded, it hides them.
  */
 data class TagFilter(
     val tagsByItem: Map<ItemRef, List<TagEntity>> = emptyMap(),
@@ -71,11 +73,19 @@ data class TagFilter(
 
     fun tagsOf(ref: ItemRef): List<TagEntity> = tagsByItem[ref].orEmpty()
 
-    /** True when the item carries an excluded tag. */
-    fun excludes(ref: ItemRef): Boolean = excluded.isNotEmpty() && tagsOf(ref).any { it.id in excluded }
+    /** The item's tag ids, or [UNTAGGED] alone for an item without tags. */
+    private fun idsOf(ref: ItemRef): Set<Long> = tagsOf(ref).map { it.id }.toSet().ifEmpty { setOf(UNTAGGED) }
+
+    /** True when the item carries an excluded tag (or has none, with [UNTAGGED] excluded). */
+    fun excludes(ref: ItemRef): Boolean = excluded.isNotEmpty() && idsOf(ref).any { it in excluded }
 
     fun matches(ref: ItemRef): Boolean =
-        (selected.isEmpty() || tagsOf(ref).map { it.id }.containsAll(selected)) && !excludes(ref)
+        (selected.isEmpty() || idsOf(ref).containsAll(selected)) && !excludes(ref)
+
+    companion object {
+        /** The "Untagged" chip; no tag has this id. */
+        const val UNTAGGED = -1L
+    }
 }
 
 /** One row of the Plans tab: a plan, or a task linked to the plan above it. */
@@ -127,9 +137,15 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** Only chosen tags that still exist count, so removing a tag from its last item can't leave an empty filter stuck on. */
     val tagFilter: StateFlow<TagFilter> =
         combine(tagsRepo.observeTagsByItem(), selectedTagIds, excludedTagIds, allTags) { byItem, selected, excluded, inUse ->
-            val existing = inUse.map { it.id }.toSet()
+            val existing = inUse.map { it.id }.toSet() + TagFilter.UNTAGGED
             TagFilter(byItem, selected intersect existing, excluded intersect existing)
         }.stateIn(TagFilter())
+
+    /** The search box: every tab shows only the items whose text contains each word typed. */
+    val searchQuery = MutableStateFlow("")
+
+    /** Each item's reminder line for its card (see [reminderLine]). */
+    val reminderLines: StateFlow<Map<ItemRef, String>> = container.itemCardSource.reminderLines.stateIn(emptyMap())
 
     val taskSort: StateFlow<TaskSort> = taskSortRepo.sort
         .map { name -> TaskSort.entries.firstOrNull { it.name == name } ?: TaskSort.DUE_DATE }
@@ -161,9 +177,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             tasksRepo.observeAll(),
             taskSort,
             combine(repeatFilter, showCompletedTasks, ::Pair),
-            tagFilter,
+            combine(tagFilter, searchQuery, ::Pair),
             priorityFilters.map { it[ItemType.TASK].orEmpty() },
-        ) { tasks, sort, (repeat, showCompleted), tags, priorities ->
+        ) { tasks, sort, (repeat, showCompleted), (tags, query), priorities ->
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -173,19 +189,21 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             }
             tasks.filter {
                 (showCompleted || !it.completed) && repeat.matches(it) &&
-                    (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.TASK, it.id))
+                    (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.TASK, it.id)) &&
+                    Search.matches(query, it.title, it.description)
             }
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
 
 
-    val goals: StateFlow<List<GoalEntity>> = goalsRepo.observeAll().sortedAndFiltered(ItemType.GOAL, { it.id }, { it.priority })
+    val goals: StateFlow<List<GoalEntity>> =
+        goalsRepo.observeAll().sortedAndFiltered(ItemType.GOAL, { it.id }, { it.priority }) { listOf(it.title, it.strategy) }
 
     val habits: StateFlow<List<HabitSummary>> =
         combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks()) { habits, marks ->
             val today = LocalDate.now()
             habits.map { habit -> habitSummary(habit, marks[habit.id].orEmpty(), today) }
-        }.sortedAndFiltered(ItemType.HABIT, { it.habit.id }, { it.habit.priority })
+        }.sortedAndFiltered(ItemType.HABIT, { it.habit.id }, { it.habit.priority }) { listOf(it.habit.name, it.habit.notes) }
 
     val showCompletedPlans = MutableStateFlow(false)
 
@@ -209,29 +227,33 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
      * The Plans tab: the plan tree with each plan's linked tasks right below it, ahead of
      * its subplans. Completed plans and tasks are left out unless their toggle is on; hiding
      * a completed plan never orphans an open one, because everything below it is completed too.
-     * A collapsed plan hides its tasks and its whole subtree. With a tag filter on, only
-     * matching plans and tasks show, plus the plans above them so the tree still reads.
+     * A collapsed plan hides its tasks and its whole subtree. With a tag filter or a search on,
+     * only matching plans and tasks show, plus the plans above them so the tree still reads.
      */
     val planTree: StateFlow<List<PlanTreeItem>> = combine(
         plansRepo.observeAll(),
         tasksByPlan,
         combine(showCompletedPlans, showCompletedPlanTasks, ::Pair),
         container.collapsedPlansRepository.collapsed,
-        combine(tagFilter, prioritySorts, priorityFilters, ::Triple),
-    ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tags, sorts, filters) ->
+        combine(combine(tagFilter, searchQuery, ::Pair), prioritySorts, priorityFilters, ::Triple),
+    ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tagsAndQuery, sorts, filters) ->
+        val (tags, query) = tagsAndQuery
+        val narrowed = tags.active || query.isNotBlank()
         // Sorting the plans sorts siblings: the tree keeps each plan's children in the order given.
         val sorted = if (sorts[ItemType.PLAN] == PrioritySort.PRIORITY) all.sortedByDescending { it.priority.ordinal } else all
         val shown = if (showPlans) sorted else sorted.filterNot { it.completed }
         val priorities = filters[ItemType.PLAN].orEmpty()
         fun tasksOf(planId: Long) = tasksByPlan[planId].orEmpty()
-            .filter { (showTasks || !it.completed) && tags.matches(ItemRef(ItemType.TASK, it.id)) }
-        val visible = if (!tags.active && priorities.isEmpty()) {
+            .filter {
+                (showTasks || !it.completed) && tags.matches(ItemRef(ItemType.TASK, it.id)) && Search.matches(query, it.title, it.description)
+            }
+        val visible = if (!narrowed && priorities.isEmpty()) {
             shown
         } else {
             // The priority filter applies to the plans themselves; their tasks are shown as usual.
             val hits = shown.filter { plan ->
                 (priorities.isEmpty() || plan.priority in priorities) &&
-                    (!tags.active || tags.matches(ItemRef(ItemType.PLAN, plan.id)) ||
+                    (!narrowed || (tags.matches(ItemRef(ItemType.PLAN, plan.id)) && Search.matches(query, plan.title, plan.description)) ||
                         (!tags.excludes(ItemRef(ItemType.PLAN, plan.id)) && tasksOf(plan.id).isNotEmpty()))
             }.map { it.id }
             val keep = hits.toSet() + hits.flatMap { PlanTree.ancestorIds(it, shown, { p -> p.id }, { p -> p.parentId }) }
@@ -260,15 +282,19 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** Set when ticking a plan was refused because of open subplans. */
     val blockedCompletion = MutableStateFlow<BlockedCompletion?>(null)
 
-    val notes: StateFlow<List<NoteEntity>> = notesRepo.observeAll().sortedAndFiltered(ItemType.NOTE, { it.id }, { it.priority })
+    val notes: StateFlow<List<NoteEntity>> =
+        notesRepo.observeAll().sortedAndFiltered(ItemType.NOTE, { it.id }, { it.priority }) { listOf(it.title, it.body) }
 
     /** List items per note id, for the "list of 3 items" line. */
     val noteListCounts: StateFlow<Map<Long, Int>> = notesRepo.observeListCounts().stateIn(emptyMap())
 
     val books: StateFlow<List<BookWithProgress>> =
-        booksRepo.observeAllWithProgress().sortedAndFiltered(ItemType.BOOK, { it.book.id }, { it.book.priority })
+        booksRepo.observeAllWithProgress().sortedAndFiltered(ItemType.BOOK, { it.book.id }, { it.book.priority }) {
+            listOf(it.book.title, it.book.author, it.book.description)
+        }
 
-    val quotes: StateFlow<List<QuoteEntity>> = quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority })
+    val quotes: StateFlow<List<QuoteEntity>> =
+        quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority }) { listOf(it.text, it.author, it.source) }
 
     /**
      * The tags on the items each tab lists, for its tag filter bar. The Plans tab also lists the
@@ -296,6 +322,10 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     fun toggleExcludedTag(tagId: Long) {
         selectedTagIds.value -= tagId
         excludedTagIds.value = excludedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
+    }
+
+    fun setSearchQuery(query: String) {
+        searchQuery.value = query
     }
 
     fun clearTags() {
@@ -441,14 +471,22 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Keeps the items of [type] that pass the shared tag filter and the tab's priority filter, in
-     * the tab's sort. Sorting by priority is stable, so items of the same priority keep their
-     * custom order.
+     * Keeps the items of [type] that pass the shared tag filter, the search (over the item's
+     * [text]) and the tab's priority filter, in the tab's sort. Sorting by priority is stable, so
+     * items of the same priority keep their custom order.
      */
-    private fun <T> Flow<List<T>>.sortedAndFiltered(type: ItemType, id: (T) -> Long, priority: (T) -> Priority): StateFlow<List<T>> =
-        combine(this, tagFilter, prioritySorts, priorityFilters) { items, tags, sorts, filters ->
+    private fun <T> Flow<List<T>>.sortedAndFiltered(
+        type: ItemType,
+        id: (T) -> Long,
+        priority: (T) -> Priority,
+        text: (T) -> List<String>,
+    ): StateFlow<List<T>> =
+        combine(this, tagFilter, prioritySorts, priorityFilters, searchQuery) { items, tags, sorts, filters, query ->
             val priorities = filters[type].orEmpty()
-            val shown = items.filter { (priorities.isEmpty() || priority(it) in priorities) && tags.matches(ItemRef(type, id(it))) }
+            val shown = items.filter {
+                (priorities.isEmpty() || priority(it) in priorities) && tags.matches(ItemRef(type, id(it))) &&
+                    Search.matches(query, *text(it).toTypedArray())
+            }
             if (sorts[type] == PrioritySort.PRIORITY) shown.sortedByDescending { priority(it).ordinal } else shown
         }.stateIn(emptyList())
 
