@@ -28,7 +28,6 @@ fun ChapterDetailScreen(
     onOpen: (ItemRef) -> Unit,
     viewModel: ChapterDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val book by viewModel.book.collectAsStateWithLifecycle()
     val chapter = viewModel.chapter
 
@@ -54,6 +53,7 @@ fun ChapterDetailScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
         if (chapter != null) {
             SectionTitle("Progress")
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -67,6 +67,5 @@ fun ChapterDetailScreen(
             }
         }
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 }

@@ -442,6 +442,26 @@ item is struck through, and a critical open task is shown in red.
 | Font size per tab | Rows of different heights make the lists and "Linked:" lines uneven. |
 | Styles in the Room database | They are display settings, like the tab order, not data to export or link. |
 
+### 2.22 Linked items as cards
+
+**Chosen (confirmed with the user):** on a detail page, each linked item is shown as the same card
+its own tab shows: title in its style, detail lines, tags, its other links, and the same control
+(task and plan checkboxes, the habit's "today" chip), plus a button to remove the link. The section
+sits right after the item's title and description fields (after Notes for a habit). A linked plan
+that can't be ticked because of open subplans gets the same "complete all" dialog as on the Plans
+tab.
+- One `ItemCard` composable and one text builder per type (`taskCardText`, `habitCardText`, …,
+  in `ui/common/ItemCard.kt`) are used by both the tabs and the detail pages, so they can't drift
+  apart.
+- `ItemCardSource` builds every item's card data from the repositories, as the tabs do, and
+  `ItemDetailViewModel.linkedCards` picks the linked ones. A card's "Linked:" line leaves out the
+  item whose page it is on. Chapters have no tab card; theirs names the book they are in.
+
+| Alternative | Why rejected |
+|---|---|
+| Building the cards from `HomeViewModel` | It is scoped to the home screen and filtered by the tag filter; detail pages need every linked item. |
+| Look-only cards without controls | The user wants linked items to work as they do in their tabs. |
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -578,11 +598,13 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/navigation/AppNavHost.kt` | Navigation graph; dispatches the item route to the right detail screen; opens a task from a reminder. |
 | `ui/common/DragHandle.kt` | The drag handle shown while reordering, with Move up / Move down accessibility actions. |
 | `ui/common/ItemStyleUi.kt` | `LocalItemStyles`, and turning a style into Compose text styles with light/dark color shades. |
-| `ui/common/ItemDetailViewModel.kt` | Base ViewModel: current id, linked items and tags, link/unlink, tag/untag, picker search, messages, close-after-delete. |
+| `ui/common/ItemDetailViewModel.kt` | Base ViewModel: current id, linked items as cards and their controls, tags, link/unlink, tag/untag, picker search, messages, close-after-delete. |
 | `ui/common/Tags.kt` | "Tags" card of every detail screen and its add-tag dialog with suggestions. |
 | `ui/common/RecurrenceFields.kt` | Schedule editor and its validation, shared by habits and tasks. |
 | `ui/common/DetailScaffold.kt` | Shared detail frame: back/save/delete (with confirmation), snackbar, scrolling content. |
-| `ui/common/LinkedItems.kt` | "Linked items" card grouped by tab, and the two-step link picker dialog with search. |
+| `ui/common/LinkedItems.kt` | "Linked items" section: linked items as tab cards with their controls, grouped by tab; and the two-step link picker dialog with search. |
+| `ui/common/ItemCard.kt` | The item card shared by the tabs and the linked items, the per-type card text, and habit summaries (§2.22). |
+| `ui/common/ItemCardSource.kt` | Card data (text, control, tags, links) for every item, and the card controls' actions, for detail pages (§2.22). |
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, plan tree, …), the shared tag filter and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |

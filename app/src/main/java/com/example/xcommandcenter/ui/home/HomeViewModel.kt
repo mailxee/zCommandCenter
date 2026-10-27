@@ -6,19 +6,19 @@ import com.example.xcommandcenter.AppContainer
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.GoalEntity
-import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
-import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.domain.TabOrder
+import com.example.xcommandcenter.ui.common.HabitSummary
+import com.example.xcommandcenter.ui.common.habitSummary
 import com.example.xcommandcenter.ui.plan.BlockedCompletion
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,14 +58,6 @@ data class TagFilter(
 
     fun matches(ref: ItemRef): Boolean = selected.isEmpty() || tagsOf(ref).map { it.id }.containsAll(selected)
 }
-
-data class HabitSummary(
-    val habit: HabitEntity,
-    val streak: Int,
-    val totalMarks: Int,
-    val scheduledToday: Boolean,
-    val markedToday: Boolean,
-)
 
 /** One row of the Plans tab: a plan, or a task linked to the plan above it. */
 sealed interface PlanTreeItem {
@@ -149,14 +141,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks(), tagFilter) { habits, marks, tags ->
             val today = LocalDate.now()
             habits.filter { tags.matches(ItemRef(ItemType.HABIT, it.id)) }.map { habit ->
-                val habitMarks = marks[habit.id].orEmpty()
-                HabitSummary(
-                    habit = habit,
-                    streak = HabitStats.streak(habit.category, habit.recurrence, habit.startDate, habitMarks, today),
-                    totalMarks = habitMarks.size,
-                    scheduledToday = habit.recurrence.isScheduled(today, habit.startDate),
-                    markedToday = today in habitMarks,
-                )
+                habitSummary(habit, marks[habit.id].orEmpty(), today)
             }
         }.stateIn(emptyList())
 

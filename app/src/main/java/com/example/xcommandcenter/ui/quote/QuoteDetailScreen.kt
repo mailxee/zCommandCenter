@@ -21,7 +21,6 @@ fun QuoteDetailScreen(
     viewModel: QuoteDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val quote = viewModel.quote
 
     DetailScaffold(
@@ -52,7 +51,7 @@ fun QuoteDetailScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 }

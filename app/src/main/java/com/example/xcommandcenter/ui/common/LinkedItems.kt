@@ -10,7 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,13 +30,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import kotlinx.coroutines.flow.Flow
 
 /** Secondary line for an entry: a chapter shows its book, books and quotes their author. */
@@ -44,53 +48,30 @@ fun ItemIndexEntry.describe(): String? = when (type) {
     else -> subtitle
 }
 
-/** "Linked items" card of a detail screen, grouped by tab, plus the link picker. */
+/**
+ * "Linked items" of a detail screen, grouped by tab: each linked item is a card as in its own tab,
+ * with the same checkbox or "today" chip, plus a button to remove the link. Also the link picker.
+ */
 @Composable
-fun LinkedItemsSection(
-    viewModel: ItemDetailViewModel,
-    linked: List<ItemIndexEntry>,
-    onOpen: (ItemRef) -> Unit,
-) {
+fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit) {
+    val cards by viewModel.linkedCards.collectAsStateWithLifecycle()
     var picking by rememberSaveable { mutableStateOf(false) }
     val saved = viewModel.itemId.collectAsState().value != 0L
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(vertical = 8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Linked items", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                TextButton(onClick = { picking = true }, enabled = saved) { Text("Add link") }
-            }
-            when {
-                !saved -> HintText("Save this item to start linking it.")
-                linked.isEmpty() -> HintText("Nothing linked yet.")
-                else -> ItemType.tabs.forEach { tab ->
-                    val group = linked.filter { it.type.tab == tab }
-                    if (group.isNotEmpty()) {
-                        Text(
-                            tab.tabLabel,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 16.dp, top = 8.dp),
-                        )
-                        group.forEach { entry ->
-                            ListItem(
-                                colors = clearListItemColors(),
-                                headlineContent = {
-                                    Text(entry.title, style = itemTextStyle(entry.type, LocalTextStyle.current), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                },
-                                supportingContent = entry.describe()?.let { { Text(it) } },
-                                trailingContent = {
-                                    IconButton(onClick = { viewModel.unlink(entry.ref) }) {
-                                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove link")
-                                    }
-                                },
-                                modifier = Modifier.clickable { onOpen(entry.ref) },
-                            )
-                        }
-                    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Linked items", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { picking = true }, enabled = saved) { Text("Add link") }
+        }
+        when {
+            !saved -> HintText("Save this item to start linking it.")
+            cards.isEmpty() -> HintText("Nothing linked yet.")
+            else -> ItemType.tabs.forEach { tab ->
+                val group = cards.filter { it.ref.type.tab == tab }
+                if (group.isNotEmpty()) {
+                    val labelStyle = itemTextStyle(tab, MaterialTheme.typography.labelLarge)
+                    Text(tab.tabLabel, style = labelStyle, color = labelStyle.color.takeOrElse { MaterialTheme.colorScheme.primary })
+                    group.forEach { card -> LinkedCard(card, viewModel, onOpen) }
                 }
             }
         }
@@ -99,12 +80,50 @@ fun LinkedItemsSection(
     if (picking) {
         LinkPickerDialog(
             self = viewModel.ref,
-            alreadyLinked = linked.map { it.ref }.toSet(),
+            alreadyLinked = cards.map { it.ref }.toSet(),
             search = viewModel::searchLinkTargets,
             onPick = { viewModel.link(it.ref); picking = false },
             onDismiss = { picking = false },
         )
     }
+    viewModel.linkedBlocked?.let {
+        CompletePlanDialog(it, viewModel::completeLinkedWithSubplans, viewModel::dismissLinkedBlocked)
+    }
+}
+
+@Composable
+private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit) {
+    val control = card.control
+    ItemCard(
+        type = card.ref.type,
+        text = card.text,
+        links = card.links,
+        onClick = { onOpen(card.ref) },
+        tags = card.tags,
+        leading = when (control) {
+            is CardControl.Task -> {
+                { Checkbox(checked = control.completed, onCheckedChange = { viewModel.setLinkedTaskCompleted(card.ref.id, it) }) }
+            }
+            is CardControl.Plan -> {
+                { Checkbox(checked = control.plan.completed, onCheckedChange = { viewModel.setLinkedPlanCompleted(control.plan, it) }) }
+            }
+            else -> null
+        },
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (control is CardControl.Habit) {
+                    FilterChip(
+                        selected = control.markedToday,
+                        onClick = { viewModel.toggleLinkedHabitToday(card.ref.id) },
+                        label = { Text(if (control.positive) "Done today" else "Missed today") },
+                    )
+                }
+                IconButton(onClick = { viewModel.unlink(card.ref) }) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove link")
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -113,7 +132,6 @@ private fun HintText(text: String) {
         text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
 

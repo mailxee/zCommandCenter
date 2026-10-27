@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.QuoteRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.launch
 
@@ -18,7 +19,8 @@ class QuoteDetailViewModel(
     private val repository: QuoteRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.QUOTE, links, tags) {
+    cards: ItemCardSource,
+) : ItemDetailViewModel(savedStateHandle, ItemType.QUOTE, links, tags, cards) {
 
     var quote by mutableStateOf(QuoteEntity(text = ""))
         private set

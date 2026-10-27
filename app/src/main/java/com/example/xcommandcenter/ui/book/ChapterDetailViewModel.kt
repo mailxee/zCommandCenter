@@ -11,6 +11,7 @@ import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +26,8 @@ class ChapterDetailViewModel(
     private val repository: BookRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.CHAPTER, links, tags) {
+    cards: ItemCardSource,
+) : ItemDetailViewModel(savedStateHandle, ItemType.CHAPTER, links, tags, cards) {
 
     var chapter by mutableStateOf<ChapterEntity?>(null)
         private set

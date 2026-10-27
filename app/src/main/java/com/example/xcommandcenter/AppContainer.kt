@@ -17,6 +17,7 @@ import com.example.xcommandcenter.data.repository.QuoteRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.reminder.ReminderScheduler
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,5 +42,9 @@ class AppContainer(context: Context) {
     val noteRepository = NoteRepository(database.noteDao())
     val bookRepository = BookRepository(database.bookDao())
     val quoteRepository = QuoteRepository(database.quoteDao())
+    val itemCardSource = ItemCardSource(
+        taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
+        linkRepository, tagRepository,
+    )
     val backupRepository = BackupRepository(context, database.backupDao(), taskRepository, reminderScheduler, tabOrderRepository)
 }

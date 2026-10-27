@@ -47,7 +47,6 @@ fun TaskDetailScreen(
     viewModel: TaskDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
-    val linked by viewModel.linked.collectAsStateWithLifecycle()
     val form = viewModel.form
 
     DetailScaffold(
@@ -71,6 +70,7 @@ fun TaskDetailScreen(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        LinkedItemsSection(viewModel, onOpen)
         ChecklistSection(viewModel)
         SectionTitle("Priority")
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -110,7 +110,6 @@ fun TaskDetailScreen(
             Text("Completed")
         }
         TagsSection(viewModel)
-        LinkedItemsSection(viewModel, linked, onOpen)
     }
 }
 

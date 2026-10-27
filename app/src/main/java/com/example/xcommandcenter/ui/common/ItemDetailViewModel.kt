@@ -7,12 +7,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.navigation.Routes
+import com.example.xcommandcenter.ui.plan.BlockedCompletion
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,15 +36,52 @@ abstract class ItemDetailViewModel(
     val type: ItemType,
     private val links: LinkRepository,
     private val tagRepository: TagRepository,
+    private val cards: ItemCardSource,
 ) : ViewModel() {
 
     private val _itemId = MutableStateFlow(savedStateHandle.get<Long>(Routes.ARG_ID) ?: 0L)
     val itemId: StateFlow<Long> = _itemId.asStateFlow()
     val ref: ItemRef get() = ItemRef(type, itemId.value)
 
-    val linked: StateFlow<List<ItemIndexEntry>> = _itemId
-        .flatMapLatest { id -> if (id == 0L) flowOf(emptyList()) else links.observeLinked(ItemRef(type, id)) }
+    /** The linked items as cards, the way their own tabs show them. */
+    val linkedCards: StateFlow<List<ItemCardData>> = _itemId
+        .flatMapLatest { id ->
+            if (id == 0L) flowOf(emptyList()) else ItemRef(type, id).let { self -> cards.cardsFor(self, links.observeLinked(self)) }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Set when ticking a linked plan was refused because of open subplans. */
+    var linkedBlocked by mutableStateOf<BlockedCompletion?>(null)
+        private set
+
+    fun setLinkedTaskCompleted(id: Long, completed: Boolean) {
+        viewModelScope.launch { cards.setTaskCompleted(id, completed) }
+    }
+
+    fun setLinkedPlanCompleted(plan: PlanEntity, completed: Boolean) {
+        viewModelScope.launch {
+            if (completed) {
+                val open = cards.completePlan(plan.id)
+                if (open > 0) linkedBlocked = BlockedCompletion(plan.id, plan.title, open)
+            } else {
+                cards.reopenPlan(plan.id)
+            }
+        }
+    }
+
+    fun completeLinkedWithSubplans() {
+        val id = linkedBlocked?.planId ?: return
+        linkedBlocked = null
+        viewModelScope.launch { cards.completePlanWithSubplans(id) }
+    }
+
+    fun dismissLinkedBlocked() {
+        linkedBlocked = null
+    }
+
+    fun toggleLinkedHabitToday(id: Long) {
+        viewModelScope.launch { cards.toggleHabitToday(id) }
+    }
 
     /** This item's tags; like links, they can be added once the item has been saved. */
     val tags: StateFlow<List<TagEntity>> = _itemId

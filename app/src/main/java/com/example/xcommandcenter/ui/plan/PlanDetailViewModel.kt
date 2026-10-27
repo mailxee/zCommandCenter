@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.PlanRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import com.example.xcommandcenter.ui.navigation.Routes
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,7 +23,8 @@ class PlanDetailViewModel(
     private val repository: PlanRepository,
     links: LinkRepository,
     tags: TagRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.PLAN, links, tags) {
+    cards: ItemCardSource,
+) : ItemDetailViewModel(savedStateHandle, ItemType.PLAN, links, tags, cards) {
 
     var plan by mutableStateOf(
         PlanEntity(title = "", parentId = savedStateHandle.get<Long>(Routes.ARG_PARENT)?.takeIf { it != 0L }),
