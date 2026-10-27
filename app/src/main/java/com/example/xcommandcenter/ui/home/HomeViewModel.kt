@@ -58,16 +58,24 @@ enum class RepeatFilter(val label: String) {
     }
 }
 
-/** The tag filter shared by every tab: an item shows only if it carries all [selected] tags. */
+/**
+ * The tag filter shared by every tab: an item shows only if it carries all [selected] tags and none
+ * of the [excluded] ones (tags pressed and held in the filter bar).
+ */
 data class TagFilter(
     val tagsByItem: Map<ItemRef, List<TagEntity>> = emptyMap(),
     val selected: Set<Long> = emptySet(),
+    val excluded: Set<Long> = emptySet(),
 ) {
-    val active: Boolean get() = selected.isNotEmpty()
+    val active: Boolean get() = selected.isNotEmpty() || excluded.isNotEmpty()
 
     fun tagsOf(ref: ItemRef): List<TagEntity> = tagsByItem[ref].orEmpty()
 
-    fun matches(ref: ItemRef): Boolean = selected.isEmpty() || tagsOf(ref).map { it.id }.containsAll(selected)
+    /** True when the item carries an excluded tag. */
+    fun excludes(ref: ItemRef): Boolean = excluded.isNotEmpty() && tagsOf(ref).any { it.id in excluded }
+
+    fun matches(ref: ItemRef): Boolean =
+        (selected.isEmpty() || tagsOf(ref).map { it.id }.containsAll(selected)) && !excludes(ref)
 }
 
 /** One row of the Plans tab: a plan, or a task linked to the plan above it. */
@@ -114,10 +122,13 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     private val selectedTagIds = MutableStateFlow<Set<Long>>(emptySet())
 
-    /** Only selected tags that still exist count, so removing a tag from its last item can't leave an empty filter stuck on. */
+    private val excludedTagIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** Only chosen tags that still exist count, so removing a tag from its last item can't leave an empty filter stuck on. */
     val tagFilter: StateFlow<TagFilter> =
-        combine(tagsRepo.observeTagsByItem(), selectedTagIds, allTags) { byItem, selected, inUse ->
-            TagFilter(byItem, selected intersect inUse.map { it.id }.toSet())
+        combine(tagsRepo.observeTagsByItem(), selectedTagIds, excludedTagIds, allTags) { byItem, selected, excluded, inUse ->
+            val existing = inUse.map { it.id }.toSet()
+            TagFilter(byItem, selected intersect existing, excluded intersect existing)
         }.stateIn(TagFilter())
 
     val taskSort: StateFlow<TaskSort> = taskSortRepo.sort
@@ -210,7 +221,8 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             // The priority filter applies to the plans themselves; their tasks are shown as usual.
             val hits = shown.filter { plan ->
                 (priorities.isEmpty() || plan.priority in priorities) &&
-                    (!tags.active || tags.matches(ItemRef(ItemType.PLAN, plan.id)) || tasksOf(plan.id).isNotEmpty())
+                    (!tags.active || tags.matches(ItemRef(ItemType.PLAN, plan.id)) ||
+                        (!tags.excludes(ItemRef(ItemType.PLAN, plan.id)) && tasksOf(plan.id).isNotEmpty()))
             }.map { it.id }
             val keep = hits.toSet() + hits.flatMap { PlanTree.ancestorIds(it, shown, { p -> p.id }, { p -> p.parentId }) }
             shown.filter { it.id in keep }
@@ -261,12 +273,24 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             }
         }.stateIn(emptyMap())
 
+    /** A tap: shows only items with the tag, or turns that off. A hidden tag becomes plain again. */
     fun toggleTag(tagId: Long) {
-        selectedTagIds.value = selectedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
+        if (tagId in excludedTagIds.value) {
+            excludedTagIds.value -= tagId
+        } else {
+            selectedTagIds.value = selectedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
+        }
+    }
+
+    /** A press and hold: hides items with the tag on every tab, or turns that off. */
+    fun toggleExcludedTag(tagId: Long) {
+        selectedTagIds.value -= tagId
+        excludedTagIds.value = excludedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
     }
 
     fun clearTags() {
         selectedTagIds.value = emptySet()
+        excludedTagIds.value = emptySet()
     }
 
     fun setShowCompletedTasks(show: Boolean) {
