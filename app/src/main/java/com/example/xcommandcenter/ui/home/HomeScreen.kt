@@ -100,7 +100,7 @@ fun HomeScreen(
                 ItemType.TASK -> TasksTab(viewModel, onOpen)
                 ItemType.GOAL -> GoalsTab(viewModel, onOpen)
                 ItemType.HABIT -> HabitsTab(viewModel, onOpen)
-                ItemType.PROJECT -> PlansTab(viewModel, onOpen)
+                ItemType.PLAN -> PlansTab(viewModel, onOpen)
                 ItemType.NOTE -> NotesTab(viewModel, onOpen)
                 ItemType.BOOK -> BooksTab(viewModel, onOpen)
                 ItemType.QUOTE -> QuotesTab(viewModel, onOpen)

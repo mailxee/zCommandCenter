@@ -9,7 +9,7 @@ import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
-import com.example.xcommandcenter.data.entity.ProjectEntity
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
@@ -17,7 +17,7 @@ import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
-import com.example.xcommandcenter.domain.ProjectTree
+import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.domain.Recurrence
 import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.domain.shortName
@@ -34,7 +34,7 @@ data class BackupData(
     val goals: List<GoalEntity> = emptyList(),
     val habits: List<HabitEntity> = emptyList(),
     val habitMarks: List<HabitMarkEntity> = emptyList(),
-    val projects: List<ProjectEntity> = emptyList(),
+    val plans: List<PlanEntity> = emptyList(),
     val notes: List<NoteEntity> = emptyList(),
     val books: List<BookEntity> = emptyList(),
     val chapters: List<ChapterEntity> = emptyList(),
@@ -44,7 +44,7 @@ data class BackupData(
     val itemTags: List<ItemTagEntity> = emptyList(),
     val checklistItems: List<ChecklistItemEntity> = emptyList(),
 ) {
-    val itemCount: Int get() = tasks.size + goals.size + habits.size + projects.size + notes.size + books.size + quotes.size
+    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size
 }
 
 /** A problem that stops an import; [message] says where, in words the user can act on. */
@@ -62,9 +62,6 @@ object BackupFormat {
     const val LINKS = "Links"
     const val TAGS = "Tags"
     const val CHECKLISTS = "Checklists"
-
-    /** The Plans tab's sheet was called this before the tab was renamed; old workbooks still import. */
-    private const val OLD_PLANS = "Projects"
 
     private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val excelEpoch = LocalDate.of(1899, 12, 30)
@@ -111,10 +108,10 @@ object BackupFormat {
                         )
                     },
             ),
-            ItemType.PROJECT to Sheet(
-                ItemType.PROJECT.tabLabel,
+            ItemType.PLAN to Sheet(
+                ItemType.PLAN.tabLabel,
                 listOf(listOf("ID", "Title", "Description", "Parent ID", "Completed", "Created", "Order")) +
-                    data.projects.map {
+                    data.plans.map {
                         listOf(
                             it.id.toString(), it.title, it.description, it.parentId?.toString().orEmpty(), bool(it.completed), time(it.createdAt),
                             it.sortOrder.toString(),
@@ -186,7 +183,7 @@ object BackupFormat {
         data.tasks.forEach { put(ItemRef(ItemType.TASK, it.id), it.title) }
         data.goals.forEach { put(ItemRef(ItemType.GOAL, it.id), it.title) }
         data.habits.forEach { put(ItemRef(ItemType.HABIT, it.id), it.name) }
-        data.projects.forEach { put(ItemRef(ItemType.PROJECT, it.id), it.title) }
+        data.plans.forEach { put(ItemRef(ItemType.PLAN, it.id), it.title) }
         data.notes.forEach { put(ItemRef(ItemType.NOTE, it.id), it.title.ifBlank { it.body.take(40) }) }
         data.books.forEach { put(ItemRef(ItemType.BOOK, it.id), it.title) }
         data.chapters.forEach { put(ItemRef(ItemType.CHAPTER, it.id), it.title) }
@@ -234,14 +231,13 @@ object BackupFormat {
             ).also { if (it.recurrenceType == RecurrenceType.WEEKLY && it.weekdays == 0) r.fail("A weekly habit needs at least one weekday") }
         }.withIds("Habits") { h, id -> h.copy(id = id) }
 
-        val plansSheet = sheet(ItemType.PROJECT.tabLabel, false) ?: sheet(OLD_PLANS, false) ?: sheet(ItemType.PROJECT.tabLabel, true)!!
-        val rawProjects = plansSheet.items("Title") { r ->
-            ProjectEntity(
+        val rawPlans = sheet(ItemType.PLAN.tabLabel, true)!!.items("Title") { r ->
+            PlanEntity(
                 id = r.id(), title = r.required("Title"), description = r.text("Description"), parentId = r.long("Parent ID"),
                 completed = r.bool("Completed"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
             )
-        }.withIds(ItemType.PROJECT.tabLabel) { p, id -> p.copy(id = id) }
-        val projects = consistentProjects(rawProjects)
+        }.withIds(ItemType.PLAN.tabLabel) { p, id -> p.copy(id = id) }
+        val plans = consistentPlans(rawPlans)
 
         val notes = sheet(ItemType.NOTE.tabLabel, true)!!.items("Title", "Body") { r ->
             NoteEntity(id = r.id(), title = r.text("Title"), body = r.text("Body"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order())
@@ -296,7 +292,7 @@ object BackupFormat {
             tasks.forEach { add(ItemRef(ItemType.TASK, it.id)) }
             goals.forEach { add(ItemRef(ItemType.GOAL, it.id)) }
             habits.forEach { add(ItemRef(ItemType.HABIT, it.id)) }
-            projects.forEach { add(ItemRef(ItemType.PROJECT, it.id)) }
+            plans.forEach { add(ItemRef(ItemType.PLAN, it.id)) }
             notes.forEach { add(ItemRef(ItemType.NOTE, it.id)) }
             books.forEach { add(ItemRef(ItemType.BOOK, it.id)) }
             chapters.forEach { add(ItemRef(ItemType.CHAPTER, it.id)) }
@@ -321,25 +317,25 @@ object BackupFormat {
         }.distinct()
 
         return ImportResult(
-            BackupData(tasks, goals, habits, marks, projects, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems),
+            BackupData(tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems),
             skipped,
         )
     }
 
     /**
      * Parents first (the table's foreign key needs them inserted before their children); a
-     * missing parent or a cycle makes the project top-level. A completed project with an open
-     * project below it is reopened, so the app's completion rule holds.
+     * missing parent or a cycle makes the plan top-level. A completed plan with an open
+     * plan below it is reopened, so the app's completion rule holds.
      */
-    private fun consistentProjects(projects: List<ProjectEntity>): List<ProjectEntity> {
-        val ids = projects.map { it.id }.toSet()
-        val withParents = projects.map { if (it.parentId != null && it.parentId !in ids) it.copy(parentId = null) else it }
-        val ordered = ProjectTree.flatten(withParents, { it.id }, { it.parentId }).map { it.node }
+    private fun consistentPlans(plans: List<PlanEntity>): List<PlanEntity> {
+        val ids = plans.map { it.id }.toSet()
+        val withParents = plans.map { if (it.parentId != null && it.parentId !in ids) it.copy(parentId = null) else it }
+        val ordered = PlanTree.flatten(withParents, { it.id }, { it.parentId }).map { it.node }
         val reached = ordered.map { it.id }.toSet()
         val all = ordered + withParents.filter { it.id !in reached }.map { it.copy(parentId = null) }
         val open = all.filterNot { it.completed }.map { it.id }.toSet()
         return all.map { p ->
-            if (p.completed && (ProjectTree.subtreeIds(p.id, all, { it.id }, { it.parentId }) - p.id).any { it in open }) p.copy(completed = false) else p
+            if (p.completed && (PlanTree.subtreeIds(p.id, all, { it.id }, { it.parentId }) - p.id).any { it in open }) p.copy(completed = false) else p
         }
     }
 

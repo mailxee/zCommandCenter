@@ -45,7 +45,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.display
 import com.example.xcommandcenter.ui.common.label
-import com.example.xcommandcenter.ui.project.CompleteProjectDialog
+import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import java.time.Instant
 import java.time.ZoneId
 
@@ -178,19 +178,19 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 
 @Composable
 fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
-    val rows by viewModel.projectTree.collectAsStateWithLifecycle()
+    val rows by viewModel.planTree.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    val showCompleted by viewModel.showCompletedProjects.collectAsStateWithLifecycle()
-    val completedCount by viewModel.completedProjectCount.collectAsStateWithLifecycle()
-    val showCompletedTasks by viewModel.showCompletedProjectTasks.collectAsStateWithLifecycle()
-    val completedTaskCount by viewModel.completedProjectTaskCount.collectAsStateWithLifecycle()
+    val showCompleted by viewModel.showCompletedPlans.collectAsStateWithLifecycle()
+    val completedCount by viewModel.completedPlanCount.collectAsStateWithLifecycle()
+    val showCompletedTasks by viewModel.showCompletedPlanTasks.collectAsStateWithLifecycle()
+    val completedTaskCount by viewModel.completedPlanTaskCount.collectAsStateWithLifecycle()
     val blocked by viewModel.blockedCompletion.collectAsStateWithLifecycle()
     val checklists by viewModel.checklistCounts.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val allHidden = rows.isEmpty() && completedCount > 0 && !showCompleted
     // A plan moves among the shown plans with the same parent.
-    val siblings = rows.filterIsInstance<ProjectTreeItem.Project>().groupBy({ it.project.parentId }, { it.project.id })
+    val siblings = rows.filterIsInstance<PlanTreeItem.Plan>().groupBy({ it.plan.parentId }, { it.plan.id })
     ItemList(
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
@@ -202,14 +202,14 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                     if (completedCount > 0) {
                         FilterChip(
                             selected = showCompleted,
-                            onClick = { viewModel.setShowCompletedProjects(!showCompleted) },
+                            onClick = { viewModel.setShowCompletedPlans(!showCompleted) },
                             label = { Text("Completed plans ($completedCount)") },
                         )
                     }
                     if (completedTaskCount > 0) {
                         FilterChip(
                             selected = showCompletedTasks,
-                            onClick = { viewModel.setShowCompletedProjectTasks(!showCompletedTasks) },
+                            onClick = { viewModel.setShowCompletedPlanTasks(!showCompletedTasks) },
                             label = { Text("Completed tasks ($completedTaskCount)") },
                         )
                     }
@@ -219,19 +219,19 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
         items(rows, key = { it.key }) { row ->
             Box(Modifier.padding(start = (row.depth * 20).dp)) {
                 when (row) {
-                    is ProjectTreeItem.Project -> {
-                        val group = siblings[row.project.parentId].orEmpty()
-                        PlanRow(row, links, tagFilter, viewModel, onOpen, if (reorder) group.indexOf(row.project.id) to group.size else null)
+                    is PlanTreeItem.Plan -> {
+                        val group = siblings[row.plan.parentId].orEmpty()
+                        PlanRow(row, links, tagFilter, viewModel, onOpen, if (reorder) group.indexOf(row.plan.id) to group.size else null)
                     }
-                    is ProjectTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen)
+                    is PlanTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen)
                 }
             }
         }
     }
     blocked?.let {
-        CompleteProjectDialog(
+        CompletePlanDialog(
             blocked = it,
-            onCompleteAll = { viewModel.completeWithSubprojects(it.projectId) },
+            onCompleteAll = { viewModel.completeWithSubplans(it.planId) },
             onDismiss = viewModel::dismissBlockedCompletion,
         )
     }
@@ -240,37 +240,37 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 /** @param position the plan's index among its shown siblings and their count, while reordering. */
 @Composable
 private fun PlanRow(
-    row: ProjectTreeItem.Project,
+    row: PlanTreeItem.Plan,
     links: Map<ItemRef, List<ItemIndexEntry>>,
     tagFilter: TagFilter,
     viewModel: HomeViewModel,
     onOpen: (ItemRef) -> Unit,
     position: Pair<Int, Int>?,
 ) {
-    val project = row.project
-    val ref = ItemRef(ItemType.PROJECT, project.id)
+    val plan = row.plan
+    val ref = ItemRef(ItemType.PLAN, plan.id)
     // Linked tasks are rows of their own below the plan, so the "Linked:" line leaves them out.
     val otherLinks = links[ref].orEmpty().filter { it.type != ItemType.TASK }
     val hidden = listOfNotNull(
-        row.subprojectCount.takeIf { it > 0 }?.let { if (it == 1) "1 subplan" else "$it subplans" },
+        row.subplanCount.takeIf { it > 0 }?.let { if (it == 1) "1 subplan" else "$it subplans" },
         row.taskCount.takeIf { it > 0 }?.let { if (it == 1) "1 task" else "$it tasks" },
     )
     ItemCard(
-        title = project.title,
+        title = plan.title,
         lines = listOfNotNull(
-            project.description.ifBlank { null },
+            plan.description.ifBlank { null },
             hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden"),
         ),
         links = otherLinks,
         tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
-        done = project.completed,
+        done = plan.completed,
         leading = {
-            Checkbox(checked = project.completed, onCheckedChange = { viewModel.setProjectCompleted(project, it) })
+            Checkbox(checked = plan.completed, onCheckedChange = { viewModel.setPlanCompleted(plan, it) })
         },
-        trailing = position?.let { (index, count) -> moveButtonsIf(true, index, count) { viewModel.move(ItemType.PROJECT, project.id, it) } } ?: {
+        trailing = position?.let { (index, count) -> moveButtonsIf(true, index, count) { viewModel.move(ItemType.PLAN, plan.id, it) } } ?: {
             if (row.hasChildren) {
-                IconButton(onClick = { viewModel.setProjectCollapsed(project.id, !row.collapsed) }) {
+                IconButton(onClick = { viewModel.setPlanCollapsed(plan.id, !row.collapsed) }) {
                     Icon(
                         painterResource(if (row.collapsed) R.drawable.ic_expand_more else R.drawable.ic_expand_less),
                         contentDescription = if (row.collapsed) "Expand" else "Collapse",

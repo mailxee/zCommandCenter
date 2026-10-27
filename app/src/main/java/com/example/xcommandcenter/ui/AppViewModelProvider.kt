@@ -13,7 +13,7 @@ import com.example.xcommandcenter.ui.goal.GoalDetailViewModel
 import com.example.xcommandcenter.ui.habit.HabitDetailViewModel
 import com.example.xcommandcenter.ui.home.HomeViewModel
 import com.example.xcommandcenter.ui.note.NoteDetailViewModel
-import com.example.xcommandcenter.ui.project.ProjectDetailViewModel
+import com.example.xcommandcenter.ui.plan.PlanDetailViewModel
 import com.example.xcommandcenter.ui.quote.QuoteDetailViewModel
 import com.example.xcommandcenter.ui.settings.SettingsViewModel
 import com.example.xcommandcenter.ui.task.TaskDetailViewModel
@@ -26,7 +26,7 @@ object AppViewModelProvider {
         initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository) } }
         initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository, tagRepository) } }
         initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository, tagRepository) } }
-        initializer { with(container()) { ProjectDetailViewModel(createSavedStateHandle(), projectRepository, linkRepository, tagRepository) } }
+        initializer { with(container()) { PlanDetailViewModel(createSavedStateHandle(), planRepository, linkRepository, tagRepository) } }
         initializer { with(container()) { NoteDetailViewModel(createSavedStateHandle(), noteRepository, linkRepository, tagRepository) } }
         initializer { with(container()) { BookDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository) } }
         initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository) } }

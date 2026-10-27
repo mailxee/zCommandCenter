@@ -13,7 +13,7 @@ import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
-import com.example.xcommandcenter.data.entity.ProjectEntity
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
@@ -47,12 +47,12 @@ class BackupFormatTest {
         goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created)),
         habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created)),
         habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1))),
-        projects = listOf(ProjectEntity(2, "Child", parentId = 1, completed = true, createdAt = created), ProjectEntity(1, "Parent", completed = true, createdAt = created)),
+        plans = listOf(PlanEntity(2, "Child", parentId = 1, completed = true, createdAt = created), PlanEntity(1, "Parent", completed = true, createdAt = created)),
         notes = listOf(NoteEntity(1, "", "Body only", created, sortOrder = -2)),
         books = listOf(BookEntity(1, "Atomic Habits", "James Clear", "", created)),
         chapters = listOf(ChapterEntity(5, 1, 0, "The surprising power", 2, true, created)),
         quotes = listOf(QuoteEntity(1, "Done is better than perfect.", createdAt = created)),
-        links = listOf(LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PROJECT, 2)).copy(createdAt = created)),
+        links = listOf(LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PLAN, 2)).copy(createdAt = created)),
         tags = listOf(TagEntity(7, "Home")),
         itemTags = listOf(ItemTagEntity(ItemType.TASK, 1, 7), ItemTagEntity(ItemType.CHAPTER, 5, 7)),
         checklistItems = listOf(
@@ -69,8 +69,8 @@ class BackupFormatTest {
         assertEquals(data.habits, back.habits)
         assertEquals(data.habitMarks, back.habitMarks)
         // Parents come first on import, so the foreign key is satisfied.
-        assertEquals(listOf(1L, 2L), back.projects.map { it.id })
-        assertEquals(data.projects.sortedBy { it.id }, back.projects)
+        assertEquals(listOf(1L, 2L), back.plans.map { it.id })
+        assertEquals(data.plans.sortedBy { it.id }, back.plans)
         assertEquals(data.notes, back.notes)
         assertEquals(data.books, back.books)
         assertEquals(data.chapters, back.chapters)
@@ -79,12 +79,6 @@ class BackupFormatTest {
         assertEquals(listOf("Home"), back.tags.map { it.name })
         assertEquals(setOf(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.CHAPTER, 5)), back.itemTags.map { ItemRef(it.type, it.itemId) }.toSet())
         assertEquals(data.checklistItems, back.checklistItems)
-    }
-
-    @Test
-    fun `a workbook from before Projects was renamed Plans still imports`() {
-        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { if (it.name == "Plans") it.copy(name = "Projects") else it }
-        assertEquals(listOf(1L, 2L), BackupFormat.fromSheets(sheets, zone).data.projects.map { it.id })
     }
 
     @Test
@@ -141,11 +135,11 @@ class BackupFormatTest {
     }
 
     @Test
-    fun `a completed project with an open child is reopened`() {
-        val sheets = BackupFormat.toSheets(data.copy(projects = listOf(ProjectEntity(1, "Parent", completed = true), ProjectEntity(2, "Child", parentId = 1))), TabOrder.default, zone)
-        val projects = BackupFormat.fromSheets(sheets, zone).data.projects
-        assertFalse(projects.first { it.id == 1L }.completed)
-        assertNull(projects.first { it.id == 1L }.parentId)
+    fun `a completed plan with an open child is reopened`() {
+        val sheets = BackupFormat.toSheets(data.copy(plans = listOf(PlanEntity(1, "Parent", completed = true), PlanEntity(2, "Child", parentId = 1))), TabOrder.default, zone)
+        val plans = BackupFormat.fromSheets(sheets, zone).data.plans
+        assertFalse(plans.first { it.id == 1L }.completed)
+        assertNull(plans.first { it.id == 1L }.parentId)
     }
 
     @Test(expected = ImportException::class)

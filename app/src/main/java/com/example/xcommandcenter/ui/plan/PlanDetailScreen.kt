@@ -1,4 +1,4 @@
-package com.example.xcommandcenter.ui.project
+package com.example.xcommandcenter.ui.plan
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -31,7 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
-import com.example.xcommandcenter.domain.ProjectTree
+import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
@@ -39,19 +39,19 @@ import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
 
 @Composable
-fun ProjectDetailScreen(
+fun PlanDetailScreen(
     onBack: () -> Unit,
     onOpen: (ItemRef) -> Unit,
     onCreateChild: (parentId: Long) -> Unit,
-    viewModel: ProjectDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
+    viewModel: PlanDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val id by viewModel.itemId.collectAsStateWithLifecycle()
     val linked by viewModel.linked.collectAsStateWithLifecycle()
-    val all by viewModel.allProjects.collectAsStateWithLifecycle()
-    val project = viewModel.project
+    val all by viewModel.allPlans.collectAsStateWithLifecycle()
+    val plan = viewModel.plan
     var choosingParent by rememberSaveable { mutableStateOf(false) }
 
-    val parent = all.firstOrNull { it.id == project.parentId }
+    val parent = all.firstOrNull { it.id == plan.parentId }
     val children = if (id == 0L) emptyList() else all.filter { it.parentId == id }
     // Read from the database, not the form: completion is saved immediately, outside the form.
     val completed = all.firstOrNull { it.id == id }?.completed ?: false
@@ -65,14 +65,14 @@ fun ProjectDetailScreen(
         deleteWarning = "Its child plans move up one level. All of its links are removed.",
     ) {
         OutlinedTextField(
-            value = project.title,
+            value = plan.title,
             onValueChange = { v -> viewModel.update { it.copy(title = v) } },
             label = { Text("Title") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
-            value = project.description,
+            value = plan.description,
             onValueChange = { v -> viewModel.update { it.copy(description = v) } },
             label = { Text("Description") },
             minLines = 3,
@@ -92,7 +92,7 @@ fun ProjectDetailScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier
                     .weight(1f)
-                    .then(if (parent != null) Modifier.clickable { onOpen(ItemRef(ItemType.PROJECT, parent.id)) } else Modifier),
+                    .then(if (parent != null) Modifier.clickable { onOpen(ItemRef(ItemType.PLAN, parent.id)) } else Modifier),
                 color = if (parent != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             OutlinedButton(onClick = { choosingParent = true }) { Text("Change") }
@@ -110,7 +110,7 @@ fun ProjectDetailScreen(
                         headlineContent = {
                             Text(child.title, textDecoration = if (child.completed) TextDecoration.LineThrough else null)
                         },
-                        modifier = Modifier.clickable { onOpen(ItemRef(ItemType.PROJECT, child.id)) },
+                        modifier = Modifier.clickable { onOpen(ItemRef(ItemType.PLAN, child.id)) },
                     )
                 }
                 TextButton(onClick = { onCreateChild(id) }, modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -124,13 +124,13 @@ fun ProjectDetailScreen(
     }
 
     viewModel.blockedCompletion?.let {
-        CompleteProjectDialog(it, viewModel::completeWithSubprojects, viewModel::dismissBlockedCompletion)
+        CompletePlanDialog(it, viewModel::completeWithSubplans, viewModel::dismissBlockedCompletion)
     }
 
     if (choosingParent) {
-        // A project cannot sit under itself or anything below it.
-        val excluded = if (id == 0L) emptySet() else ProjectTree.subtreeIds(id, all, { it.id }, { it.parentId })
-        val options = ProjectTree.flatten(all, { it.id }, { it.parentId }).filter { it.node.id !in excluded }
+        // A plan cannot sit under itself or anything below it.
+        val excluded = if (id == 0L) emptySet() else PlanTree.subtreeIds(id, all, { it.id }, { it.parentId })
+        val options = PlanTree.flatten(all, { it.id }, { it.parentId }).filter { it.node.id !in excluded }
         AlertDialog(
             onDismissRequest = { choosingParent = false },
             title = { Text("Parent plan") },

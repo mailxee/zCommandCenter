@@ -1,7 +1,6 @@
 package com.example.xcommandcenter.data.db
 
 import android.content.Context
-import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -13,7 +12,7 @@ import com.example.xcommandcenter.data.dao.GoalDao
 import com.example.xcommandcenter.data.dao.HabitDao
 import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.dao.NoteDao
-import com.example.xcommandcenter.data.dao.ProjectDao
+import com.example.xcommandcenter.data.dao.PlanDao
 import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
@@ -27,7 +26,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
-import com.example.xcommandcenter.data.entity.ProjectEntity
+import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
@@ -39,7 +38,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         GoalEntity::class,
         HabitEntity::class,
         HabitMarkEntity::class,
-        ProjectEntity::class,
+        PlanEntity::class,
         NoteEntity::class,
         BookEntity::class,
         ChapterEntity::class,
@@ -49,17 +48,15 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         ItemTagEntity::class,
     ],
     views = [ItemIndexEntry::class],
-    version = 4,
-    // 2: projects.completed. 3: task recurrence columns, tags and item_tags.
-    // 4: sortOrder on every tab's table, and checklist_items.
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+    // Reset to 1 when Projects became Plans; databases from earlier builds are not migrated (the app is reinstalled).
+    version = 1,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun goalDao(): GoalDao
     abstract fun habitDao(): HabitDao
-    abstract fun projectDao(): ProjectDao
+    abstract fun planDao(): PlanDao
     abstract fun noteDao(): NoteDao
     abstract fun bookDao(): BookDao
     abstract fun quoteDao(): QuoteDao
