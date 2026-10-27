@@ -98,7 +98,7 @@ fun BookDetailScreen(
                 TextButton(onClick = viewModel::clearBookReads, enabled = saved.readCount > 0) { Text("Clear") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Internalized", modifier = Modifier.weight(1f))
+                Text("Done", modifier = Modifier.weight(1f))
                 Switch(checked = saved.internalized, onCheckedChange = viewModel::setBookInternalized)
             }
         }

@@ -631,8 +631,10 @@ rule under the schedule.
   style (Tab, Position, Color, Bold, Italic, Underline, Font). Importing it sets the tab order and
   every tab's style; tabs left out follow the listed ones and keep their default style; a blank
   cell takes the tab's default. A workbook without the sheet leaves the current settings alone.
-- **Chapters:** on a book's page each chapter's checkbox is labelled "Done" (it was "Internalized").
-  The data and the book's own "Internalized" are unchanged.
+- **"Done":** what was labelled "Internalized" now reads "Done": each chapter's checkbox on its
+  book's page and on its own page, the whole book's checkbox, and the book card ("5 chapters · 2
+  done", "Book done"). The data (`internalized` columns) and the backup's "Internalized" columns
+  keep their names, so older workbooks still import.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

@@ -67,7 +67,7 @@ fun ChapterDetailScreen(
                 TextButton(onClick = viewModel::clearReads, enabled = chapter.readCount > 0) { Text("Clear") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Internalized", modifier = Modifier.weight(1f))
+                Text("Done", modifier = Modifier.weight(1f))
                 Switch(checked = chapter.internalized, onCheckedChange = viewModel::setInternalized)
             }
         }

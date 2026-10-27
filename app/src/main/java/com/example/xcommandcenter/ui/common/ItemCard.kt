@@ -118,10 +118,10 @@ fun bookCardText(item: BookWithProgress) = CardText(
     lines = listOfNotNull(
         priorityLine(item.book.priority),
         item.book.author.ifBlank { null },
-        "${item.chapterCount} chapters · ${item.internalizedCount} internalized",
+        "${item.chapterCount} chapters · ${item.internalizedCount} done",
         listOfNotNull(
             "Read ${times(item.book.readCount)}".takeIf { item.book.readCount > 0 },
-            "Book internalized".takeIf { item.book.internalized },
+            "Book done".takeIf { item.book.internalized },
         ).joinToString(" · ").ifEmpty { null },
     ),
     emphasis = critical(item.book.priority),
