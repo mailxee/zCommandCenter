@@ -675,6 +675,13 @@ doesn't disappear. Link lines and Linked items need no filtering: every link of 
 leads into the network. Reminders are unaffected. A fresh start of `MainActivity` turns link mode
 off; deleting the root does too, since the root's index entry then emits null.
 
+### 2.37 Tab counters
+
+Each tab shows its name with "shown/total" below it (`HomeViewModel.tabCounts`). Shown is what
+the tab lists after every filter, completed tasks hidden by their toggle included; total is all
+the tab's items, or in link mode all the network's. The Plans tab counts plans that pass its
+filters, collapsed or not, leaving out headings outside the network; the Books tab counts books.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

@@ -19,7 +19,6 @@ import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
@@ -72,6 +71,7 @@ fun HomeScreen(
     var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = order.firstOrNull { it.name == selectedName } ?: order.first()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    val counts by viewModel.tabCounts.collectAsStateWithLifecycle()
     val picking by viewModel.linkPicking.collectAsStateWithLifecycle()
     // While picking a root for link mode, a tapped card becomes the root instead of opening.
     val open: (ItemRef) -> Unit = { ref -> if (picking) viewModel.pickLinkRoot(ref) else onOpen(ref) }
@@ -119,8 +119,9 @@ fun HomeScreen(
                             if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
                             if (reorder && tab in priorityTabs) viewModel.setPrioritySort(tab, PrioritySort.CUSTOM)
                         },
-                        text = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
-                    )
+                    ) {
+                        TabLabel(tab, counts[tab])
+                    }
                 }
             }
             Row(
@@ -143,6 +144,24 @@ fun HomeScreen(
                 ItemType.CHAPTER -> Unit // Not a tab.
             }
         }
+    }
+}
+
+/** The tab's name, in its item style, with "shown/total" below it. */
+@Composable
+private fun TabLabel(tab: ItemType, count: TabCount?) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) {
+            if (count != null) contentDescription = "${tab.tabLabel}, ${count.shown} of ${count.total} shown"
+        },
+    ) {
+        Text(tab.tabLabel, style = itemTextStyle(tab, MaterialTheme.typography.titleSmall))
+        Text(
+            count?.let { "${it.shown}/${it.total}" } ?: " ",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

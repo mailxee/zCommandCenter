@@ -91,6 +91,9 @@ data class TagFilter(
 /** In normal mode (null) every item; in link mode only the network's. */
 private fun Set<ItemRef>?.has(ref: ItemRef): Boolean = this == null || ref in this
 
+/** A tab's counter: [shown] of [total] items. */
+data class TabCount(val shown: Int, val total: Int)
+
 /** One row of the Plans tab: a plan, or a task linked to the plan above it. */
 sealed interface PlanTreeItem {
     val key: String
@@ -244,8 +247,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
      * a completed plan never orphans an open one, because everything below it is completed too.
      * A collapsed plan hides its tasks and its whole subtree. With a tag filter, a search or link
      * mode on, only matching plans and tasks show, plus the plans above them so the tree still reads.
+     * Also the number of plans the tab shows, collapsed or not, for its counter.
      */
-    val planTree: StateFlow<List<PlanTreeItem>> = combine(
+    private val planView: StateFlow<Pair<List<PlanTreeItem>, Int>> = combine(
         plansRepo.observeAll(),
         tasksByPlan,
         combine(showCompletedPlans, showCompletedPlanTasks, ::Pair),
@@ -276,7 +280,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             shown.filter { it.id in keep }
         }
         val subplanCounts = visible.groupingBy { it.parentId }.eachCount()
-        PlanTree.flatten(visible, { it.id }, { it.parentId }, collapsed).flatMap { row ->
+        val rows = PlanTree.flatten(visible, { it.id }, { it.parentId }, collapsed).flatMap { row ->
             val plan = row.node
             val tasks = tasksOf(plan.id)
             val isCollapsed = plan.id in collapsed
@@ -284,7 +288,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             if (isCollapsed) listOf(planItem)
             else listOf(planItem) + tasks.map { PlanTreeItem.Task(it, plan.id, row.depth + 1) }
         }
-    }.stateIn(emptyList())
+        // A plan outside link mode's network, shown only as a heading, isn't counted.
+        rows to visible.count { network.has(ItemRef(ItemType.PLAN, it.id)) }
+    }.stateIn(emptyList<PlanTreeItem>() to 0)
+
+    val planTree: StateFlow<List<PlanTreeItem>> = planView.map { it.first }.stateIn(emptyList())
 
     /** Completed tasks linked to any plan, for the toggle's label. */
     val completedPlanTaskCount: StateFlow<Int> = tasksByPlan
@@ -326,6 +334,30 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                     .values.flatten().map { it.id }.toSet()
             }
         }.stateIn(emptyMap())
+
+    /**
+     * Each tab's counter: the items it shows, out of all its items (in link mode, all the
+     * network's). The Plans tab counts plans, not their tasks; the Books tab counts books.
+     */
+    val tabCounts: StateFlow<Map<ItemType, TabCount>> = run {
+        fun <T> count(type: ItemType, shown: Flow<List<T>>, all: Flow<List<Long>>): Flow<Pair<ItemType, TabCount>> =
+            combine(shown.map { it.size }, all, network) { shownCount, ids, network ->
+                type to TabCount(shownCount, ids.count { network.has(ItemRef(type, it)) })
+            }
+        combine(
+            listOf(
+                count(ItemType.TASK, tasks, tasksRepo.observeAll().map { all -> all.map { it.id } }),
+                count(ItemType.GOAL, goals, goalsRepo.observeAll().map { all -> all.map { it.id } }),
+                count(ItemType.HABIT, habits, habitsRepo.observeAll().map { all -> all.map { it.id } }),
+                combine(planView, plansRepo.observeAll(), network) { (_, shown), all, network ->
+                    ItemType.PLAN to TabCount(shown, all.count { network.has(ItemRef(ItemType.PLAN, it.id)) })
+                },
+                count(ItemType.NOTE, notes, notesRepo.observeAll().map { all -> all.map { it.id } }),
+                count(ItemType.BOOK, books, booksRepo.observeAllWithProgress().map { all -> all.map { it.book.id } }),
+                count(ItemType.QUOTE, quotes, quotesRepo.observeAll().map { all -> all.map { it.id } }),
+            ),
+        ) { it.toMap() }.stateIn(emptyMap())
+    }
 
     /** A tap: shows only items with the tag, or turns that off. A hidden tag becomes plain again. */
     fun toggleTag(tagId: Long) {
