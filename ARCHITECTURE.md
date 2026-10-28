@@ -682,6 +682,15 @@ the tab lists after every filter, completed tasks hidden by their toggle include
 the tab's items, or in link mode all the network's. The Plans tab counts plans that pass its
 filters, collapsed or not, leaving out headings outside the network; the Books tab counts books.
 
+### 2.38 Fixed signing key
+
+Debug builds are signed with `app/signing/debug.keystore` (standard debug passwords, set in
+`app/build.gradle.kts`) instead of the per-machine `~/.android/debug.keystore`, which a fresh
+build machine would generate anew. Android only installs an update signed with the same key as
+the installed app, so a new key would force an uninstall, losing the app's data. Keep this file:
+it is the key the installed app was signed with (SHA-256
+`10:2F:74:41:06:D8:76:25:35:03:0D:F9:8F:00:C1:42:59:B3:C9:18:91:34:55:A1:E1:9E:D4:F5:E9:46:50:36`).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
