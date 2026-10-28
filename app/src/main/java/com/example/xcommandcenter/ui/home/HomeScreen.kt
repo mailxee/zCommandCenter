@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,9 +40,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,6 +54,7 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.AppViewModelProvider
+import com.example.xcommandcenter.ui.common.itemSpanStyle
 import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
 
@@ -66,6 +72,9 @@ fun HomeScreen(
     var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = order.firstOrNull { it.name == selectedName } ?: order.first()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    val picking by viewModel.linkPicking.collectAsStateWithLifecycle()
+    // While picking a root for link mode, a tapped card becomes the root instead of opening.
+    val open: (ItemRef) -> Unit = { ref -> if (picking) viewModel.pickLinkRoot(ref) else onOpen(ref) }
 
     Scaffold(
         topBar = {
@@ -114,16 +123,23 @@ fun HomeScreen(
                     )
                 }
             }
-            SearchBar(viewModel, selected)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp),
+            ) {
+                SearchBar(viewModel, selected, Modifier.weight(1f))
+                LinkModeButton(viewModel, picking)
+            }
+            LinkModeStatus(viewModel, picking)
             TagFilterBar(viewModel, selected)
             when (selected) {
-                ItemType.TASK -> TasksTab(viewModel, onOpen)
-                ItemType.GOAL -> GoalsTab(viewModel, onOpen)
-                ItemType.HABIT -> HabitsTab(viewModel, onOpen)
-                ItemType.PLAN -> PlansTab(viewModel, onOpen)
-                ItemType.NOTE -> NotesTab(viewModel, onOpen)
-                ItemType.BOOK -> BooksTab(viewModel, onOpen)
-                ItemType.QUOTE -> QuotesTab(viewModel, onOpen)
+                ItemType.TASK -> TasksTab(viewModel, open)
+                ItemType.GOAL -> GoalsTab(viewModel, open)
+                ItemType.HABIT -> HabitsTab(viewModel, open)
+                ItemType.PLAN -> PlansTab(viewModel, open)
+                ItemType.NOTE -> NotesTab(viewModel, open)
+                ItemType.BOOK -> BooksTab(viewModel, open)
+                ItemType.QUOTE -> QuotesTab(viewModel, open)
                 ItemType.CHAPTER -> Unit // Not a tab.
             }
         }
@@ -135,7 +151,7 @@ fun HomeScreen(
  * author and so on) contains every word typed. The text stays when switching tabs.
  */
 @Composable
-private fun SearchBar(viewModel: HomeViewModel, tab: ItemType) {
+private fun SearchBar(viewModel: HomeViewModel, tab: ItemType, modifier: Modifier) {
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
     OutlinedTextField(
         value = query,
@@ -147,8 +163,59 @@ private fun SearchBar(viewModel: HomeViewModel, tab: ItemType) {
         },
         singleLine = true,
         shape = RoundedCornerShape(28.dp),
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+        modifier = modifier,
     )
+}
+
+/**
+ * Link mode: pressed, the next card tapped becomes the root, and every tab then shows only the
+ * items linked to it, directly or through other items. Pressed again, back to normal mode.
+ */
+@Composable
+private fun LinkModeButton(viewModel: HomeViewModel, picking: Boolean) {
+    val root by viewModel.linkRoot.collectAsStateWithLifecycle()
+    val on = picking || root != null
+    FilledTonalIconToggleButton(
+        checked = on,
+        onCheckedChange = { viewModel.toggleLinkMode() },
+        modifier = Modifier.padding(start = 4.dp).semantics {
+            stateDescription = when {
+                picking -> "Choosing an item"
+                root != null -> "On"
+                else -> "Off"
+            }
+        },
+    ) {
+        Icon(painterResource(R.drawable.ic_link), contentDescription = "Link mode")
+    }
+}
+
+/** Under the search bar while link mode is picking or on: what to do, or whose network is shown. */
+@Composable
+private fun LinkModeStatus(viewModel: HomeViewModel, picking: Boolean) {
+    val root by viewModel.linkRoot.collectAsStateWithLifecycle()
+    val current = root
+    val style = MaterialTheme.typography.bodyMedium
+    when {
+        picking -> Text(
+            "Tap a card to show only the items linked to it",
+            style = style,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        current != null -> Text(
+            buildAnnotatedString {
+                append("Linked to ")
+                withStyle(itemSpanStyle(current.type.tab)) { append(current.title) }
+            },
+            style = style,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                .semantics { contentDescription = "Link mode: showing items linked to ${current.title}" },
+        )
+    }
 }
 
 /**

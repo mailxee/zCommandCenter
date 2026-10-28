@@ -160,11 +160,13 @@ abstract class ItemDetailViewModel(
     }
 
     /**
-     * After a save: stores the reminders (unless the screen's repository already did, [remindersSaved]),
+     * After a save: stores the reminders (unless the screen's repository already did, [remindersSaved])
+     * and, in link mode, links a new item to the root;
      * then [close] for the check mark, which also leaves the screen; the save button stays.
      */
     protected suspend fun onSaved(id: Long, close: Boolean, remindersSaved: Boolean = false) {
         if (!remindersSaved) reminderRepository.replace(ItemRef(type, id), reminders)
+        if (_itemId.value == 0L) links.joinNetwork(ItemRef(type, id))
         cleanReminders = reminders
         _itemId.value = id
         // A new item now exists; a restored screen must reopen it, not a blank form.

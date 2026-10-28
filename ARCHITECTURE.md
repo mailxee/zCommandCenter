@@ -657,6 +657,24 @@ line, and each book only once, however many of its chapters are linked
 (`LinkDao.observeChapterBooks`, applied in `LinkRepository.observeLinksByOwner`); the item's own
 page still lists the chapters in Linked items.
 
+### 2.36 Link mode
+
+A link button sits beside the (now narrower) search box. Pressed, the next card tapped on any
+tab becomes the root instead of opening; every tab then shows only the root's network: the items
+linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
+walk over the undirected links). A chapter and its book count as one item, so reaching either
+reaches the book and all its chapters. A line under the search box names the root; pressing the
+button again goes back to normal mode.
+
+The state lives in `LinkRepository` (in memory: `picking`, the root, and the `network` flow), so
+both the home screen and the detail screens see it. `HomeViewModel` keeps only network items in
+every tab, the plan tree (plans above a network plan stay as headings), the tag chips, the
+completed counts and "Delete completed"; the link picker searches only the network. A new item
+saved in link mode is linked to the root (`ItemDetailViewModel.onSaved` → `joinNetwork`), so it
+doesn't disappear. Link lines and Linked items need no filtering: every link of a network item
+leads into the network. Reminders are unaffected. A fresh start of `MainActivity` turns link mode
+off; deleting the root does too, since the root's index entry then emits null.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

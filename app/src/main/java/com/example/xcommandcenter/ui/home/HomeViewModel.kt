@@ -88,6 +88,9 @@ data class TagFilter(
     }
 }
 
+/** In normal mode (null) every item; in link mode only the network's. */
+private fun Set<ItemRef>?.has(ref: ItemRef): Boolean = this == null || ref in this
+
 /** One row of the Plans tab: a plan, or a task linked to the plan above it. */
 sealed interface PlanTreeItem {
     val key: String
@@ -121,11 +124,21 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
     private val taskSortRepo = container.taskSortRepository
+    private val linksRepo = container.linkRepository
 
     val tabOrder: StateFlow<List<ItemType>> = container.tabOrderRepository.order.stateIn(TabOrder.default)
 
     val linksByOwner: StateFlow<Map<ItemRef, List<ItemIndexEntry>>> =
         container.linkRepository.observeLinksByOwner().stateIn(emptyMap())
+
+    /** True after the link mode button is pressed, until a card is tapped to become the root. */
+    val linkPicking: StateFlow<Boolean> = linksRepo.picking
+
+    /** Link mode's root; null in normal mode. */
+    val linkRoot: StateFlow<ItemIndexEntry?> = linksRepo.linkRoot.stateIn(null)
+
+    /** In link mode, the only items every tab shows (see [LinkRepository.network]); null in normal mode. */
+    val network: StateFlow<Set<ItemRef>?> = linksRepo.network.stateIn(null)
 
     /** Tags on at least one item: the choices in the tag filter bar. */
     val allTags: StateFlow<List<TagEntity>> = tagsRepo.observeInUse().stateIn(emptyList())
@@ -169,7 +182,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val showCompletedTasks: StateFlow<Boolean> = taskSortRepo.showCompleted.stateIn(true)
 
     /** All completed tasks, whatever the filters: for the toggle's label and "Delete completed". */
-    val completedTaskCount: StateFlow<Int> = tasksRepo.observeAll().map { all -> all.count { it.completed } }.stateIn(0)
+    val completedTaskCount: StateFlow<Int> = combine(tasksRepo.observeAll(), network) { all, network ->
+        all.count { it.completed && network.has(ItemRef(ItemType.TASK, it.id)) }
+    }.stateIn(0)
 
     /** Open tasks first, then by the chosen key; Critical is the highest priority. */
     val tasks: StateFlow<List<TaskEntity>> =
@@ -177,9 +192,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             tasksRepo.observeAll(),
             taskSort,
             combine(repeatFilter, showCompletedTasks, ::Pair),
-            combine(tagFilter, searchQuery, ::Pair),
+            combine(tagFilter, searchQuery, network, ::Triple),
             priorityFilters.map { it[ItemType.TASK].orEmpty() },
-        ) { tasks, sort, (repeat, showCompleted), (tags, query), priorities ->
+        ) { tasks, sort, (repeat, showCompleted), (tags, query, network), priorities ->
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -188,7 +203,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 TaskSort.CUSTOM -> compareBy { it.sortOrder }
             }
             tasks.filter {
-                (showCompleted || !it.completed) && repeat.matches(it) &&
+                network.has(ItemRef(ItemType.TASK, it.id)) && (showCompleted || !it.completed) && repeat.matches(it) &&
                     (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.TASK, it.id)) &&
                     Search.matches(query, it.title, it.description)
             }
@@ -209,10 +224,10 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     val showCompletedPlanTasks = MutableStateFlow(false)
 
-    /** Tasks linked to each plan id: open first, then by due date and title. */
+    /** Tasks linked to each plan id (in link mode, the network's): open first, then by due date and title. */
     private val tasksByPlan: Flow<Map<Long, List<TaskEntity>>> =
-        combine(tasksRepo.observeAll(), linksByOwner) { tasks, links ->
-            val byId = tasks.associateBy { it.id }
+        combine(tasksRepo.observeAll(), linksByOwner, network) { tasks, links, network ->
+            val byId = tasks.filter { network.has(ItemRef(ItemType.TASK, it.id)) }.associateBy { it.id }
             val order = compareBy<TaskEntity> { it.completed }
                 .thenBy(nullsLast()) { it.dueDate }
                 .thenBy { it.title.lowercase() }
@@ -227,18 +242,18 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
      * The Plans tab: the plan tree with each plan's linked tasks right below it, ahead of
      * its subplans. Completed plans and tasks are left out unless their toggle is on; hiding
      * a completed plan never orphans an open one, because everything below it is completed too.
-     * A collapsed plan hides its tasks and its whole subtree. With a tag filter or a search on,
-     * only matching plans and tasks show, plus the plans above them so the tree still reads.
+     * A collapsed plan hides its tasks and its whole subtree. With a tag filter, a search or link
+     * mode on, only matching plans and tasks show, plus the plans above them so the tree still reads.
      */
     val planTree: StateFlow<List<PlanTreeItem>> = combine(
         plansRepo.observeAll(),
         tasksByPlan,
         combine(showCompletedPlans, showCompletedPlanTasks, ::Pair),
         container.collapsedPlansRepository.collapsed,
-        combine(combine(tagFilter, searchQuery, ::Pair), prioritySorts, priorityFilters, ::Triple),
-    ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tagsAndQuery, sorts, filters) ->
-        val (tags, query) = tagsAndQuery
-        val narrowed = tags.active || query.isNotBlank()
+        combine(combine(tagFilter, searchQuery, network, ::Triple), prioritySorts, priorityFilters, ::Triple),
+    ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tagsQueryNetwork, sorts, filters) ->
+        val (tags, query, network) = tagsQueryNetwork
+        val narrowed = tags.active || query.isNotBlank() || network != null
         // Sorting the plans sorts siblings: the tree keeps each plan's children in the order given.
         val sorted = if (sorts[ItemType.PLAN] == PrioritySort.PRIORITY) all.sortedByDescending { it.priority.ordinal } else all
         val shown = if (showPlans) sorted else sorted.filterNot { it.completed }
@@ -253,7 +268,8 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             // The priority filter applies to the plans themselves; their tasks are shown as usual.
             val hits = shown.filter { plan ->
                 (priorities.isEmpty() || plan.priority in priorities) &&
-                    (!narrowed || (tags.matches(ItemRef(ItemType.PLAN, plan.id)) && Search.matches(query, plan.title, plan.description)) ||
+                    (!narrowed || (network.has(ItemRef(ItemType.PLAN, plan.id)) && tags.matches(ItemRef(ItemType.PLAN, plan.id)) &&
+                        Search.matches(query, plan.title, plan.description)) ||
                         (!tags.excludes(ItemRef(ItemType.PLAN, plan.id)) && tasksOf(plan.id).isNotEmpty()))
             }.map { it.id }
             val keep = hits.toSet() + hits.flatMap { PlanTree.ancestorIds(it, shown, { p -> p.id }, { p -> p.parentId }) }
@@ -275,9 +291,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         .map { byPlan -> byPlan.values.flatten().filter { it.completed }.distinctBy { it.id }.size }
         .stateIn(0)
 
-    val completedPlanCount: StateFlow<Int> = plansRepo.observeAll()
-        .map { all -> all.count { it.completed } }
-        .stateIn(0)
+    val completedPlanCount: StateFlow<Int> = combine(plansRepo.observeAll(), network) { all, network ->
+        all.count { it.completed && network.has(ItemRef(ItemType.PLAN, it.id)) }
+    }.stateIn(0)
 
     /** Set when ticking a plan was refused because of open subplans. */
     val blockedCompletion = MutableStateFlow<BlockedCompletion?>(null)
@@ -298,13 +314,15 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     /**
      * The tags on the items each tab lists, for its tag filter bar. The Plans tab also lists the
-     * tasks linked to plans, so their tags count there too.
+     * tasks linked to plans, so their tags count there too. In link mode, only the network's items count.
      */
     val tabTagIds: StateFlow<Map<ItemType, Set<Long>>> =
-        combine(tagsRepo.observeTagsByItem(), tasksByPlan) { byItem, tasksByPlan ->
+        combine(tagsRepo.observeTagsByItem(), tasksByPlan, network) { byItem, tasksByPlan, network ->
             val planTaskIds = tasksByPlan.values.flatten().map { it.id }.toSet()
             ItemType.tabs.associateWith { tab ->
-                byItem.filterKeys { ref -> ref.type == tab || (tab == ItemType.PLAN && ref.type == ItemType.TASK && ref.id in planTaskIds) }
+                byItem.filterKeys { ref ->
+                    network.has(ref) && (ref.type == tab || (tab == ItemType.PLAN && ref.type == ItemType.TASK && ref.id in planTaskIds))
+                }
                     .values.flatten().map { it.id }.toSet()
             }
         }.stateIn(emptyMap())
@@ -337,8 +355,21 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         viewModelScope.launch { taskSortRepo.setShowCompleted(show) }
     }
 
+    /** In link mode, only the network's completed tasks. */
     fun deleteCompletedTasks() {
-        viewModelScope.launch { tasksRepo.deleteCompleted() }
+        val network = network.value
+        viewModelScope.launch {
+            tasksRepo.deleteCompleted(network?.filter { it.type == ItemType.TASK }?.map { it.id }?.toSet())
+        }
+    }
+
+    /** The link mode button: starts picking a root, or goes back to normal mode. */
+    fun toggleLinkMode() {
+        if (linkPicking.value || linkRoot.value != null) linksRepo.exitLinkMode() else linksRepo.startPicking()
+    }
+
+    fun pickLinkRoot(ref: ItemRef) {
+        linksRepo.pickRoot(ref)
     }
 
     fun setTaskSort(sort: TaskSort) {
@@ -471,8 +502,8 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Keeps the items of [type] that pass the shared tag filter, the search (over the item's
-     * [text]) and the tab's priority filter, in the tab's sort. Sorting by priority is stable, so
+     * Keeps the items of [type] that pass link mode, the shared tag filter, the search (over the
+     * item's [text]) and the tab's priority filter, in the tab's sort. Sorting by priority is stable, so
      * items of the same priority keep their custom order.
      */
     private fun <T> Flow<List<T>>.sortedAndFiltered(
@@ -481,10 +512,10 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         priority: (T) -> Priority,
         text: (T) -> List<String>,
     ): StateFlow<List<T>> =
-        combine(this, tagFilter, prioritySorts, priorityFilters, searchQuery) { items, tags, sorts, filters, query ->
+        combine(this, tagFilter, prioritySorts, priorityFilters, combine(searchQuery, network, ::Pair)) { items, tags, sorts, filters, (query, network) ->
             val priorities = filters[type].orEmpty()
             val shown = items.filter {
-                (priorities.isEmpty() || priority(it) in priorities) && tags.matches(ItemRef(type, id(it))) &&
+                network.has(ItemRef(type, id(it))) && (priorities.isEmpty() || priority(it) in priorities) && tags.matches(ItemRef(type, id(it))) &&
                     Search.matches(query, *text(it).toTypedArray())
             }
             if (sorts[type] == PrioritySort.PRIORITY) shown.sortedByDescending { priority(it).ordinal } else shown
