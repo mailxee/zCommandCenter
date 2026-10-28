@@ -65,9 +65,12 @@ class TaskRepository(
         reminders.removeOrphans()
     }
 
-    /** Deletes every completed task; a repeating task's open next occurrence is not completed, so it stays. */
-    suspend fun deleteCompleted() {
-        dao.deleteCompleted()
+    /**
+     * Deletes every completed task, or only those among [within] (link mode); a repeating task's
+     * open next occurrence is not completed, so it stays.
+     */
+    suspend fun deleteCompleted(within: Set<Long>? = null) {
+        if (within == null) dao.deleteCompleted() else dao.deleteAll(dao.completedIds().filter { it in within })
         reminders.removeOrphans()
     }
 }

@@ -151,4 +151,8 @@ interface TaskDao {
     /** Deletes every completed task, with its links, tags and checklist, all or nothing. Returns the ids. */
     @Transaction
     suspend fun deleteCompleted(): List<Long> = completedIds().onEach { delete(it) }
+
+    /** Deletes the given tasks, as [delete] does, all or nothing. */
+    @Transaction
+    suspend fun deleteAll(ids: List<Long>) = ids.forEach { delete(it) }
 }

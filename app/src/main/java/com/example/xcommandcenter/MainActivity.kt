@@ -42,6 +42,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handledToken = savedInstanceState?.getLong(KEY_HANDLED_TOKEN, NO_TOKEN) ?: NO_TOKEN
+        // Link mode lasts until the app is closed: a fresh start is back in normal mode, a rotation is not.
+        if (savedInstanceState == null) (application as XCommandCenterApp).container.linkRepository.exitLinkMode()
         readIntent(intent)
         setContent {
             val styles by (application as XCommandCenterApp).container.itemStyleRepository.styles

@@ -5,10 +5,68 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.LinkNetwork
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 
 class LinkRepository(private val dao: LinkDao) {
+
+    /**
+     * Link mode, kept in memory for as long as the app runs: [picking] while waiting for the card
+     * that becomes the root, then the root's [network] is all the app shows.
+     */
+    private val _picking = MutableStateFlow(false)
+    val picking: StateFlow<Boolean> = _picking.asStateFlow()
+
+    private val rootRef = MutableStateFlow<ItemRef?>(null)
+
+    /** The root while link mode is on; null in normal mode, and once the root is deleted. */
+    val linkRoot: Flow<ItemIndexEntry?> =
+        rootRef.flatMapLatest { ref -> if (ref == null) flowOf(null) else dao.observeEntry(ref.type, ref.id) }
+
+    /** Every item linked to the root, directly or through other items (see [LinkNetwork]); null in normal mode. */
+    val network: Flow<Set<ItemRef>?> = linkRoot.flatMapLatest { root ->
+        if (root == null) {
+            flowOf(null)
+        } else {
+            combine(dao.observeAll(), dao.observeChapterBooks()) { links, chapterBooks ->
+                LinkNetwork.of(
+                    root.ref,
+                    links.map { ItemRef(it.aType, it.aId) to ItemRef(it.bType, it.bId) },
+                    chapterBooks.associate { it.chapterId to it.id },
+                )
+            }
+        }
+    }
+
+    /** The link mode button: waits for a card to pick as the root. */
+    fun startPicking() {
+        rootRef.value = null
+        _picking.value = true
+    }
+
+    fun pickRoot(ref: ItemRef) {
+        _picking.value = false
+        rootRef.value = ref
+    }
+
+    /** Back to normal mode, from picking or from link mode. */
+    fun exitLinkMode() {
+        _picking.value = false
+        rootRef.value = null
+    }
+
+    /** In link mode, links a new item to the root, so it joins the network rather than disappearing on save. */
+    suspend fun joinNetwork(ref: ItemRef) {
+        val root = linkRoot.first() ?: return
+        if (ref !in network.first().orEmpty()) link(ref, root.ref)
+    }
 
     fun observeLinked(ref: ItemRef): Flow<List<ItemIndexEntry>> = dao.observeLinked(ref.type, ref.id)
 
@@ -36,9 +94,11 @@ class LinkRepository(private val dao: LinkDao) {
         dao.delete(link.aType, link.aId, link.bType, link.bId)
     }
 
-    /** Picker search within one tab; the Books tab also offers its chapters. */
+    /** Picker search within one tab; the Books tab also offers its chapters. In link mode, only the network. */
     fun search(tab: ItemType, query: String): Flow<List<ItemIndexEntry>> {
         val types = if (tab == ItemType.BOOK) listOf(ItemType.BOOK, ItemType.CHAPTER) else listOf(tab)
-        return dao.search(types.map { it.name }, query.trim())
+        return combine(dao.search(types.map { it.name }, query.trim()), network) { found, network ->
+            if (network == null) found else found.filter { it.ref in network }
+        }
     }
 }

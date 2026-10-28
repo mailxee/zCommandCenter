@@ -62,6 +62,13 @@ interface LinkDao {
     @Query("SELECT c.id AS chapterId, b.id, b.title, NULLIF(b.author, '') AS subtitle FROM chapters c JOIN books b ON b.id = c.bookId")
     fun observeChapterBooks(): Flow<List<ChapterBook>>
 
+    @Query("SELECT * FROM links")
+    fun observeAll(): Flow<List<LinkEntity>>
+
+    /** One item's index entry; emits null once the item is deleted. */
+    @Query("SELECT * FROM item_index WHERE type = :type AND id = :id")
+    fun observeEntry(type: ItemType, id: Long): Flow<ItemIndexEntry?>
+
     @Query(
         """
         SELECT * FROM item_index
