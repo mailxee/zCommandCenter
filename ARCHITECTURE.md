@@ -769,6 +769,16 @@ padding) so the first five fit across a phone. A new install's sample data (`See
 one person's goals: live as a Stoic, learn the piano, run a half marathon, with a Weekday and a
 Weekend schedule (days set, automatic switching off).
 
+### 2.45 App ID and release signing
+
+The application ID is `com.xeeshan.manage_everything` for debug and release builds alike (the
+Kotlin `namespace` stays `com.example.xcommandcenter`; only the ID is the app's identity). Debug
+builds keep the public debug key (2.38). Release builds are signed with the Play upload key, read
+from environment variables that `.github/workflows/release.yml` sets from the repository secrets
+`RELEASE_KEYSTORE_BASE64` and `RELEASE_KEYSTORE_PASSWORD`; without them a release build is simply
+unsigned, so the public repository builds for anyone. `.gitignore` keeps any other keystore out.
+`RELEASING.md` has the steps.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
