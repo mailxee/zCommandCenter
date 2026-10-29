@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,6 +82,7 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
             self = viewModel.ref,
             alreadyLinked = cards.map { it.ref }.toSet(),
             search = viewModel::searchLinkTargets,
+            chapters = viewModel::chaptersOf,
             onPick = { viewModel.link(it.ref); picking = false },
             onDismiss = { picking = false },
         )
@@ -126,11 +127,7 @@ private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpe
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (control is CardControl.Habit) {
-                    FilterChip(
-                        selected = control.markedToday,
-                        onClick = { viewModel.toggleLinkedHabitToday(card.ref.id) },
-                        label = { Text(if (control.positive) "Done today" else "Missed today") },
-                    )
+                    HabitTodayChip(control.positive, control.markedToday) { viewModel.toggleLinkedHabitToday(card.ref.id) }
                 }
                 if (removable) {
                     IconButton(onClick = { viewModel.unlink(card.ref) }) {
@@ -157,15 +154,22 @@ fun LinkPickerDialog(
     self: ItemRef,
     alreadyLinked: Set<ItemRef>,
     search: (ItemType, String) -> Flow<List<ItemIndexEntry>>,
+    chapters: (bookId: Long) -> Flow<List<ItemIndexEntry>>,
     onPick: (ItemIndexEntry) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf<ItemType?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
+    // In the Books tab, the book picked first; its chapters (and the whole book) are then offered.
+    var bookId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var bookTitle by rememberSaveable { mutableStateOf("") }
+    val bookStep = bookId
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(tab?.let { "Link a ${it.singular.lowercase()}" } ?: "Link to which tab?") },
+        title = {
+            Text(tab?.let { if (it == ItemType.BOOK) "Link a book or chapter" else "Link a ${it.singular.lowercase()}" } ?: "Link to which tab?")
+        },
         text = {
             val selected = tab
             if (selected == null) {
@@ -178,6 +182,37 @@ fun LinkPickerDialog(
                         )
                     }
                 }
+            } else if (bookStep != null) {
+                val found by remember(bookStep) { chapters(bookStep) }.collectAsState(initial = emptyList())
+                val book = ItemIndexEntry(ItemType.BOOK, bookStep, bookTitle, null)
+                val words = query.trim()
+                val matches = found.filter { it.ref != self && it.title.contains(words, ignoreCase = true) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(bookTitle, style = itemTextStyle(ItemType.BOOK, MaterialTheme.typography.titleSmall), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (found.size > 8 || words.isNotEmpty()) {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            label = { Text("Search chapters") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                        if (book.ref != self) {
+                            item(key = "book") {
+                                PickerRow("Whole book", "Links the book itself", book.ref in alreadyLinked, ItemType.BOOK) { onPick(book) }
+                                HorizontalDivider()
+                            }
+                        }
+                        if (found.isEmpty()) item(key = "none") { Text("This book has no chapters.", Modifier.padding(vertical = 12.dp)) }
+                        else if (matches.isEmpty()) item(key = "none") { Text("No matches.", Modifier.padding(vertical = 12.dp)) }
+                        items(matches, key = { "${it.type}-${it.id}" }) { entry ->
+                            PickerRow(entry.title, null, entry.ref in alreadyLinked, ItemType.CHAPTER) { onPick(entry) }
+                            HorizontalDivider()
+                        }
+                    }
+                }
             } else {
                 val results by remember(selected, query) { search(selected, query) }.collectAsState(initial = emptyList())
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -188,22 +223,21 @@ fun LinkPickerDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    val candidates = results.filter { it.ref != self }
+                    // A book is picked to show its chapters, so the book this page is about stays on the list.
+                    val candidates = results.filter { it.ref != self || selected == ItemType.BOOK }
                     if (candidates.isEmpty()) Text("No matches.")
                     LazyColumn(Modifier.heightIn(max = 360.dp)) {
                         items(candidates, key = { "${it.type}-${it.id}" }) { entry ->
-                            val linked = entry.ref in alreadyLinked
-                            ListItem(
-                                colors = clearListItemColors(),
-                                headlineContent = {
-                                    Text(entry.title, style = itemTextStyle(entry.type, LocalTextStyle.current), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                },
-                                supportingContent = {
-                                    val detail = listOfNotNull(entry.describe(), if (linked) "Already linked" else null)
-                                    if (detail.isNotEmpty()) Text(detail.joinToString(" · "))
-                                },
-                                modifier = Modifier.clickable(enabled = !linked) { onPick(entry) },
-                            )
+                            if (entry.type == ItemType.BOOK) {
+                                // Opens the book's chapters; linking is done there, the whole book included.
+                                PickerRow(entry.title, entry.describe(), linked = false, ItemType.BOOK, more = true) {
+                                    bookId = entry.id
+                                    bookTitle = entry.title
+                                    query = ""
+                                }
+                            } else {
+                                PickerRow(entry.title, entry.describe(), entry.ref in alreadyLinked, entry.type) { onPick(entry) }
+                            }
                             HorizontalDivider()
                         }
                     }
@@ -211,8 +245,30 @@ fun LinkPickerDialog(
             }
         },
         confirmButton = {
-            if (tab != null) TextButton(onClick = { tab = null; query = "" }) { Text("Change tab") }
+            when {
+                bookStep != null -> TextButton(onClick = { bookId = null; query = "" }) { Text("Back to books") }
+                tab != null -> TextButton(onClick = { tab = null; query = "" }) { Text("Change tab") }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** One choice in the link picker; [more] marks a book, which opens its chapters instead of linking. */
+@Composable
+private fun PickerRow(title: String, detail: String?, linked: Boolean, type: ItemType, more: Boolean = false, onClick: () -> Unit) {
+    ListItem(
+        colors = clearListItemColors(),
+        headlineContent = {
+            Text(title, style = itemTextStyle(type, LocalTextStyle.current), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = {
+            val lines = listOfNotNull(detail, if (linked) "Already linked" else null)
+            if (lines.isNotEmpty()) Text(lines.joinToString(" · "))
+        },
+        trailingContent = if (more) {
+            { Icon(painterResource(R.drawable.ic_expand_more), contentDescription = "Show chapters", Modifier.rotate(-90f)) }
+        } else null,
+        modifier = Modifier.clickable(enabled = !linked, onClickLabel = if (more) "Show chapters" else "Link") { onClick() },
     )
 }

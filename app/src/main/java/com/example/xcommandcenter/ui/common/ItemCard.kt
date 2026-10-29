@@ -1,6 +1,7 @@
 package com.example.xcommandcenter.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -48,6 +49,7 @@ data class HabitSummary(
     val totalMarks: Int,
     val scheduledToday: Boolean,
     val markedToday: Boolean,
+    val marks: Set<LocalDate>,
 ) {
     val positive: Boolean get() = habit.category == HabitCategory.POSITIVE
 }
@@ -58,6 +60,7 @@ fun habitSummary(habit: HabitEntity, marks: Set<LocalDate>, today: LocalDate): H
     totalMarks = marks.size,
     scheduledToday = HabitStats.isDue(habit.category, habit.recurrence, habit.startDate, marks, today),
     markedToday = today in marks,
+    marks = marks,
 )
 
 fun taskCardText(task: TaskEntity, checklist: ChecklistCount?) = CardText(
@@ -158,6 +161,7 @@ fun ItemCard(
     outlined: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val content: @Composable ColumnScope.() -> Unit = {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -224,6 +228,8 @@ fun ItemCard(
             }
             trailing?.invoke()
         }
+        // Full width below the text and controls, such as a habit's calendar.
+        footer?.let { Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) { it() } }
     }
     if (outlined) {
         OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)

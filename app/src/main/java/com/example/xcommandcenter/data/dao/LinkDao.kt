@@ -62,6 +62,15 @@ interface LinkDao {
     @Query("SELECT c.id AS chapterId, b.id, b.title, NULLIF(b.author, '') AS subtitle FROM chapters c JOIN books b ON b.id = c.bookId")
     fun observeChapterBooks(): Flow<List<ChapterBook>>
 
+    /** A book's chapters, in the book's order, as index entries. */
+    @Query(
+        """
+        SELECT 'CHAPTER' AS type, c.id, c.title, b.title AS subtitle FROM chapters c JOIN books b ON b.id = c.bookId
+        WHERE c.bookId = :bookId ORDER BY c.position
+        """,
+    )
+    fun observeChapters(bookId: Long): Flow<List<ItemIndexEntry>>
+
     @Query("SELECT * FROM links")
     fun observeAll(): Flow<List<LinkEntity>>
 

@@ -150,6 +150,8 @@ abstract class ItemDetailViewModel(
 
     fun searchLinkTargets(tab: ItemType, query: String): Flow<List<ItemIndexEntry>> = links.search(tab, query)
 
+    fun chaptersOf(bookId: Long): Flow<List<ItemIndexEntry>> = links.chapters(bookId)
+
     fun link(target: ItemRef) {
         if (itemId.value == 0L) return
         viewModelScope.launch { links.link(ref, target) }

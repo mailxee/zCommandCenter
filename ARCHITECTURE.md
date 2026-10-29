@@ -662,8 +662,11 @@ page still lists the chapters in Linked items.
 A link button sits beside the (now narrower) search box. Pressed, the next card tapped on any
 tab becomes the root instead of opening; every tab then shows only the root's network: the items
 linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
-walk over the undirected links). A chapter and its book count as one item, so reaching either
-reaches the book and all its chapters. A line under the search box names the root; pressing the
+walk over the undirected links). Notes, quotes and books are end points, never followed: the walk
+goes only through tasks, goals, habits and plans, and an end point (a book with all its chapters; a
+chapter's links count as its book's) shows when it is linked to one of them. An end point as the
+root starts the walk from the items linked to it, and also shows the end points linked to it
+directly (one step), so a new note, quote or book saved from it stays visible. A line under the search box names the root; pressing the
 button again goes back to normal mode.
 
 The state lives in `LinkRepository` (in memory: `picking`, the root, and the `network` flow), so
@@ -690,6 +693,27 @@ build machine would generate anew. Android only installs an update signed with t
 the installed app, so a new key would force an uninstall, losing the app's data. Keep this file:
 it is the key the installed app was signed with (SHA-256
 `10:2F:74:41:06:D8:76:25:35:03:0D:F9:8F:00:C1:42:59:B3:C9:18:91:34:55:A1:E1:9E:D4:F5:E9:46:50:36`).
+
+### 2.39 Habit calendar
+
+Each card in the Habits tab ends with a month calendar (`ui/common/HabitCalendar`, passed as
+`ItemCard`'s full-width `footer`), and the habit's page shows the same calendar in place of the
+old history chips. It is a `HorizontalPager` of months from the habit's first month (its start
+date, or an earlier mark) to the current one, opening on the current one; weeks start on Monday.
+
+Every habit follows one rule (`dayStatus`): a due day from the start through today is done
+(filled in the Habits tab's color) or missed (red outline). A positive habit stores its done
+days, so an unmarked past due day is missed and today stays pending; a negative habit stores its
+missed days, so an unmarked due day is done. On the habit's page, tapping a due day toggles its
+mark, switching it between done and missed for either kind; the card's calendar only shows. The
+"Missed today" chip turns red with a cross when selected (`HabitTodayChip`).
+
+### 2.40 Picking a book, then a chapter
+
+The link picker's Books tab lists books only (`LinkRepository.search`). Tapping a book opens a
+second step: "Whole book", then its chapters in the book's order (`LinkDao.observeChapters`,
+searchable when the book has many), each linked with one tap; "Back to books" returns. In link
+mode both steps list only the network's items.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
