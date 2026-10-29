@@ -11,6 +11,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
@@ -128,6 +129,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
     private val blocksRepo = container.blockRepository
+    private val schedulesRepo = container.scheduleRepository
     private val taskSortRepo = container.taskSortRepository
     private val linksRepo = container.linkRepository
 
@@ -322,14 +324,54 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val quotes: StateFlow<List<QuoteEntity>> =
         quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority }) { listOf(it.text, it.author, it.source) }
 
-    /** The Schedule tab: blocks by start time, passing link mode, the tag filter and the search. */
+    /** Every schedule, for the Schedule tab's switcher. */
+    val schedules: StateFlow<List<ScheduleEntity>> = schedulesRepo.schedules.stateIn(emptyList())
+
+    /** The schedule the Schedule tab shows (see [ScheduleRepository.active]). */
+    val activeSchedule: StateFlow<ScheduleEntity?> = schedulesRepo.active.stateIn(null)
+
+    /** Whether each day starts on the schedule set for its weekday. */
+    val scheduleAutomatic: StateFlow<Boolean> = schedulesRepo.choice.map { it.automatic }.stateIn(false)
+
+    private val activeBlocks: Flow<List<BlockEntity>> =
+        combine(blocksRepo.observeAll(), schedulesRepo.active) { blocks, active -> blocks.filter { it.scheduleId == active?.id } }
+
+    /** The Schedule tab: the active schedule's blocks by start time, passing link mode, the tag filter and the search. */
     val blocks: StateFlow<List<BlockEntity>> =
-        combine(blocksRepo.observeAll(), tagFilter, searchQuery, network) { blocks, tags, query, network ->
+        combine(activeBlocks, tagFilter, searchQuery, network) { blocks, tags, query, network ->
             blocks.filter {
                 val ref = ItemRef(ItemType.BLOCK, it.id)
                 network.has(ref) && tags.matches(ref) && Search.matches(query, it.title, it.notes)
             }
         }.stateIn(emptyList())
+
+    fun selectSchedule(id: Long) {
+        viewModelScope.launch { schedulesRepo.select(id) }
+    }
+
+    fun createSchedule(name: String) {
+        viewModelScope.launch { schedulesRepo.create(name.trim()) }
+    }
+
+    fun renameSchedule(id: Long, name: String) {
+        viewModelScope.launch { schedulesRepo.rename(id, name.trim()) }
+    }
+
+    fun duplicateSchedule(id: Long, name: String) {
+        viewModelScope.launch { schedulesRepo.duplicate(id, name.trim()) }
+    }
+
+    fun deleteSchedule(id: Long) {
+        viewModelScope.launch { schedulesRepo.delete(id) }
+    }
+
+    fun setScheduleDays(id: Long, days: Int) {
+        viewModelScope.launch { schedulesRepo.setDays(id, days) }
+    }
+
+    fun setScheduleAutomatic(on: Boolean) {
+        viewModelScope.launch { schedulesRepo.setAutomatic(on) }
+    }
 
     /**
      * The tags on the items each tab lists, for its tag filter bar. The Plans tab also lists the
@@ -366,7 +408,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 count(ItemType.NOTE, notes, notesRepo.observeAll().map { all -> all.map { it.id } }),
                 count(ItemType.BOOK, books, booksRepo.observeAllWithProgress().map { all -> all.map { it.book.id } }),
                 count(ItemType.QUOTE, quotes, quotesRepo.observeAll().map { all -> all.map { it.id } }),
-                count(ItemType.BLOCK, blocks, blocksRepo.observeAll().map { all -> all.map { it.id } }),
+                count(ItemType.BLOCK, blocks, activeBlocks.map { all -> all.map { it.id } }),
             ),
         ) { it.toMap() }.stateIn(emptyMap())
     }

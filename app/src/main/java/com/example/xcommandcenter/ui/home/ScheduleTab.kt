@@ -58,7 +58,7 @@ private val Gutter = 56.dp
 private const val DAY = 24 * 60
 
 /**
- * The Schedule tab: the plan for every day, hours down the left as in a calendar's day view, each
+ * The Schedule tab: the active schedule's plan for the day (switched with [ScheduleSwitcher]), hours down the left as in a calendar's day view, each
  * block placed by its start and sized by its length, overlapping ones side by side. A red line
  * marks the time now, and the tab opens scrolled to it. Tapping an empty half hour adds a block
  * there ([onCreateAt]); tapping a block opens it.
@@ -84,8 +84,9 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
     }
 
     Column(Modifier.fillMaxSize()) {
+        ScheduleSwitcher(viewModel)
         Text(
-            if (blocks.isEmpty()) "Your plan for every day. Tap a time to add a block." else "Your plan for every day · tap an empty time to add a block",
+            if (blocks.isEmpty()) "Nothing planned yet. Tap a time to add a block." else "Tap an empty time to add a block",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

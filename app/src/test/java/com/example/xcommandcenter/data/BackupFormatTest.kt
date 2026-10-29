@@ -2,6 +2,7 @@ package com.example.xcommandcenter.data
 
 import com.example.xcommandcenter.data.backup.BackupData
 import com.example.xcommandcenter.data.backup.BackupFormat
+import com.example.xcommandcenter.data.backup.BackupScheduleChoice
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.backup.Sheet
 import com.example.xcommandcenter.data.entity.BlockEntity
@@ -18,6 +19,7 @@ import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
+import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.HabitCategory
@@ -88,6 +90,11 @@ class BackupFormatTest {
         blocks = listOf(
             BlockEntity(1, "Deep work", 8 * 60, 10 * 60, "Phone on silent", created),
             BlockEntity(2, "Wind down", 22 * 60, 24 * 60, createdAt = created),
+            BlockEntity(3, "Long run", 7 * 60, 9 * 60, createdAt = created, scheduleId = 4),
+        ),
+        schedules = listOf(
+            ScheduleEntity(1, "Workday", 0, Recurrence.maskFromDays(DayOfWeek.entries.take(5).toSet())),
+            ScheduleEntity(4, "Weekend", 1, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY))),
         ),
     )
 
@@ -112,6 +119,23 @@ class BackupFormatTest {
         assertEquals(data.noteListItems, back.noteListItems)
         assertEquals(data.reminders, back.reminders)
         assertEquals(data.blocks, back.blocks)
+        assertEquals(data.schedules, back.schedules)
+    }
+
+    @Test
+    fun `the schedule on show and automatic switching come back`() {
+        val choice = BackupScheduleChoice(selectedId = 4, automatic = true)
+        val result = BackupFormat.fromSheets(BackupFormat.toSheets(data, TabOrder.default, zone, scheduleChoice = choice), zone)
+        assertEquals(choice, result.scheduleChoice)
+    }
+
+    @Test
+    fun `a workbook without a Schedules sheet puts every block in one schedule`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name == "Schedules" }
+        val result = BackupFormat.fromSheets(sheets, zone)
+        assertEquals(listOf(ScheduleEntity(1, "My schedule")), result.data.schedules)
+        assertTrue(result.data.blocks.all { it.scheduleId == 1L })
+        assertNull(result.scheduleChoice)
     }
 
     @Test
@@ -195,7 +219,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags", "Reminders", "Settings"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags", "Reminders", "Settings", "Schedules"), names)
     }
 
     @Test

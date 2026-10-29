@@ -25,13 +25,15 @@ sealed interface ReminderNotice {
 /**
  * Owns every item's reminders and keeps one alarm per reminder in step with what is stored. A
  * habit's reminder is a time of day, repeated on each scheduled day; a schedule block's is a time
- * of day, every day; any other item's is a date and time, once. Alarms are set even for completed tasks and plans; when one goes off for a
+ * of day, every day, shown only while its schedule is the active one; any other item's is a date and time, once. Alarms are set even for completed tasks and plans; when one goes off for a
  * completed item, nothing is shown (so reopening the item needs no rescheduling).
  */
 class ReminderRepository(
     private val dao: ReminderDao,
     private val habits: HabitDao,
     private val scheduler: ReminderScheduler,
+    /** The active schedule; only its blocks' reminders go off. */
+    private val activeSchedule: suspend () -> Long?,
 ) {
     /** Reminder times per item, earliest first (see [ReminderEntity.time]). */
     fun observeAll(): Flow<Map<ItemRef, List<Long>>> =
@@ -86,7 +88,8 @@ class ReminderRepository(
         val title = dao.title(reminder.itemType, reminder.itemId) ?: return null
         if (reminder.itemType == ItemType.BLOCK) {
             scheduleDaily(reminder)
-            return ReminderNotice.Item(reminder.ref, title)
+            // Every block keeps its alarm, so switching schedules needs no rescheduling; only the active one's show.
+            return if (dao.blockSchedule(reminder.itemId) == activeSchedule()) ReminderNotice.Item(reminder.ref, title) else null
         }
         if (dao.completed(reminder.itemType, reminder.itemId) == 1) return null
         return ReminderNotice.Item(reminder.ref, title)

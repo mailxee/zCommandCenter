@@ -47,6 +47,10 @@ interface ReminderDao {
     @Query("SELECT title FROM item_index WHERE type = :type AND id = :itemId")
     suspend fun title(type: ItemType, itemId: Long): String?
 
+    /** The schedule a block belongs to; null if the block no longer exists. */
+    @Query("SELECT scheduleId FROM blocks WHERE id = :blockId")
+    suspend fun blockSchedule(blockId: Long): Long?
+
     /** 1 for a completed task or plan; anything else is never completed. */
     @Query(
         """

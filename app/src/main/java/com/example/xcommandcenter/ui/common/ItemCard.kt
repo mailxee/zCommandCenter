@@ -143,9 +143,10 @@ fun quoteCardText(quote: QuoteEntity): CardText {
 /** "7:00 – 7:45 AM": a block's time of day. */
 fun blockTimeText(block: BlockEntity): String = "${minuteText(block.startMinute)} – ${minuteText(block.endMinute)}"
 
-fun blockCardText(block: BlockEntity) = CardText(
+/** [schedule] names the block's schedule, when there is more than one to tell apart. */
+fun blockCardText(block: BlockEntity, schedule: String? = null) = CardText(
     title = block.title,
-    lines = listOfNotNull(blockTimeText(block), block.notes.ifBlank { null }),
+    lines = listOfNotNull(listOfNotNull(schedule, blockTimeText(block)).joinToString(" · "), block.notes.ifBlank { null }),
 )
 
 /** Chapters have no tab of their own; their card names the book they are in. */

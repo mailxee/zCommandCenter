@@ -13,6 +13,9 @@ interface BlockDao {
     @Query("SELECT * FROM blocks ORDER BY startMinute, endMinute, id")
     fun observeAll(): Flow<List<BlockEntity>>
 
+    @Query("SELECT * FROM blocks WHERE scheduleId = :scheduleId ORDER BY startMinute, endMinute, id")
+    suspend fun inSchedule(scheduleId: Long): List<BlockEntity>
+
     @Query("SELECT * FROM blocks WHERE id = :id")
     suspend fun get(id: Long): BlockEntity?
 

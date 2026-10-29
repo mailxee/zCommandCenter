@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.example.xcommandcenter.data.dao.BackupDao
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
+import com.example.xcommandcenter.data.prefs.ScheduleChoiceRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.clearCollapsedPlans
 import com.example.xcommandcenter.data.prefs.clearSettings
@@ -22,11 +23,16 @@ class BackupRepository(
     private val reminders: ReminderRepository,
     private val tabOrder: TabOrderRepository,
     private val itemStyles: ItemStyleRepository,
+    private val scheduleChoice: ScheduleChoiceRepository,
 ) {
     /** Writes the whole database to [uri]; returns how many items (across the seven tabs) went in. */
     suspend fun export(uri: Uri): Int = withContext(Dispatchers.IO) {
         val data = dao.snapshot()
-        val sheets = BackupFormat.toSheets(data, tabOrder.order.first(), styles = itemStyles.styles.first())
+        val choice = scheduleChoice.choice.first()
+        val sheets = BackupFormat.toSheets(
+            data, tabOrder.order.first(), styles = itemStyles.styles.first(),
+            scheduleChoice = BackupScheduleChoice(choice.selectedId, choice.automatic),
+        )
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Can't write to the chosen file")
         out.use { Xlsx.write(sheets, it) }
         data.itemCount
@@ -54,13 +60,14 @@ class BackupRepository(
             tabOrder.setOrder(settings.tabOrder)
             settings.styles.forEach { (tab, style) -> itemStyles.setStyle(tab, style) }
         }
+        result.scheduleChoice?.let { scheduleChoice.restore(it.selectedId, it.automatic) }
         result
     }
 
     /** Deletes every item, link, tag and habit mark, every saved setting and every pending reminder. */
     suspend fun deleteEverything() = withContext(Dispatchers.IO) {
         reminders.cancelAll()
-        dao.deleteAll()
+        dao.deleteEverything()
         clearSettings(context)
     }
 }

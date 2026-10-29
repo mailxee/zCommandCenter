@@ -19,6 +19,7 @@ import com.example.xcommandcenter.data.dao.NoteDao
 import com.example.xcommandcenter.data.dao.PlanDao
 import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.dao.ReminderDao
+import com.example.xcommandcenter.data.dao.ScheduleDao
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
 import com.example.xcommandcenter.data.entity.BlockEntity
@@ -36,6 +37,7 @@ import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
+import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 
@@ -57,6 +59,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         ItemTagEntity::class,
         ReminderEntity::class,
         BlockEntity::class,
+        ScheduleEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -65,13 +68,15 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 4: the reminders table, any number per item; a task's and a habit's one reminder are copied into it.
     // 5: the old single-reminder columns are dropped (two steps, so step 4 can still read them).
     // 6: the Schedule tab's blocks.
-    version = 6,
+    // 7: several schedules; existing blocks go into the first.
+    version = 7,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4, spec = AppDatabase.CopyReminders::class),
         AutoMigration(from = 4, to = 5, spec = AppDatabase.DropSingleReminders::class),
         AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7, spec = AppDatabase.AddSchedules::class),
     ],
 )
 @TypeConverters(Converters::class)
@@ -88,6 +93,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun backupDao(): BackupDao
     abstract fun reminderDao(): ReminderDao
     abstract fun blockDao(): BlockDao
+    abstract fun scheduleDao(): ScheduleDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {
@@ -97,18 +103,33 @@ abstract class AppDatabase : RoomDatabase() {
         }
     }
 
+    /** The first schedule, which every existing block now belongs to. */
+    class AddSchedules : AutoMigrationSpec {
+        override fun onPostMigrate(db: SupportSQLiteDatabase) = insertFirstSchedule(db)
+    }
+
     @DeleteColumn(tableName = "tasks", columnName = "reminderAt")
     @DeleteColumn(tableName = "habits", columnName = "reminderMinutes")
     class DropSingleReminders : AutoMigrationSpec
 
     companion object {
+        /** There is always a schedule; blocks default to this one. */
+        fun insertFirstSchedule(db: SupportSQLiteDatabase) {
+            db.execSQL("INSERT OR IGNORE INTO schedules (id, name, sortOrder, days) VALUES (1, '$FIRST_SCHEDULE', 0, 0)")
+        }
+
+        const val FIRST_SCHEDULE = "My schedule"
+
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "xcommandcenter.db")
                 .addCallback(
                     object : Callback() {
                         // Runs once, inside the transaction that creates the schema, so the
                         // seed is all-or-nothing and never re-inserted on later launches.
-                        override fun onCreate(db: SupportSQLiteDatabase) = SeedData.insert(db)
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            insertFirstSchedule(db)
+                            SeedData.insert(db)
+                        }
                     },
                 )
                 .build()

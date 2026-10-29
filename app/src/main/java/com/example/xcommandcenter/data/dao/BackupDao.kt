@@ -18,7 +18,9 @@ import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.db.AppDatabase
 import com.example.xcommandcenter.data.entity.ReminderEntity
+import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 
@@ -41,12 +43,13 @@ interface BackupDao {
     @Query("SELECT * FROM item_tags") suspend fun itemTags(): List<ItemTagEntity>
     @Query("SELECT * FROM reminders ORDER BY itemType, itemId, time") suspend fun reminders(): List<ReminderEntity>
     @Query("SELECT * FROM blocks ORDER BY id") suspend fun blocks(): List<BlockEntity>
+    @Query("SELECT * FROM schedules ORDER BY sortOrder, id") suspend fun schedules(): List<ScheduleEntity>
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(), blocks(),
+        reminders(), blocks(), schedules(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -65,6 +68,7 @@ interface BackupDao {
     @Insert suspend fun insertItemTags(rows: List<ItemTagEntity>)
     @Insert suspend fun insertReminders(rows: List<ReminderEntity>)
     @Insert suspend fun insertBlocks(rows: List<BlockEntity>)
+    @Insert suspend fun insertSchedules(rows: List<ScheduleEntity>)
 
     // Children before parents, so foreign keys never point at a deleted row mid-way.
     @Query("DELETE FROM item_tags") suspend fun deleteItemTags()
@@ -83,6 +87,7 @@ interface BackupDao {
     @Query("DELETE FROM books") suspend fun deleteBooks()
     @Query("DELETE FROM quotes") suspend fun deleteQuotes()
     @Query("DELETE FROM blocks") suspend fun deleteBlocks()
+    @Query("DELETE FROM schedules") suspend fun deleteSchedules()
 
     @Transaction
     suspend fun deleteAll() {
@@ -102,6 +107,14 @@ interface BackupDao {
         deleteBooks()
         deleteQuotes()
         deleteBlocks()
+        deleteSchedules()
+    }
+
+    /** [deleteAll], leaving the one schedule there always is. */
+    @Transaction
+    suspend fun deleteEverything() {
+        deleteAll()
+        insertSchedules(listOf(ScheduleEntity(id = 1, name = AppDatabase.FIRST_SCHEDULE)))
     }
 
     /**
@@ -123,6 +136,7 @@ interface BackupDao {
         insertBooks(data.books)
         insertChapters(data.chapters)
         insertQuotes(data.quotes)
+        insertSchedules(data.schedules.ifEmpty { listOf(ScheduleEntity(id = 1, name = AppDatabase.FIRST_SCHEDULE)) })
         insertBlocks(data.blocks)
         insertLinks(data.links)
         insertTags(data.tags)

@@ -32,7 +32,7 @@ object AppViewModelProvider {
         initializer { with(container()) { BookDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { QuoteDetailViewModel(createSavedStateHandle(), quoteRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
-        initializer { with(container()) { BlockDetailViewModel(createSavedStateHandle(), blockRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
+        initializer { with(container()) { BlockDetailViewModel(createSavedStateHandle(), blockRepository, scheduleRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
     }
 
     private fun CreationExtras.container(): AppContainer =

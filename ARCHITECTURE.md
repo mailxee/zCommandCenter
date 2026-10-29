@@ -733,6 +733,24 @@ points, appear in search, tag filters, the tab counter and link pickers, and hav
 "Schedule" sheet in the Excel backup (optional on import; End "24:00" is midnight). The card's link
 lines are shared with every other card (`LinkLines`).
 
+### 2.42 Several schedules
+
+Blocks belong to a schedule (`schedules` table, `blocks.scheduleId`; database version 7, whose
+`AddSchedules` spec creates "My schedule", id 1, for existing blocks; a new database gets it too,
+and "Delete everything" puts it back, so there is always one). The tab's `ScheduleSwitcher` shows
+the active schedule and a menu to switch, add, rename, duplicate (`ScheduleDao.duplicate` copies
+every block with its links, tags and reminders), set the weekdays each is used on, delete (not the
+last), and turn automatic switching on.
+
+Which schedule is active is `domain/ScheduleChoice`: the last pick (`ScheduleChoiceRepository`, with
+the day it was made), except that with automatic switching on a new day starts on the schedule set
+for its weekday; a pick made today wins until tomorrow. A weekday belongs to at most one schedule
+(`assignDays`). The tab, its counter, search and new blocks use the active schedule. Every block
+keeps its alarm, and `ReminderRepository.fired` shows a block's reminder only when its schedule is
+active, so switching needs no rescheduling. Elsewhere, block cards and the link picker name the
+block's schedule when there are several. The backup's Schedules sheet holds the schedules, the
+one on show and the automatic switch; the Schedule sheet's "Schedule ID" places each block.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

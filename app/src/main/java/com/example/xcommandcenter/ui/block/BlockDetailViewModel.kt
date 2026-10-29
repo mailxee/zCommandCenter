@@ -9,6 +9,7 @@ import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.repository.BlockRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.ReminderRepository
+import com.example.xcommandcenter.data.repository.ScheduleRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemCardSource
@@ -20,6 +21,7 @@ import java.time.LocalTime
 class BlockDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: BlockRepository,
+    private val schedules: ScheduleRepository,
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
@@ -72,7 +74,11 @@ class BlockDetailViewModel(
             return
         }
         val toSave = block.copy(id = itemId.value, title = block.title.trim(), notes = block.notes.trim())
-        viewModelScope.launch { onSaved(repository.save(toSave), close) }
+        viewModelScope.launch {
+            // A new block goes into the schedule on show.
+            val placed = if (toSave.id == 0L) toSave.copy(scheduleId = schedules.activeId() ?: toSave.scheduleId) else toSave
+            onSaved(repository.save(placed), close)
+        }
     }
 
     fun delete() = deleteThen { repository.delete(it) }
