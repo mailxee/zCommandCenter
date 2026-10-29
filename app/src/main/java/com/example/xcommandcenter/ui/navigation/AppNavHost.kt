@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.ui.block.BlockDetailScreen
 import com.example.xcommandcenter.ui.book.BookDetailScreen
 import com.example.xcommandcenter.ui.book.ChapterDetailScreen
 import com.example.xcommandcenter.ui.goal.GoalDetailScreen
@@ -45,6 +46,7 @@ fun AppNavHost(
             HomeScreen(
                 onOpen = open,
                 onCreate = { type -> navController.navigate(Routes.newItem(type)) },
+                onCreateBlock = { minute -> navController.navigate(Routes.newBlock(minute)) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
@@ -57,6 +59,7 @@ fun AppNavHost(
                 navArgument(Routes.ARG_TYPE) { type = NavType.StringType },
                 navArgument(Routes.ARG_ID) { type = NavType.LongType },
                 navArgument(Routes.ARG_PARENT) { type = NavType.LongType; defaultValue = 0L },
+                navArgument(Routes.ARG_START) { type = NavType.IntType; defaultValue = -1 },
             ),
         ) { entry ->
             val type = ItemType.valueOf(entry.arguments?.getString(Routes.ARG_TYPE) ?: ItemType.TASK.name)
@@ -73,6 +76,7 @@ fun AppNavHost(
                 ItemType.BOOK -> BookDetailScreen(onBack = back, onOpen = open)
                 ItemType.CHAPTER -> ChapterDetailScreen(onBack = back, onOpen = open)
                 ItemType.QUOTE -> QuoteDetailScreen(onBack = back, onOpen = open)
+                ItemType.BLOCK -> BlockDetailScreen(onBack = back, onOpen = open)
             }
         }
     }

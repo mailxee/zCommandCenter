@@ -3,6 +3,7 @@ package com.example.xcommandcenter.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.AppContainer
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.GoalEntity
@@ -10,6 +11,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
@@ -126,6 +128,8 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val notesRepo = container.noteRepository
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
+    private val blocksRepo = container.blockRepository
+    private val schedulesRepo = container.scheduleRepository
     private val taskSortRepo = container.taskSortRepository
     private val linksRepo = container.linkRepository
 
@@ -320,6 +324,62 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val quotes: StateFlow<List<QuoteEntity>> =
         quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority }) { listOf(it.text, it.author, it.source) }
 
+    /** Every schedule, for the Schedule tab's switcher. */
+    val schedules: StateFlow<List<ScheduleEntity>> = schedulesRepo.schedules.stateIn(emptyList())
+
+    /** The schedule the Schedule tab shows (see [ScheduleRepository.active]). */
+    val activeSchedule: StateFlow<ScheduleEntity?> = schedulesRepo.active.stateIn(null)
+
+    /** Whether each day starts on the schedule set for its weekday. */
+    val scheduleAutomatic: StateFlow<Boolean> = schedulesRepo.choice.map { it.automatic }.stateIn(false)
+
+    private val activeBlocks: Flow<List<BlockEntity>> =
+        combine(blocksRepo.observeAll(), schedulesRepo.active) { blocks, active -> blocks.filter { it.scheduleId == active?.id } }
+
+    /** The Schedule tab: the active schedule's blocks by start time, passing link mode, the tag filter and the search. */
+    val blocks: StateFlow<List<BlockEntity>> =
+        combine(activeBlocks, tagFilter, searchQuery, network) { blocks, tags, query, network ->
+            blocks.filter {
+                val ref = ItemRef(ItemType.BLOCK, it.id)
+                network.has(ref) && tags.matches(ref) && Search.matches(query, it.title, it.notes)
+            }
+        }.stateIn(emptyList())
+
+    /** Free stretches the user has opened on the Schedule tab, as "scheduleId:start-end"; the rest stay folded. Kept while the app runs. */
+    val openGaps = MutableStateFlow<Set<String>>(emptySet())
+
+    fun toggleGap(key: String) {
+        openGaps.value = openGaps.value.let { if (key in it) it - key else it + key }
+    }
+
+    fun selectSchedule(id: Long) {
+        viewModelScope.launch { schedulesRepo.select(id) }
+    }
+
+    fun createSchedule(name: String) {
+        viewModelScope.launch { schedulesRepo.create(name.trim()) }
+    }
+
+    fun renameSchedule(id: Long, name: String) {
+        viewModelScope.launch { schedulesRepo.rename(id, name.trim()) }
+    }
+
+    fun duplicateSchedule(id: Long, name: String) {
+        viewModelScope.launch { schedulesRepo.duplicate(id, name.trim()) }
+    }
+
+    fun deleteSchedule(id: Long) {
+        viewModelScope.launch { schedulesRepo.delete(id) }
+    }
+
+    fun setScheduleDays(id: Long, days: Int) {
+        viewModelScope.launch { schedulesRepo.setDays(id, days) }
+    }
+
+    fun setScheduleAutomatic(on: Boolean) {
+        viewModelScope.launch { schedulesRepo.setAutomatic(on) }
+    }
+
     /**
      * The tags on the items each tab lists, for its tag filter bar. The Plans tab also lists the
      * tasks linked to plans, so their tags count there too. In link mode, only the network's items count.
@@ -355,6 +415,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 count(ItemType.NOTE, notes, notesRepo.observeAll().map { all -> all.map { it.id } }),
                 count(ItemType.BOOK, books, booksRepo.observeAllWithProgress().map { all -> all.map { it.book.id } }),
                 count(ItemType.QUOTE, quotes, quotesRepo.observeAll().map { all -> all.map { it.id } }),
+                count(ItemType.BLOCK, blocks, activeBlocks.map { all -> all.map { it.id } }),
             ),
         ) { it.toMap() }.stateIn(emptyMap())
     }
@@ -445,6 +506,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 ItemType.NOTE -> notes.value.map { it.id }
                 ItemType.BOOK -> books.value.map { it.book.id }
                 ItemType.QUOTE -> quotes.value.map { it.id }
+                ItemType.BLOCK -> return@launch // Blocks are ordered by time.
                 ItemType.CHAPTER -> return@launch // Chapters are ordered on their book's page.
             }
             ManualOrder.move(orderedIds(type, id), shown, id, offset)?.let { saveOrder(type, it) }
@@ -466,6 +528,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.NOTE -> notesRepo.observeAll().first().map { it.id }
         ItemType.BOOK -> booksRepo.observeAllWithProgress().first().map { it.book.id }
         ItemType.QUOTE -> quotesRepo.observeAll().first().map { it.id }
+        ItemType.BLOCK -> emptyList()
         ItemType.CHAPTER -> emptyList()
     }
 
@@ -477,6 +540,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.NOTE -> notesRepo.reorder(ids)
         ItemType.BOOK -> booksRepo.reorder(ids)
         ItemType.QUOTE -> quotesRepo.reorder(ids)
+        ItemType.BLOCK -> Unit
         ItemType.CHAPTER -> Unit
     }
 

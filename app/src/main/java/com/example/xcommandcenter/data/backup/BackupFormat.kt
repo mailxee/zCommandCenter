@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.backup
 
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
@@ -13,8 +14,10 @@ import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
+import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
+import com.example.xcommandcenter.data.db.AppDatabase.Companion.FIRST_SCHEDULE
 import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemStyle
@@ -53,8 +56,10 @@ data class BackupData(
     val checklistItems: List<ChecklistItemEntity> = emptyList(),
     val noteListItems: List<NoteListItemEntity> = emptyList(),
     val reminders: List<ReminderEntity> = emptyList(),
+    val blocks: List<BlockEntity> = emptyList(),
+    val schedules: List<ScheduleEntity> = emptyList(),
 ) {
-    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size
+    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size
 }
 
 /** A problem that stops an import; [message] says where, in words the user can act on. */
@@ -62,7 +67,8 @@ class ImportException(message: String) : Exception(message)
 
 /**
  * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists, Chapters,
- * Habit history, Links, Tags, Reminders and Settings (the tab order and each tab's item style), so
+ * Habit history, Links, Tags, Reminders, Settings (the tab order and each tab's item style) and
+ * Schedules (the Schedule tab's schedules, which is on show, and automatic switching), so
  * that an import restores everything. Columns are found by header name, so
  * reordering columns in Excel is fine. Ids tie rows together; a blank id gets a new one.
  * Enums are written as their labels ("Medium", "Every N days") and read by label or name.
@@ -76,6 +82,7 @@ object BackupFormat {
     const val NOTE_LISTS = "Note lists"
     const val REMINDERS = "Reminders"
     const val SETTINGS = "Settings"
+    const val SCHEDULES = "Schedules"
 
     private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val clock = DateTimeFormatter.ofPattern("HH:mm")
@@ -88,6 +95,7 @@ object BackupFormat {
         tabOrder: List<ItemType>,
         zone: ZoneId = ZoneId.systemDefault(),
         styles: ItemStyles = ItemStyles(),
+        scheduleChoice: BackupScheduleChoice = BackupScheduleChoice(),
     ): List<Sheet> {
         fun time(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTime) }.orEmpty()
         fun bool(b: Boolean) = if (b) "TRUE" else "FALSE"
@@ -165,6 +173,16 @@ object BackupFormat {
                         listOf(it.id.toString(), it.text, it.source, it.author, time(it.createdAt), it.sortOrder.toString(), it.priority.label)
                     },
             ),
+            ItemType.BLOCK to Sheet(
+                ItemType.BLOCK.tabLabel,
+                listOf(listOf("ID", "Title", "Start", "End", "Notes", "Created", "Schedule ID", "Schedule")) +
+                    data.blocks.map {
+                        listOf(
+                            it.id.toString(), it.title, clockText(it.startMinute), clockText(it.endMinute), it.notes, time(it.createdAt),
+                            it.scheduleId.toString(), data.schedules.firstOrNull { s -> s.id == it.scheduleId }?.name.orEmpty(),
+                        )
+                    },
+            ),
         )
         val chapters = Sheet(
             CHAPTERS,
@@ -219,8 +237,8 @@ object BackupFormat {
             REMINDERS,
             listOf(listOf("Type", "ID", "Title", "Reminder")) +
                 data.reminders.sortedWith(compareBy({ it.itemType }, { it.itemId }, { it.time })).map {
-                    // A habit's reminder is a time of day; anything else's a date and time.
-                    val at = if (it.itemType == ItemType.HABIT) it.timeOfDay.format(clock) else time(it.time)
+                    // A habit's and a block's reminder is a time of day; anything else's a date and time.
+                    val at = if (it.itemType.remindsDaily) it.timeOfDay.format(clock) else time(it.time)
                     listOf(it.itemType.singular, it.itemId.toString(), title(it.ref), at)
                 },
         )
@@ -235,7 +253,17 @@ object BackupFormat {
                     )
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags, reminders, settings)
+        val schedules = Sheet(
+            SCHEDULES,
+            listOf(listOf("ID", "Name", "Order", "Days", "Selected", "Switch automatically")) +
+                data.schedules.map {
+                    listOf(
+                        it.id.toString(), it.name, it.sortOrder.toString(), days(it.days), bool(it.id == scheduleChoice.selectedId),
+                        bool(scheduleChoice.automatic),
+                    )
+                },
+        )
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags, reminders, settings, schedules)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -247,13 +275,17 @@ object BackupFormat {
         data.books.forEach { put(ItemRef(ItemType.BOOK, it.id), it.title) }
         data.chapters.forEach { put(ItemRef(ItemType.CHAPTER, it.id), it.title) }
         data.quotes.forEach { put(ItemRef(ItemType.QUOTE, it.id), it.text.take(40)) }
+        data.blocks.forEach { put(ItemRef(ItemType.BLOCK, it.id), it.title) }
     }
+
+    /** A minute of the day as "HH:mm"; the end of the day, 1440, as "24:00". */
+    private fun clockText(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)
 
     // --- import ---
 
     /**
      * Parses a workbook written by [toSheets] (or edited in a spreadsheet app). The seven tab
-     * sheets must be present; the others are optional. Rows that refer to missing items (a link
+     * sheets from before the Schedule tab must be present; the others, Schedule included, are optional. Rows that refer to missing items (a link
      * to a deleted task, a tag on an unknown id) are skipped and counted in [ImportResult.skipped].
      */
     fun fromSheets(sheets: List<Sheet>, zone: ZoneId = ZoneId.systemDefault(), now: Long = System.currentTimeMillis()): ImportResult {
@@ -323,6 +355,30 @@ object BackupFormat {
             )
         }.withIds("Quotes") { q, id -> q.copy(id = id) }
 
+        // Workbooks from before several schedules have none: everything goes into the first.
+        val scheduleSheet = sheet(SCHEDULES, false)
+        val schedules = scheduleSheet?.items("Name") { r ->
+            ScheduleEntity(id = r.id(), name = r.required("Name"), sortOrder = r.order(), days = r.weekdays("Days"))
+        }.orEmpty().withIds(SCHEDULES) { s, id -> s.copy(id = id) }
+            .ifEmpty { listOf(ScheduleEntity(id = 1, name = FIRST_SCHEDULE)) }
+        val scheduleChoice = scheduleSheet?.rows("Name")?.let { rows ->
+            BackupScheduleChoice(
+                selectedId = rows.zip(schedules).firstOrNull { (r, _) -> r.bool("Selected") }?.second?.id,
+                automatic = rows.any { it.bool("Switch automatically") },
+            )
+        }
+        val scheduleIds = schedules.map { it.id }.toSet()
+
+        val blocks = sheet(ItemType.BLOCK.tabLabel, false)?.items("Title") { r ->
+            val start = r.minuteOfDay("Start") ?: r.fail("Start is required")
+            val end = r.minuteOfDay("End") ?: r.fail("End is required")
+            if (end <= start) r.fail("End must be after Start")
+            BlockEntity(
+                id = r.id(), title = r.required("Title"), startMinute = start, endMinute = end, notes = r.text("Notes"), createdAt = r.dateTime("Created") ?: now,
+                scheduleId = r.long("Schedule ID")?.takeIf { it in scheduleIds } ?: schedules.first().id,
+            )
+        }.orEmpty().withIds(ItemType.BLOCK.tabLabel) { b, id -> b.copy(id = id) }
+
         val bookIds = books.map { it.id }.toSet()
         val chapterRows = sheet(CHAPTERS, false)?.items("Title") { r ->
             val bookId = r.long("Book ID") ?: r.fail("Book ID is required")
@@ -373,6 +429,7 @@ object BackupFormat {
             books.forEach { add(ItemRef(ItemType.BOOK, it.id)) }
             chapters.forEach { add(ItemRef(ItemType.CHAPTER, it.id)) }
             quotes.forEach { add(ItemRef(ItemType.QUOTE, it.id)) }
+            blocks.forEach { add(ItemRef(ItemType.BLOCK, it.id)) }
         }
 
         val links = sheet(LINKS, false)?.rows("ID A", "ID B").orEmpty().mapNotNull { r ->
@@ -397,7 +454,7 @@ object BackupFormat {
             reminderSheet.rows("Reminder").mapNotNull { r ->
                 val ref = ItemRef(r.itemType("Type"), r.long("ID") ?: r.fail("ID is required"))
                 if (ref !in existing) return@mapNotNull null.also { skipped++ }
-                val time = if (ref.type == ItemType.HABIT) {
+                val time = if (ref.type.remindsDaily) {
                     r.time("Reminder")?.let { it.hour * 60L + it.minute }
                 } else {
                     r.dateTime("Reminder")
@@ -443,10 +500,11 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders,
+                noteListItems, reminders, blocks, schedules,
             ),
             skipped,
             settings,
+            scheduleChoice,
         )
     }
 
@@ -580,6 +638,12 @@ object BackupFormat {
             fail("$column \"$t\" isn't a time like 08:30")
         }
 
+        /** A time of day as minutes (0..1440): like [time], plus "24:00" for the end of the day. */
+        fun minuteOfDay(column: String): Int? {
+            if (text(column) == "24:00") return 24 * 60
+            return time(column)?.let { it.hour * 60 + it.minute }
+        }
+
         /** "yyyy-MM-dd HH:mm", ISO with T, a plain date, or an Excel serial number; local time zone. */
         fun dateTime(column: String): Long? {
             val t = text(column).ifEmpty { return null }
@@ -597,7 +661,16 @@ object BackupFormat {
 
 /** What an import produced, and how many rows were skipped because they pointed at missing items. */
 /** [settings] is null for a workbook without a Settings sheet; the current settings then stay. */
-data class ImportResult(val data: BackupData, val skipped: Int, val settings: BackupSettings? = null)
+/** [scheduleChoice] is null for a workbook without a Schedules sheet. */
+data class ImportResult(
+    val data: BackupData,
+    val skipped: Int,
+    val settings: BackupSettings? = null,
+    val scheduleChoice: BackupScheduleChoice? = null,
+)
+
+/** The schedule picked on the Schedule tab and whether automatic switching is on, as the Schedules sheet keeps them. */
+data class BackupScheduleChoice(val selectedId: Long? = null, val automatic: Boolean = false)
 
 /** The Settings sheet: the tab order and every tab's item style. */
 data class BackupSettings(val tabOrder: List<ItemType>, val styles: Map<ItemType, ItemStyle>)

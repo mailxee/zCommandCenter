@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.GoalEntity
@@ -139,6 +140,15 @@ fun quoteCardText(quote: QuoteEntity): CardText {
     )
 }
 
+/** "7:00 – 7:45 AM": a block's time of day. */
+fun blockTimeText(block: BlockEntity): String = "${minuteText(block.startMinute)} – ${minuteText(block.endMinute)}"
+
+/** [schedule] names the block's schedule, when there is more than one to tell apart. */
+fun blockCardText(block: BlockEntity, schedule: String? = null) = CardText(
+    title = block.title,
+    lines = listOfNotNull(listOfNotNull(schedule, blockTimeText(block)).joinToString(" · "), block.notes.ifBlank { null }),
+)
+
 /** Chapters have no tab of their own; their card names the book they are in. */
 fun chapterCardText(entry: ItemIndexEntry) = CardText(entry.title, listOfNotNull(entry.describe()))
 
@@ -204,27 +214,7 @@ fun ItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                // One line per tab, its name and its items in the tab's style.
-                val styles = LocalItemStyles.current
-                val dark = isDarkSurface()
-                LocalTabOrder.current.forEach { tab ->
-                    val group = links.filter { it.type.tab == tab }
-                    if (group.isNotEmpty()) {
-                        Text(
-                            buildAnnotatedString {
-                                withStyle(styles[tab].toSpanStyle(dark)) { append("${tab.tabLabel}: ") }
-                                group.forEachIndexed { index, entry ->
-                                    if (index > 0) append(" · ")
-                                    withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
-                                }
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+                LinkLines(links)
             }
             trailing?.invoke()
         }
@@ -235,6 +225,31 @@ fun ItemCard(
         OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
     } else {
         Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
+    }
+}
+
+/** An item's links, one line per tab in the user's tab order: the tab's name, then its items, each in its tab's style. */
+@Composable
+fun LinkLines(links: List<ItemIndexEntry>, maxLines: Int = 2) {
+    val styles = LocalItemStyles.current
+    val dark = isDarkSurface()
+    LocalTabOrder.current.forEach { tab ->
+        val group = links.filter { it.type.tab == tab }
+        if (group.isNotEmpty()) {
+            Text(
+                buildAnnotatedString {
+                    withStyle(styles[tab].toSpanStyle(dark)) { append("${tab.tabLabel}: ") }
+                    group.forEachIndexed { index, entry ->
+                        if (index > 0) append(" · ")
+                        withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
+                    }
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

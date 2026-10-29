@@ -44,6 +44,9 @@ fun LocalDate.display(): String = format(dateFormat)
 fun LocalDateTime.display(): String = "${toLocalDate().display()}, ${toLocalTime().display()}"
 fun LocalTime.display(): String = format(timeFormat)
 
+/** A minute of the day (0..1440) as a time; 1440, the end of the day, shows as midnight. */
+fun minuteText(minute: Int): String = LocalTime.of(minute / 60 % 24, minute % 60).display()
+
 /** A labelled date with a picker and a clear button. */
 @Composable
 fun DateField(label: String, date: LocalDate?, onChange: (LocalDate?) -> Unit) {

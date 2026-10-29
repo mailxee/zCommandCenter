@@ -715,6 +715,60 @@ second step: "Whole book", then its chapters in the book's order (`LinkDao.obser
 searchable when the book has many), each linked with one tap; "Back to books" returns. In link
 mode both steps list only the network's items.
 
+### 2.41 Schedule tab
+
+A plan for every day (`ItemType.BLOCK`, tab "Schedule", item "Block"; `blocks` table, database
+version 6, an auto-migration that also rebuilds `item_index`). A block has a title, a start and an
+end in minutes of the day (`endMinute` 1440 = midnight), notes, tags, links and reminders; nothing is
+dated or completed. `ui/home/ScheduleTab` draws the day: hours down a gutter (64 dp an hour),
+blocks placed by start and sized by length, overlapping ones side by side (`domain/ScheduleLayout`),
+a red line at the time now, opened scrolled to it. Tapping an empty half hour opens a new block
+there (`Routes.newBlock`, `ARG_START`); the + button starts one at the next half hour.
+
+A block's reminders are times of day, every day, like a habit's (`ItemType.remindsDaily`;
+`ReminderRepository.scheduleDaily` sets the next one and re-arms on firing). "Add reminder" offers
+"At start", 5–30 minutes or an hour before, or any time; moving the block's start moves its
+reminders by the same amount (`ItemDetailViewModel.shiftReminders`). Blocks are link-mode end
+points, appear in search, tag filters, the tab counter and link pickers, and have their own
+"Schedule" sheet in the Excel backup (optional on import; End "24:00" is midnight). The card's link
+lines are shared with every other card (`LinkLines`).
+
+### 2.42 Several schedules
+
+Blocks belong to a schedule (`schedules` table, `blocks.scheduleId`; database version 7, whose
+`AddSchedules` spec creates "My schedule", id 1, for existing blocks; a new database gets it too,
+and "Delete everything" puts it back, so there is always one). The tab's `ScheduleSwitcher` shows
+the active schedule and a menu to switch, add, rename, duplicate (`ScheduleDao.duplicate` copies
+every block with its links, tags and reminders), set the weekdays each is used on, delete (not the
+last), and turn automatic switching on.
+
+Which schedule is active is `domain/ScheduleChoice`: the last pick (`ScheduleChoiceRepository`, with
+the day it was made), except that with automatic switching on a new day starts on the schedule set
+for its weekday; a pick made today wins until tomorrow. A weekday belongs to at most one schedule
+(`assignDays`). The tab, its counter, search and new blocks use the active schedule. Every block
+keeps its alarm, and `ReminderRepository.fired` shows a block's reminder only when its schedule is
+active, so switching needs no rescheduling. Elsewhere, block cards and the link picker name the
+block's schedule when there are several. The backup's Schedules sheet holds the schedules, the
+one on show and the automatic switch; the Schedule sheet's "Schedule ID" places each block.
+
+### 2.43 Durations and folded free time
+
+Blocks show their length ("8:00 – 10:00 AM · 2 h", `durationText`), as does the block's page.
+Free stretches of two hours or more (`ScheduleAxis.gaps`: before, between and after the blocks;
+none on an empty day) fold into a slim bar ("12:00 AM – 7:00 AM · 7 h free"); a tap opens one and
+a tab at its top folds it again. `ScheduleAxis` maps minutes to positions with the folded gaps
+shrunk to their bars, and back for taps (none on a bar). Opened gaps are kept in
+`HomeViewModel.openGaps` while the app runs, keyed by schedule and times, so every launch starts
+folded. The now line becomes a red "now" on a bar that holds it, and the tab scrolls there.
+
+### 2.44 Default tab order, narrower tabs, new sample data
+
+Until the user reorders, the tabs run Schedule, Goals, Plans, Tasks, Habits, Notes, Books, Quotes
+(`TabOrder.default`, no longer the enum order). Tabs are narrower (`minTabWidth = 0.dp`, 10 dp
+padding) so the first five fit across a phone. A new install's sample data (`SeedData`) follows
+one person's goals: live as a Stoic, learn the piano, run a half marathon, with a Weekday and a
+Weekend schedule (days set, automatic switching off).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -815,7 +869,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/backup/BackupRepository.kt` | Export to and import from a document `Uri`, delete everything; handles alarms and settings. |
 | `data/db/AppDatabase.kt` | Room database declaration (12 tables, 1 view) and builder with the seed callback. |
 | `data/db/Converters.kt` | `LocalDate` ⇄ epoch day. |
-| `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history, 28 cross-tab links, a repeating task and four tags. |
+| `data/db/SeedData.kt` | First-launch content for a Stoic, piano-learning, half-marathon-training life: ~5 items per tab, chapters, habit history, a note list, two schedules of blocks, reminders, ~40 cross-tab links, a repeating task and four tags. |
 | `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below; clearing all settings or the collapsed set. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedPlansRepository.kt` | Which plans are collapsed in the Plans tab. |

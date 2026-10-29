@@ -61,6 +61,7 @@ import com.example.xcommandcenter.ui.common.label
 fun HomeScreen(
     onOpen: (ItemRef) -> Unit,
     onCreate: (ItemType) -> Unit,
+    onCreateBlock: (minute: Int) -> Unit,
     onSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
@@ -85,7 +86,8 @@ fun HomeScreen(
                         IconButton(onClick = { viewModel.setReorderMode(false) }) {
                             Icon(painterResource(R.drawable.ic_check), contentDescription = "Done reordering")
                         }
-                    } else {
+                    } else if (selected != ItemType.BLOCK) {
+                        // Blocks are ordered by their times, so the Schedule tab has nothing to reorder.
                         IconButton(
                             onClick = {
                                 viewModel.setReorderMode(true)
@@ -110,7 +112,8 @@ fun HomeScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected), edgePadding = 8.dp) {
+            // Narrow tabs, so the first five fit on a phone without scrolling.
+            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected), edgePadding = 4.dp, minTabWidth = 0.dp) {
                 order.forEach { tab ->
                     Tab(
                         selected = tab == selected,
@@ -141,6 +144,7 @@ fun HomeScreen(
                 ItemType.NOTE -> NotesTab(viewModel, open)
                 ItemType.BOOK -> BooksTab(viewModel, open)
                 ItemType.QUOTE -> QuotesTab(viewModel, open)
+                ItemType.BLOCK -> ScheduleTab(viewModel, open, onCreateBlock)
                 ItemType.CHAPTER -> Unit // Not a tab.
             }
         }
@@ -152,7 +156,7 @@ fun HomeScreen(
 private fun TabLabel(tab: ItemType, count: TabCount?) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) {
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).semantics(mergeDescendants = true) {
             if (count != null) contentDescription = "${tab.tabLabel}, ${count.shown} of ${count.total} shown"
         },
     ) {

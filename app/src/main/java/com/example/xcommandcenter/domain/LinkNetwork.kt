@@ -2,13 +2,13 @@ package com.example.xcommandcenter.domain
 
 /**
  * Link mode's network: every item reachable from a root by following links, however many steps
- * away. Links are undirected. Notes, quotes and books are end points, never followed: the walk
- * goes only through tasks, goals, habits and plans, and an end point shows (a book with all its
- * chapters) when it is linked to one of them. A chapter's links count as its book's.
+ * away. Links are undirected. Notes, quotes, books and schedule blocks are end points, never
+ * followed: the walk goes only through tasks, goals, habits and plans, and an end point shows (a
+ * book with all its chapters) when it is linked to one of them. A chapter's links count as its book's.
  */
 object LinkNetwork {
     /** The tabs whose items end the walk instead of extending it. */
-    private val endPoints = setOf(ItemType.NOTE, ItemType.QUOTE, ItemType.BOOK, ItemType.CHAPTER)
+    private val endPoints = setOf(ItemType.NOTE, ItemType.QUOTE, ItemType.BOOK, ItemType.CHAPTER, ItemType.BLOCK)
 
     /**
      * The items reachable from [root] over [links] (pairs of linked items), [root] included.

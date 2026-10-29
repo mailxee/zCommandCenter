@@ -24,14 +24,16 @@ sealed interface ReminderNotice {
 
 /**
  * Owns every item's reminders and keeps one alarm per reminder in step with what is stored. A
- * habit's reminder is a time of day, repeated on each scheduled day; any other item's is a date
- * and time, once. Alarms are set even for completed tasks and plans; when one goes off for a
+ * habit's reminder is a time of day, repeated on each scheduled day; a schedule block's is a time
+ * of day, every day, shown only while its schedule is the active one; any other item's is a date and time, once. Alarms are set even for completed tasks and plans; when one goes off for a
  * completed item, nothing is shown (so reopening the item needs no rescheduling).
  */
 class ReminderRepository(
     private val dao: ReminderDao,
     private val habits: HabitDao,
     private val scheduler: ReminderScheduler,
+    /** The active schedule; only its blocks' reminders go off. */
+    private val activeSchedule: suspend () -> Long?,
 ) {
     /** Reminder times per item, earliest first (see [ReminderEntity.time]). */
     fun observeAll(): Flow<Map<ItemRef, List<Long>>> =
@@ -84,6 +86,11 @@ class ReminderRepository(
             return if (due) ReminderNotice.Habit(habit) else null
         }
         val title = dao.title(reminder.itemType, reminder.itemId) ?: return null
+        if (reminder.itemType == ItemType.BLOCK) {
+            scheduleDaily(reminder)
+            // Every block keeps its alarm, so switching schedules needs no rescheduling; only the active one's show.
+            return if (dao.blockSchedule(reminder.itemId) == activeSchedule()) ReminderNotice.Item(reminder.ref, title) else null
+        }
         if (dao.completed(reminder.itemType, reminder.itemId) == 1) return null
         return ReminderNotice.Item(reminder.ref, title)
     }
@@ -91,11 +98,21 @@ class ReminderRepository(
     private suspend fun schedule(reminder: ReminderEntity) {
         if (reminder.itemType == ItemType.HABIT) {
             habits.get(reminder.itemId)?.let { schedule(reminder, it, habits.markDates(it.id).toSet()) } ?: scheduler.cancel(reminder.id)
+        } else if (reminder.itemType == ItemType.BLOCK) {
+            scheduleDaily(reminder)
         } else if (reminder.time > System.currentTimeMillis()) {
             scheduler.schedule(reminder.id, reminder.time)
         } else {
             scheduler.cancel(reminder.id)
         }
+    }
+
+    /** A block's alarm goes to the next time its minute of the day comes round: today if still ahead, else tomorrow. */
+    private fun scheduleDaily(reminder: ReminderEntity) {
+        val now = LocalDateTime.now()
+        val today = now.toLocalDate().atTime(reminder.timeOfDay)
+        val next = if (today.isAfter(now)) today else today.plusDays(1)
+        scheduler.schedule(reminder.id, next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
     }
 
     /** A habit's alarm goes to its next due day (skipping today once marked), so marks change it too. */
