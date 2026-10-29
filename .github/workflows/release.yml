@@ -37,6 +37,8 @@ jobs:
         env:
           RELEASE_KEYSTORE_FILE: ${{ runner.temp }}/upload-keystore.p12
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          # Each run is a new versionCode, as Play requires for every upload.
+          VERSION_CODE: ${{ github.run_number }}
         run: bash gradlew testDebugUnitTest bundleRelease assembleRelease
 
       - name: Remove the upload key

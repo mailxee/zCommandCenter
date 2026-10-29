@@ -779,6 +779,13 @@ from environment variables that `.github/workflows/release.yml` sets from the re
 unsigned, so the public repository builds for anyone. `.gitignore` keeps any other keystore out.
 `RELEASING.md` has the steps.
 
+### 2.46 A separate debug app; versionCode from the workflow
+
+Debug builds add `applicationIdSuffix = ".debug"` and are named "Manage Everything Debug"
+(`src/debug/res/values/strings.xml`), so they install beside the Play app, which Play signs with
+its own key and nothing else can update. Release builds take `versionCode` from `VERSION_CODE`,
+which the release workflow sets to its run number; local builds use 1.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

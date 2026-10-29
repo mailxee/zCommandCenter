@@ -3,6 +3,13 @@
 The app's ID on Google Play is `com.xeeshan.manage_everything`. It can never change once the app
 is published.
 
+## Debug builds
+
+Debug builds are a separate app, `com.xeeshan.manage_everything.debug`, named "Manage Everything
+Debug". It installs beside the app from Google Play with its own data, and each debug build
+installs over the last. To try changes with real data, export to Excel from the Play app and
+import into the debug app.
+
 ## Signing
 
 - **Debug builds** are signed with `app/signing/debug.keystore`, a public key kept in the
@@ -32,8 +39,9 @@ runs on a manual start or a version tag, so the key stays private when the repos
 
 ## Building a release
 
-1. Raise `versionCode` (and `versionName`) in `app/build.gradle.kts`; Play rejects a versionCode it
-   has seen before.
+1. `versionCode` is the workflow's run number, so each run can be uploaded (Play rejects a
+   versionCode it has seen before). Change `versionName` in `app/build.gradle.kts` when you want
+   the version users see to change.
 2. Run **Actions → Release build → Run workflow**, or push a tag such as `v1.0.0`.
 3. Download the `manage-everything-release` artifact and upload the `.aab` in the Play Console.
 

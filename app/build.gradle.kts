@@ -17,7 +17,9 @@ android {
         applicationId = "com.xeeshan.manage_everything"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
+        // Release builds from GitHub take the workflow's run number, so every Play upload gets a new
+        // versionCode without editing this file; local builds use 1.
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -48,6 +50,11 @@ android {
     }
 
     buildTypes {
+        // A separate app beside the one from Google Play, with its own data, so test builds never
+        // touch the real install (which Play signs with its own key, so nothing could replace it anyway).
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfigs.getByName("release").takeIf { it.storeFile != null }?.let { signingConfig = it }
             optimization {
