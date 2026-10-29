@@ -94,11 +94,12 @@ class LinkRepository(private val dao: LinkDao) {
         dao.delete(link.aType, link.aId, link.bType, link.bId)
     }
 
-    /** Picker search within one tab; the Books tab also offers its chapters. In link mode, only the network. */
-    fun search(tab: ItemType, query: String): Flow<List<ItemIndexEntry>> {
-        val types = if (tab == ItemType.BOOK) listOf(ItemType.BOOK, ItemType.CHAPTER) else listOf(tab)
-        return combine(dao.search(types.map { it.name }, query.trim()), network) { found, network ->
-            if (network == null) found else found.filter { it.ref in network }
-        }
-    }
+    /** Picker search within one tab (books only; their chapters come from [chapters]). In link mode, only the network. */
+    fun search(tab: ItemType, query: String): Flow<List<ItemIndexEntry>> = inNetwork(dao.search(listOf(tab.name), query.trim()))
+
+    /** A book's chapters in order, for the picker's second step. In link mode, only the network. */
+    fun chapters(bookId: Long): Flow<List<ItemIndexEntry>> = inNetwork(dao.observeChapters(bookId))
+
+    private fun inNetwork(entries: Flow<List<ItemIndexEntry>>): Flow<List<ItemIndexEntry>> =
+        combine(entries, network) { found, network -> if (network == null) found else found.filter { it.ref in network } }
 }

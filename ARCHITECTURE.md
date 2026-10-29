@@ -704,6 +704,13 @@ color for one to avoid; today is outlined; days before the start or after today 
 only shows marks (`HabitSummary.marks`); marking stays with the "Done today" chip and the detail
 screen.
 
+### 2.40 Picking a book, then a chapter
+
+The link picker's Books tab lists books only (`LinkRepository.search`). Tapping a book opens a
+second step: "Whole book", then its chapters in the book's order (`LinkDao.observeChapters`,
+searchable when the book has many), each linked with one tap; "Back to books" returns. In link
+mode both steps list only the network's items.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
