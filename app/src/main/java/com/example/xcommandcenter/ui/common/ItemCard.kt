@@ -239,9 +239,12 @@ fun LinkLines(links: List<ItemIndexEntry>, maxLines: Int = 2) {
             Text(
                 buildAnnotatedString {
                     withStyle(styles[tab].toSpanStyle(dark)) { append("${tab.tabLabel}: ") }
+                    // Blocks of the same name in different schedules are told apart by their schedule.
+                    val repeated = group.groupingBy { it.type to it.title }.eachCount().filterValues { it > 1 }.keys
                     group.forEachIndexed { index, entry ->
                         if (index > 0) append(" · ")
-                        withStyle(styles[entry.type].toSpanStyle(dark)) { append(linkLabel(entry)) }
+                        val label = linkLabel(entry).let { if (entry.type == ItemType.BLOCK && (entry.type to entry.title) in repeated) "$it (${entry.subtitle})" else it }
+                        withStyle(styles[entry.type].toSpanStyle(dark)) { append(label) }
                     }
                 },
                 style = MaterialTheme.typography.labelMedium,
