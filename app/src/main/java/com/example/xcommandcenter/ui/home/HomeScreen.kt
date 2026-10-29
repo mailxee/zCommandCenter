@@ -112,7 +112,8 @@ fun HomeScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected), edgePadding = 8.dp) {
+            // Narrow tabs, so the first five fit on a phone without scrolling.
+            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected), edgePadding = 4.dp, minTabWidth = 0.dp) {
                 order.forEach { tab ->
                     Tab(
                         selected = tab == selected,
@@ -155,7 +156,7 @@ fun HomeScreen(
 private fun TabLabel(tab: ItemType, count: TabCount?) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) {
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).semantics(mergeDescendants = true) {
             if (count != null) contentDescription = "${tab.tabLabel}, ${count.shown} of ${count.total} shown"
         },
     ) {

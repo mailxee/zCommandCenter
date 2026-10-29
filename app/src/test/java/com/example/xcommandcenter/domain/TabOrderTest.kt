@@ -10,9 +10,9 @@ class TabOrderTest {
     }
 
     @Test
-    fun `default order ends with Schedule`() {
+    fun `default order starts with Schedule`() {
         assertEquals(
-            listOf(ItemType.TASK, ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.BLOCK),
+            listOf(ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE),
             TabOrder.default,
         )
     }
@@ -35,6 +35,6 @@ class TabOrderTest {
     @Test
     fun `move shifts one tab`() {
         val moved = TabOrder.move(TabOrder.default, from = 0, to = 2)
-        assertEquals(listOf(ItemType.GOAL, ItemType.HABIT, ItemType.TASK), moved.take(3))
+        assertEquals(listOf(ItemType.GOAL, ItemType.PLAN, ItemType.BLOCK), moved.take(3))
     }
 }

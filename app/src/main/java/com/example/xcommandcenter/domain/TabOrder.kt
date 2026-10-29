@@ -2,8 +2,10 @@ package com.example.xcommandcenter.domain
 
 /** Parsing and editing of the user's tab order, kept independent of how it is stored. */
 object TabOrder {
-    /** Enum order: Tasks, Goals, Habits, Plans, Notes, Books, Quotes, and Schedule last. */
-    val default: List<ItemType> = ItemType.tabs
+    /** Until the user reorders: the day's plan first, then what it serves and what fills it. */
+    val default: List<ItemType> = listOf(
+        ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE,
+    )
 
     /** Unknown names are dropped and tabs missing from [stored] are appended in default order. */
     fun parse(stored: String?): List<ItemType> {

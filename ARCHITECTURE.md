@@ -761,6 +761,14 @@ shrunk to their bars, and back for taps (none on a bar). Opened gaps are kept in
 `HomeViewModel.openGaps` while the app runs, keyed by schedule and times, so every launch starts
 folded. The now line becomes a red "now" on a bar that holds it, and the tab scrolls there.
 
+### 2.44 Default tab order, narrower tabs, new sample data
+
+Until the user reorders, the tabs run Schedule, Goals, Plans, Tasks, Habits, Notes, Books, Quotes
+(`TabOrder.default`, no longer the enum order). Tabs are narrower (`minTabWidth = 0.dp`, 10 dp
+padding) so the first five fit across a phone. A new install's sample data (`SeedData`) follows
+one person's goals: live as a Stoic, learn the piano, run a half marathon, with a Weekday and a
+Weekend schedule (days set, automatic switching off).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
@@ -861,7 +869,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/backup/BackupRepository.kt` | Export to and import from a document `Uri`, delete everything; handles alarms and settings. |
 | `data/db/AppDatabase.kt` | Room database declaration (12 tables, 1 view) and builder with the seed callback. |
 | `data/db/Converters.kt` | `LocalDate` ⇄ epoch day. |
-| `data/db/SeedData.kt` | First-launch content: ~5 items per tab, chapters, habit history, 28 cross-tab links, a repeating task and four tags. |
+| `data/db/SeedData.kt` | First-launch content for a Stoic, piano-learning, half-marathon-training life: ~5 items per tab, chapters, habit history, a note list, two schedules of blocks, reminders, ~40 cross-tab links, a repeating task and four tags. |
 | `data/prefs/SettingsStore.kt` | The single DataStore preferences file shared by the repositories below; clearing all settings or the collapsed set. |
 | `data/prefs/TabOrderRepository.kt` | DataStore-backed persisted tab order. |
 | `data/prefs/CollapsedPlansRepository.kt` | Which plans are collapsed in the Plans tab. |
