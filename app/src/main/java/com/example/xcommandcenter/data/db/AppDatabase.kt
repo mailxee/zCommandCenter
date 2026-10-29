@@ -10,6 +10,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.xcommandcenter.data.dao.BackupDao
+import com.example.xcommandcenter.data.dao.BlockDao
 import com.example.xcommandcenter.data.dao.BookDao
 import com.example.xcommandcenter.data.dao.GoalDao
 import com.example.xcommandcenter.data.dao.HabitDao
@@ -20,6 +21,7 @@ import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.dao.ReminderDao
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
@@ -54,6 +56,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         TagEntity::class,
         ItemTagEntity::class,
         ReminderEntity::class,
+        BlockEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -61,12 +64,14 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 3: priority on goals, habits, plans, books and quotes.
     // 4: the reminders table, any number per item; a task's and a habit's one reminder are copied into it.
     // 5: the old single-reminder columns are dropped (two steps, so step 4 can still read them).
-    version = 5,
+    // 6: the Schedule tab's blocks.
+    version = 6,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4, spec = AppDatabase.CopyReminders::class),
         AutoMigration(from = 4, to = 5, spec = AppDatabase.DropSingleReminders::class),
+        AutoMigration(from = 5, to = 6),
     ],
 )
 @TypeConverters(Converters::class)
@@ -82,6 +87,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun backupDao(): BackupDao
     abstract fun reminderDao(): ReminderDao
+    abstract fun blockDao(): BlockDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {

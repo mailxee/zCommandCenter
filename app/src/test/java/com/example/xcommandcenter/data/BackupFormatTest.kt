@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.backup.BackupData
 import com.example.xcommandcenter.data.backup.BackupFormat
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.backup.Sheet
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
@@ -82,6 +83,11 @@ class BackupFormatTest {
             ReminderEntity(itemType = ItemType.TASK, itemId = 1, time = created + 7_200_000),
             ReminderEntity(itemType = ItemType.HABIT, itemId = 1, time = 7 * 60 + 30L),
             ReminderEntity(itemType = ItemType.NOTE, itemId = 1, time = created + 86_400_000),
+            ReminderEntity(itemType = ItemType.BLOCK, itemId = 2, time = 21 * 60 + 55L),
+        ),
+        blocks = listOf(
+            BlockEntity(1, "Deep work", 8 * 60, 10 * 60, "Phone on silent", created),
+            BlockEntity(2, "Wind down", 22 * 60, 24 * 60, createdAt = created),
         ),
     )
 
@@ -105,6 +111,28 @@ class BackupFormatTest {
         assertEquals(data.checklistItems, back.checklistItems)
         assertEquals(data.noteListItems, back.noteListItems)
         assertEquals(data.reminders, back.reminders)
+        assertEquals(data.blocks, back.blocks)
+    }
+
+    @Test
+    fun `a block ending at midnight is written as 24 00`() {
+        val schedule = BackupFormat.toSheets(data, TabOrder.default, zone).first { it.name == "Schedule" }
+        assertEquals(listOf("2", "Wind down", "22:00", "24:00"), schedule.rows[2].take(4))
+    }
+
+    @Test
+    fun `a workbook without a Schedule sheet imports with no blocks`() {
+        val sheets = BackupFormat.toSheets(data.copy(reminders = emptyList()), TabOrder.default, zone).filterNot { it.name == "Schedule" }
+        assertTrue(BackupFormat.fromSheets(sheets, zone).data.blocks.isEmpty())
+    }
+
+    @Test
+    fun `a block must end after it starts`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { sheet ->
+            if (sheet.name == "Schedule") sheet.copy(rows = listOf(sheet.rows.first(), listOf("", "Backwards", "10:00", "09:00"))) else sheet
+        }
+        val error = runCatching { BackupFormat.fromSheets(sheets, zone) }.exceptionOrNull()
+        assertTrue(error is ImportException && error.message!!.contains("End must be after Start"))
     }
 
     @Test
@@ -130,7 +158,7 @@ class BackupFormatTest {
             if (sheet.name == "Settings") sheet.copy(rows = listOf(sheet.rows.first(), listOf("Quotes", "1", "Red"))) else sheet
         }
         val settings = BackupFormat.fromSheets(sheets, zone).settings!!
-        assertEquals(listOf(ItemType.QUOTE) + TabOrder.default.dropLast(1), settings.tabOrder)
+        assertEquals(listOf(ItemType.QUOTE) + TabOrder.default.filterNot { it == ItemType.QUOTE }, settings.tabOrder)
         assertEquals(ItemStyle(color = StyleColor.RED, italic = true), settings.styles[ItemType.QUOTE])
     }
 

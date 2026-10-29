@@ -7,6 +7,7 @@ import com.example.xcommandcenter.data.prefs.CollapsedPlansRepository
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.TaskSortRepository
+import com.example.xcommandcenter.data.repository.BlockRepository
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.HabitRepository
@@ -44,9 +45,10 @@ class AppContainer(context: Context) {
     val noteRepository = NoteRepository(database.noteDao(), reminderRepository)
     val bookRepository = BookRepository(database.bookDao(), reminderRepository)
     val quoteRepository = QuoteRepository(database.quoteDao(), reminderRepository)
+    val blockRepository = BlockRepository(database.blockDao(), reminderRepository)
     val itemCardSource = ItemCardSource(
         taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
-        linkRepository, tagRepository, reminderRepository,
+        blockRepository, linkRepository, tagRepository, reminderRepository,
     )
     val backupRepository = BackupRepository(context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository)
 }

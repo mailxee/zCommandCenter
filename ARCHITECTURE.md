@@ -715,6 +715,24 @@ second step: "Whole book", then its chapters in the book's order (`LinkDao.obser
 searchable when the book has many), each linked with one tap; "Back to books" returns. In link
 mode both steps list only the network's items.
 
+### 2.41 Schedule tab
+
+A plan for every day (`ItemType.BLOCK`, tab "Schedule", item "Block"; `blocks` table, database
+version 6, an auto-migration that also rebuilds `item_index`). A block has a title, a start and an
+end in minutes of the day (`endMinute` 1440 = midnight), notes, tags, links and reminders; nothing is
+dated or completed. `ui/home/ScheduleTab` draws the day: hours down a gutter (64 dp an hour),
+blocks placed by start and sized by length, overlapping ones side by side (`domain/ScheduleLayout`),
+a red line at the time now, opened scrolled to it. Tapping an empty half hour opens a new block
+there (`Routes.newBlock`, `ARG_START`); the + button starts one at the next half hour.
+
+A block's reminders are times of day, every day, like a habit's (`ItemType.remindsDaily`;
+`ReminderRepository.scheduleDaily` sets the next one and re-arms on firing). "Add reminder" offers
+"At start", 5–30 minutes or an hour before, or any time; moving the block's start moves its
+reminders by the same amount (`ItemDetailViewModel.shiftReminders`). Blocks are link-mode end
+points, appear in search, tag filters, the tab counter and link pickers, and have their own
+"Schedule" sheet in the Excel backup (optional on import; End "24:00" is midnight). The card's link
+lines are shared with every other card (`LinkLines`).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

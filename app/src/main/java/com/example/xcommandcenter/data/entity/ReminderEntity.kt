@@ -9,8 +9,8 @@ import java.time.LocalTime
 
 /**
  * One reminder on any item; an item can have any number. For a habit, [time] is the minute of the
- * day (0..1439) it reminds on each scheduled day; for any other item, the epoch millis it fires at,
- * once. Reminders go with their item: deleting the item removes them (see `ReminderRepository`).
+ * day (0..1439) it reminds on each scheduled day, and for a schedule block the minute it reminds
+ * every day; for any other item, the epoch millis it fires at, once. Reminders go with their item: deleting the item removes them (see `ReminderRepository`).
  */
 @Entity(tableName = "reminders", indices = [Index("itemType", "itemId")])
 data class ReminderEntity(
@@ -21,6 +21,6 @@ data class ReminderEntity(
 ) {
     val ref: ItemRef get() = ItemRef(itemType, itemId)
 
-    /** For a habit's reminder. */
+    /** For a habit's or a block's reminder. */
     val timeOfDay: LocalTime get() = LocalTime.of((time / 60).toInt(), (time % 60).toInt())
 }

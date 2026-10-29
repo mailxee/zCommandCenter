@@ -3,6 +3,7 @@ package com.example.xcommandcenter.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.AppContainer
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChecklistCount
 import com.example.xcommandcenter.data.entity.GoalEntity
@@ -126,6 +127,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val notesRepo = container.noteRepository
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
+    private val blocksRepo = container.blockRepository
     private val taskSortRepo = container.taskSortRepository
     private val linksRepo = container.linkRepository
 
@@ -320,6 +322,15 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val quotes: StateFlow<List<QuoteEntity>> =
         quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority }) { listOf(it.text, it.author, it.source) }
 
+    /** The Schedule tab: blocks by start time, passing link mode, the tag filter and the search. */
+    val blocks: StateFlow<List<BlockEntity>> =
+        combine(blocksRepo.observeAll(), tagFilter, searchQuery, network) { blocks, tags, query, network ->
+            blocks.filter {
+                val ref = ItemRef(ItemType.BLOCK, it.id)
+                network.has(ref) && tags.matches(ref) && Search.matches(query, it.title, it.notes)
+            }
+        }.stateIn(emptyList())
+
     /**
      * The tags on the items each tab lists, for its tag filter bar. The Plans tab also lists the
      * tasks linked to plans, so their tags count there too. In link mode, only the network's items count.
@@ -355,6 +366,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 count(ItemType.NOTE, notes, notesRepo.observeAll().map { all -> all.map { it.id } }),
                 count(ItemType.BOOK, books, booksRepo.observeAllWithProgress().map { all -> all.map { it.book.id } }),
                 count(ItemType.QUOTE, quotes, quotesRepo.observeAll().map { all -> all.map { it.id } }),
+                count(ItemType.BLOCK, blocks, blocksRepo.observeAll().map { all -> all.map { it.id } }),
             ),
         ) { it.toMap() }.stateIn(emptyMap())
     }
@@ -445,6 +457,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 ItemType.NOTE -> notes.value.map { it.id }
                 ItemType.BOOK -> books.value.map { it.book.id }
                 ItemType.QUOTE -> quotes.value.map { it.id }
+                ItemType.BLOCK -> return@launch // Blocks are ordered by time.
                 ItemType.CHAPTER -> return@launch // Chapters are ordered on their book's page.
             }
             ManualOrder.move(orderedIds(type, id), shown, id, offset)?.let { saveOrder(type, it) }
@@ -466,6 +479,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.NOTE -> notesRepo.observeAll().first().map { it.id }
         ItemType.BOOK -> booksRepo.observeAllWithProgress().first().map { it.book.id }
         ItemType.QUOTE -> quotesRepo.observeAll().first().map { it.id }
+        ItemType.BLOCK -> emptyList()
         ItemType.CHAPTER -> emptyList()
     }
 
@@ -477,6 +491,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.NOTE -> notesRepo.reorder(ids)
         ItemType.BOOK -> booksRepo.reorder(ids)
         ItemType.QUOTE -> quotesRepo.reorder(ids)
+        ItemType.BLOCK -> Unit
         ItemType.CHAPTER -> Unit
     }
 

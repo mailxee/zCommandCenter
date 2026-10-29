@@ -14,7 +14,14 @@ enum class ItemType(val tabLabel: String, val singular: String, val isTab: Boole
     NOTE("Notes", "Note"),
     BOOK("Books", "Book"),
     QUOTE("Quotes", "Quote"),
+    BLOCK("Schedule", "Block"),
     CHAPTER("Chapters", "Chapter", isTab = false);
+
+    /**
+     * A habit's and a block's reminders are times of day that repeat (see `ReminderEntity.time`);
+     * anything else's are a date and time, once.
+     */
+    val remindsDaily: Boolean get() = this == HABIT || this == BLOCK
 
     /** The tab an item of this type is shown under. */
     val tab: ItemType get() = if (this == CHAPTER) BOOK else this

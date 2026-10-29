@@ -24,6 +24,7 @@ import com.example.xcommandcenter.domain.ItemType
         UNION ALL SELECT 'BOOK', id, title, NULLIF(author, '') FROM books
         UNION ALL SELECT 'CHAPTER', c.id, c.title, b.title FROM chapters c JOIN books b ON b.id = c.bookId
         UNION ALL SELECT 'QUOTE', id, text, NULLIF(author, '') FROM quotes
+        UNION ALL SELECT 'BLOCK', id, title, NULL FROM blocks
     """,
 )
 data class ItemIndexEntry(

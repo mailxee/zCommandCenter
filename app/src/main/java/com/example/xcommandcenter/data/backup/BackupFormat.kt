@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.backup
 
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
@@ -53,8 +54,9 @@ data class BackupData(
     val checklistItems: List<ChecklistItemEntity> = emptyList(),
     val noteListItems: List<NoteListItemEntity> = emptyList(),
     val reminders: List<ReminderEntity> = emptyList(),
+    val blocks: List<BlockEntity> = emptyList(),
 ) {
-    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size
+    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size
 }
 
 /** A problem that stops an import; [message] says where, in words the user can act on. */
@@ -165,6 +167,13 @@ object BackupFormat {
                         listOf(it.id.toString(), it.text, it.source, it.author, time(it.createdAt), it.sortOrder.toString(), it.priority.label)
                     },
             ),
+            ItemType.BLOCK to Sheet(
+                ItemType.BLOCK.tabLabel,
+                listOf(listOf("ID", "Title", "Start", "End", "Notes", "Created")) +
+                    data.blocks.map {
+                        listOf(it.id.toString(), it.title, clockText(it.startMinute), clockText(it.endMinute), it.notes, time(it.createdAt))
+                    },
+            ),
         )
         val chapters = Sheet(
             CHAPTERS,
@@ -219,8 +228,8 @@ object BackupFormat {
             REMINDERS,
             listOf(listOf("Type", "ID", "Title", "Reminder")) +
                 data.reminders.sortedWith(compareBy({ it.itemType }, { it.itemId }, { it.time })).map {
-                    // A habit's reminder is a time of day; anything else's a date and time.
-                    val at = if (it.itemType == ItemType.HABIT) it.timeOfDay.format(clock) else time(it.time)
+                    // A habit's and a block's reminder is a time of day; anything else's a date and time.
+                    val at = if (it.itemType.remindsDaily) it.timeOfDay.format(clock) else time(it.time)
                     listOf(it.itemType.singular, it.itemId.toString(), title(it.ref), at)
                 },
         )
@@ -247,13 +256,17 @@ object BackupFormat {
         data.books.forEach { put(ItemRef(ItemType.BOOK, it.id), it.title) }
         data.chapters.forEach { put(ItemRef(ItemType.CHAPTER, it.id), it.title) }
         data.quotes.forEach { put(ItemRef(ItemType.QUOTE, it.id), it.text.take(40)) }
+        data.blocks.forEach { put(ItemRef(ItemType.BLOCK, it.id), it.title) }
     }
+
+    /** A minute of the day as "HH:mm"; the end of the day, 1440, as "24:00". */
+    private fun clockText(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)
 
     // --- import ---
 
     /**
      * Parses a workbook written by [toSheets] (or edited in a spreadsheet app). The seven tab
-     * sheets must be present; the others are optional. Rows that refer to missing items (a link
+     * sheets from before the Schedule tab must be present; the others, Schedule included, are optional. Rows that refer to missing items (a link
      * to a deleted task, a tag on an unknown id) are skipped and counted in [ImportResult.skipped].
      */
     fun fromSheets(sheets: List<Sheet>, zone: ZoneId = ZoneId.systemDefault(), now: Long = System.currentTimeMillis()): ImportResult {
@@ -323,6 +336,13 @@ object BackupFormat {
             )
         }.withIds("Quotes") { q, id -> q.copy(id = id) }
 
+        val blocks = sheet(ItemType.BLOCK.tabLabel, false)?.items("Title") { r ->
+            val start = r.minuteOfDay("Start") ?: r.fail("Start is required")
+            val end = r.minuteOfDay("End") ?: r.fail("End is required")
+            if (end <= start) r.fail("End must be after Start")
+            BlockEntity(id = r.id(), title = r.required("Title"), startMinute = start, endMinute = end, notes = r.text("Notes"), createdAt = r.dateTime("Created") ?: now)
+        }.orEmpty().withIds(ItemType.BLOCK.tabLabel) { b, id -> b.copy(id = id) }
+
         val bookIds = books.map { it.id }.toSet()
         val chapterRows = sheet(CHAPTERS, false)?.items("Title") { r ->
             val bookId = r.long("Book ID") ?: r.fail("Book ID is required")
@@ -373,6 +393,7 @@ object BackupFormat {
             books.forEach { add(ItemRef(ItemType.BOOK, it.id)) }
             chapters.forEach { add(ItemRef(ItemType.CHAPTER, it.id)) }
             quotes.forEach { add(ItemRef(ItemType.QUOTE, it.id)) }
+            blocks.forEach { add(ItemRef(ItemType.BLOCK, it.id)) }
         }
 
         val links = sheet(LINKS, false)?.rows("ID A", "ID B").orEmpty().mapNotNull { r ->
@@ -397,7 +418,7 @@ object BackupFormat {
             reminderSheet.rows("Reminder").mapNotNull { r ->
                 val ref = ItemRef(r.itemType("Type"), r.long("ID") ?: r.fail("ID is required"))
                 if (ref !in existing) return@mapNotNull null.also { skipped++ }
-                val time = if (ref.type == ItemType.HABIT) {
+                val time = if (ref.type.remindsDaily) {
                     r.time("Reminder")?.let { it.hour * 60L + it.minute }
                 } else {
                     r.dateTime("Reminder")
@@ -443,7 +464,7 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders,
+                noteListItems, reminders, blocks,
             ),
             skipped,
             settings,
@@ -578,6 +599,12 @@ object BackupFormat {
             runCatching { return LocalTime.parse(t) }
             t.toDoubleOrNull()?.takeIf { it in 0.0..<1.0 }?.let { return LocalTime.ofSecondOfDay(Math.round(it * 86_400) % 86_400) }
             fail("$column \"$t\" isn't a time like 08:30")
+        }
+
+        /** A time of day as minutes (0..1440): like [time], plus "24:00" for the end of the day. */
+        fun minuteOfDay(column: String): Int? {
+            if (text(column) == "24:00") return 24 * 60
+            return time(column)?.let { it.hour * 60 + it.minute }
         }
 
         /** "yyyy-MM-dd HH:mm", ISO with T, a plain date, or an Excel serial number; local time zone. */

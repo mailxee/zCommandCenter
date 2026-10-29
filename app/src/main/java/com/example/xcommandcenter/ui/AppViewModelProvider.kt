@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.xcommandcenter.AppContainer
 import com.example.xcommandcenter.XCommandCenterApp
+import com.example.xcommandcenter.ui.block.BlockDetailViewModel
 import com.example.xcommandcenter.ui.book.BookDetailViewModel
 import com.example.xcommandcenter.ui.book.ChapterDetailViewModel
 import com.example.xcommandcenter.ui.goal.GoalDetailViewModel
@@ -31,6 +32,7 @@ object AppViewModelProvider {
         initializer { with(container()) { BookDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { QuoteDetailViewModel(createSavedStateHandle(), quoteRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
+        initializer { with(container()) { BlockDetailViewModel(createSavedStateHandle(), blockRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
     }
 
     private fun CreationExtras.container(): AppContainer =

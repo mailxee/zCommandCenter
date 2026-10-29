@@ -136,6 +136,11 @@ abstract class ItemDetailViewModel(
         reminders = reminders - time
     }
 
+    /** Moves every reminder by [minutes], for times of day that follow their item (a block moved to a new time). */
+    protected fun shiftReminders(minutes: Int) {
+        reminders = reminders.map { Math.floorMod(it + minutes, 24 * 60L) }.distinct().sorted()
+    }
+
     /** Shown once in a snackbar, then cleared by the screen. */
     var message by mutableStateOf<String?>(null)
         protected set

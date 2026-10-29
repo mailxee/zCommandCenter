@@ -10,9 +10,9 @@ class TabOrderTest {
     }
 
     @Test
-    fun `default order ends with Quotes`() {
+    fun `default order ends with Schedule`() {
         assertEquals(
-            listOf(ItemType.TASK, ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE),
+            listOf(ItemType.TASK, ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.BLOCK),
             TabOrder.default,
         )
     }
@@ -29,7 +29,7 @@ class TabOrderTest {
         assertEquals(ItemType.QUOTE, parsed[0])
         assertEquals(ItemType.TASK, parsed[1])
         assertEquals(ItemType.tabs.toSet(), parsed.toSet())
-        assertEquals(7, parsed.size)
+        assertEquals(8, parsed.size)
     }
 
     @Test

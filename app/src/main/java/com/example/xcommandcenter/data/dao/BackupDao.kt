@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import com.example.xcommandcenter.data.backup.BackupData
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
@@ -39,12 +40,13 @@ interface BackupDao {
     @Query("SELECT * FROM tags ORDER BY name") suspend fun tags(): List<TagEntity>
     @Query("SELECT * FROM item_tags") suspend fun itemTags(): List<ItemTagEntity>
     @Query("SELECT * FROM reminders ORDER BY itemType, itemId, time") suspend fun reminders(): List<ReminderEntity>
+    @Query("SELECT * FROM blocks ORDER BY id") suspend fun blocks(): List<BlockEntity>
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(),
+        reminders(), blocks(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -62,6 +64,7 @@ interface BackupDao {
     @Insert suspend fun insertTags(rows: List<TagEntity>)
     @Insert suspend fun insertItemTags(rows: List<ItemTagEntity>)
     @Insert suspend fun insertReminders(rows: List<ReminderEntity>)
+    @Insert suspend fun insertBlocks(rows: List<BlockEntity>)
 
     // Children before parents, so foreign keys never point at a deleted row mid-way.
     @Query("DELETE FROM item_tags") suspend fun deleteItemTags()
@@ -79,6 +82,7 @@ interface BackupDao {
     @Query("DELETE FROM notes") suspend fun deleteNotes()
     @Query("DELETE FROM books") suspend fun deleteBooks()
     @Query("DELETE FROM quotes") suspend fun deleteQuotes()
+    @Query("DELETE FROM blocks") suspend fun deleteBlocks()
 
     @Transaction
     suspend fun deleteAll() {
@@ -97,6 +101,7 @@ interface BackupDao {
         deleteNotes()
         deleteBooks()
         deleteQuotes()
+        deleteBlocks()
     }
 
     /**
@@ -118,6 +123,7 @@ interface BackupDao {
         insertBooks(data.books)
         insertChapters(data.chapters)
         insertQuotes(data.quotes)
+        insertBlocks(data.blocks)
         insertLinks(data.links)
         insertTags(data.tags)
         insertItemTags(data.itemTags)

@@ -1,11 +1,13 @@
 package com.example.xcommandcenter.ui.common
 
+import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
+import com.example.xcommandcenter.data.repository.BlockRepository
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.HabitRepository
@@ -57,6 +59,7 @@ class ItemCardSource(
     private val notes: NoteRepository,
     private val books: BookRepository,
     private val quotes: QuoteRepository,
+    private val blocks: BlockRepository,
     private val links: LinkRepository,
     private val tags: TagRepository,
     private val reminders: ReminderRepository,
@@ -64,8 +67,10 @@ class ItemCardSource(
     private val texts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
         combine(tasks.observeAll(), tasks.observeChecklistCounts(), goals.observeAll(), ::Triple),
         combine(habits.observeAll(), habits.observeAllMarks(), plans.observeAll(), ::Triple),
-        combine(notes.observeAll(), notes.observeListCounts(), books.observeAllWithProgress(), quotes.observeAll()) { a, b, c, d -> NoteBookQuote(a, b, c, d) },
-    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList) ->
+        combine(
+            notes.observeAll(), notes.observeListCounts(), books.observeAllWithProgress(), quotes.observeAll(), blocks.observeAll(),
+        ) { a, b, c, d, e -> NoteBookQuote(a, b, c, d, e) },
+    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList) ->
         val today = LocalDate.now()
         buildMap {
             taskList.forEach { put(ItemRef(ItemType.TASK, it.id), taskCardText(it, checklists[it.id]) to CardControl.Task(it.completed)) }
@@ -79,6 +84,7 @@ class ItemCardSource(
             noteList.forEach { put(ItemRef(ItemType.NOTE, it.id), noteCardText(it, listCounts[it.id] ?: 0) to null) }
             bookList.forEach { put(ItemRef(ItemType.BOOK, it.book.id), bookCardText(it) to null) }
             quoteList.forEach { put(ItemRef(ItemType.QUOTE, it.id), quoteCardText(it) to null) }
+            blockList.forEach { put(ItemRef(ItemType.BLOCK, it.id), blockCardText(it) to null) }
         }
     }
 
@@ -87,6 +93,7 @@ class ItemCardSource(
         val listCounts: Map<Long, Int>,
         val books: List<BookWithProgress>,
         val quotes: List<QuoteEntity>,
+        val blocks: List<BlockEntity>,
     )
 
     /** Each item's reminder line (see [reminderLine]); a habit's names its next reminder, so it needs the habit and its marks. */
