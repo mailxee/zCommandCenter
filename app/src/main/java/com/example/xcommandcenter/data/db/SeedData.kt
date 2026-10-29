@@ -63,7 +63,7 @@ internal object SeedData {
         // Goals: the three this sample life is built around, plus one that supports them all.
         row("goals", "id" to 1L, "title" to "Live as a Stoic", "priority" to Priority.CRITICAL,
             "strategy" to "Morning reflection, evening review, and a page of the Stoics every day. Focus on what is in my control.")
-        row("goals", "id" to 2L, "title" to "Learn to play the piano", "priority" to Priority.HIGH,
+        row("goals", "id" to 2L, "title" to "Play the piano", "priority" to Priority.HIGH,
             "strategy" to "30 minutes of practice every evening, a lesson every week, one new piece a month.")
         row("goals", "id" to 3L, "title" to "Run a half marathon", "priority" to Priority.HIGH,
             "strategy" to "12-week plan: three runs a week, a long run on Sundays, add no more than 10% distance per week.")
