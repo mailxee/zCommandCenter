@@ -662,9 +662,11 @@ page still lists the chapters in Linked items.
 A link button sits beside the (now narrower) search box. Pressed, the next card tapped on any
 tab becomes the root instead of opening; every tab then shows only the root's network: the items
 linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
-walk over the undirected links). Books are not followed: the walk goes only through the other
-tabs' items, and a book (with all its chapters; a chapter's links count as its book's) shows when
-it is linked to one of them. A book as the root starts the walk from the items linked to it. A line under the search box names the root; pressing the
+walk over the undirected links). Notes, quotes and books are end points, never followed: the walk
+goes only through tasks, goals, habits and plans, and an end point (a book with all its chapters; a
+chapter's links count as its book's) shows when it is linked to one of them. An end point as the
+root starts the walk from the items linked to it, and also shows the end points linked to it
+directly (one step), so a new note, quote or book saved from it stays visible. A line under the search box names the root; pressing the
 button again goes back to normal mode.
 
 The state lives in `LinkRepository` (in memory: `picking`, the root, and the `network` flow), so
