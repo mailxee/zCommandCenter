@@ -14,3 +14,11 @@
 .cxx
 local.properties
 /ignore_this/
+
+# Signing keys: only the public debug key under app/signing/ belongs in the repository.
+*.jks
+*.p12
+*.pfx
+*.keystore
+!app/signing/debug.keystore
+keystore.properties

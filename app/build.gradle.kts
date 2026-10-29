@@ -12,7 +12,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.xcommandcenter"
+        // The app's identity on Google Play and on devices; it can never change once published.
+        // (The Kotlin package, `namespace` above, is only the code's layout and may differ.)
+        applicationId = "com.xeeshan.manage_everything"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -31,10 +33,23 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // The Play upload key is never in the repository: release builds read it from the
+        // environment, set from GitHub secrets by .github/workflows/release.yml (see RELEASING.md).
+        // Without RELEASE_KEYSTORE_FILE, release builds come out unsigned.
+        create("release") {
+            System.getenv("RELEASE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let { path ->
+                val password = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                storeFile = file(path)
+                storePassword = password
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "upload"
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: password
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfigs.getByName("release").takeIf { it.storeFile != null }?.let { signingConfig = it }
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
