@@ -1,0 +1,4 @@
+<resources>
+    <!-- Debug builds are a separate app (applicationIdSuffix ".debug"); the name tells them apart. -->
+    <string name="app_name">Manage Everything Debug</string>
+</resources>
