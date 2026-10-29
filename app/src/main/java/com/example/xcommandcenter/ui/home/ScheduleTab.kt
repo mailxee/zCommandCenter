@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,11 +57,16 @@ import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
 import com.example.xcommandcenter.ui.common.minuteText
 import kotlinx.coroutines.delay
+import android.text.format.DateFormat
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 private val HourHeight = 64.dp
 private val Gutter = 56.dp
 private val BarHeight = 32.dp
+private val MinBlockHeight = 24.dp
+/** How many minutes [MinBlockHeight] covers, rounded up. */
+private val MinBlockMinutes = Math.ceil((MinBlockHeight + 2.dp).value / HourHeight.value * 60.0).toInt()
 /** Room above the first hour's label. */
 private val Top = 8.dp
 private const val DAY = ScheduleAxis.DAY
@@ -135,7 +141,9 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
                     )
                 }
                 val columnWidth = width - Gutter - 8.dp
-                ScheduleLayout.place(blocks, { it.startMinute }, { it.endMinute }).forEach { placed ->
+                // A short block is drawn at least MinBlockHeight tall; laid out by that drawn length, a
+                // block right after it goes beside it instead of underneath.
+                ScheduleLayout.place(blocks, { it.startMinute }, { maxOf(it.endMinute, it.startMinute + MinBlockMinutes) }).forEach { placed ->
                     val block = placed.item
                     val ref = ItemRef(ItemType.BLOCK, block.id)
                     val slot = columnWidth / placed.columns
@@ -148,7 +156,7 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
                         modifier = Modifier
                             .offset(x = Gutter + slot * placed.column, y = at(block.startMinute) + 1.dp)
                             .width(slot - 2.dp)
-                            .height(maxOf(at(block.endMinute) - at(block.startMinute) - 2.dp, 24.dp)),
+                            .height(maxOf(at(block.endMinute) - at(block.startMinute) - 2.dp, MinBlockHeight)),
                     )
                 }
                 if (!axis.hides(now)) NowLine(at(now))
@@ -198,15 +206,20 @@ private fun GapBar(gap: Pair<Int, Int>, folded: Boolean, holdsNow: Boolean, onTo
     }
 }
 
+private val hour12 = DateTimeFormatter.ofPattern("h a")
+private val hour24 = DateTimeFormatter.ofPattern("HH:mm")
+
 private fun minuteNow(): Int = LocalTime.now().let { it.hour * 60 + it.minute }
 
 /** The hour's label in the gutter and its line across the day. */
 @Composable
 private fun HourRow(hour: Int, y: Dp) {
+    // "7 AM" or "07:00", as calendar apps label hours: a full "12:00 AM" doesn't fit the gutter.
+    val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
     Box(Modifier.offset(y = y).fillMaxWidth()) {
         HorizontalDivider(Modifier.padding(start = Gutter - 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Text(
-            minuteText(hour * 60),
+            LocalTime.of(hour, 0).format(if (is24Hour) hour24 else hour12),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -251,10 +264,17 @@ private fun BlockCard(
                     style = itemTextStyle(ItemType.BLOCK, MaterialTheme.typography.titleSmall),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    // On one line with the time, the title gets the larger share; both shorten to fit.
+                    modifier = Modifier.weight(if (short) 2f else 1f, fill = false),
                 )
                 if (short) {
-                    Text(timeAndLength(block), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Text(
+                        timeAndLength(block),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
                 }
                 if (hasReminder) {
                     Icon(painterResource(R.drawable.ic_notifications), contentDescription = "Has reminders", Modifier.size(14.dp))

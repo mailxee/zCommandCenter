@@ -786,6 +786,14 @@ Debug builds add `applicationIdSuffix = ".debug"` and are named "Manage Everythi
 its own key and nothing else can update. Release builds take `versionCode` from `VERSION_CODE`,
 which the release workflow sets to its run number; local builds use 1.
 
+### 2.47 Schedule polish
+
+Hour labels are just the hour ("7 AM", or "07:00" on a 24-hour phone), so they fit the gutter. A
+block shorter than about 25 minutes is drawn 24 dp tall; it is laid out by that drawn length, so
+the block after it sits beside it rather than under it, and on its single line the title gets two
+thirds of the room and the time shortens. In link lines, blocks of the same name from different
+schedules carry their schedule's name ("Morning reflection (Weekday)").
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.
