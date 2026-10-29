@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.durationText
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
@@ -55,6 +56,11 @@ fun BlockDetailScreen(
             TimeButton("Starts", block.startMinute, Modifier.weight(1f), viewModel::setStart)
             TimeButton("Ends", block.endMinute, Modifier.weight(1f), viewModel::setEnd)
         }
+        Text(
+            "Lasts ${durationText(block.endMinute - block.startMinute)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         OutlinedTextField(
             value = block.notes,
             onValueChange = { v -> viewModel.update { it.copy(notes = v) } },

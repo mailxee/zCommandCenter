@@ -345,6 +345,13 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             }
         }.stateIn(emptyList())
 
+    /** Free stretches the user has opened on the Schedule tab, as "scheduleId:start-end"; the rest stay folded. Kept while the app runs. */
+    val openGaps = MutableStateFlow<Set<String>>(emptySet())
+
+    fun toggleGap(key: String) {
+        openGaps.value = openGaps.value.let { if (key in it) it - key else it + key }
+    }
+
     fun selectSchedule(id: Long) {
         viewModelScope.launch { schedulesRepo.select(id) }
     }

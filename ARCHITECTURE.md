@@ -751,6 +751,16 @@ active, so switching needs no rescheduling. Elsewhere, block cards and the link 
 block's schedule when there are several. The backup's Schedules sheet holds the schedules, the
 one on show and the automatic switch; the Schedule sheet's "Schedule ID" places each block.
 
+### 2.43 Durations and folded free time
+
+Blocks show their length ("8:00 – 10:00 AM · 2 h", `durationText`), as does the block's page.
+Free stretches of two hours or more (`ScheduleAxis.gaps`: before, between and after the blocks;
+none on an empty day) fold into a slim bar ("12:00 AM – 7:00 AM · 7 h free"); a tap opens one and
+a tab at its top folds it again. `ScheduleAxis` maps minutes to positions with the folded gaps
+shrunk to their bars, and back for taps (none on a bar). Opened gaps are kept in
+`HomeViewModel.openGaps` while the app runs, keyed by schedule and times, so every launch starts
+folded. The now line becomes a red "now" on a bar that holds it, and the tab scrolls there.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** chip on *Read 20 pages*.

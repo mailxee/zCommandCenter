@@ -32,7 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -44,7 +47,9 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.ScheduleAxis
 import com.example.xcommandcenter.domain.ScheduleLayout
+import com.example.xcommandcenter.domain.durationText
 import com.example.xcommandcenter.ui.common.LinkLines
 import com.example.xcommandcenter.ui.common.blockTimeText
 import com.example.xcommandcenter.ui.common.itemTextStyle
@@ -55,13 +60,17 @@ import java.time.LocalTime
 
 private val HourHeight = 64.dp
 private val Gutter = 56.dp
-private const val DAY = 24 * 60
+private val BarHeight = 32.dp
+/** Room above the first hour's label. */
+private val Top = 8.dp
+private const val DAY = ScheduleAxis.DAY
 
 /**
- * The Schedule tab: the active schedule's plan for the day (switched with [ScheduleSwitcher]), hours down the left as in a calendar's day view, each
- * block placed by its start and sized by its length, overlapping ones side by side. A red line
- * marks the time now, and the tab opens scrolled to it. Tapping an empty half hour adds a block
- * there ([onCreateAt]); tapping a block opens it.
+ * The Schedule tab: the active schedule's plan for the day (switched with [ScheduleSwitcher]),
+ * hours down the left as in a calendar's day view, each block placed by its start and sized by its
+ * length, overlapping ones side by side. Free stretches of two hours or more fold into a bar that
+ * opens on a tap ([ScheduleAxis]). A red line marks the time now, and the tab opens scrolled to
+ * it. Tapping an empty time adds a block there ([onCreateAt]); tapping a block opens it.
  */
 @Composable
 fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt: (Int) -> Unit) {
@@ -69,6 +78,8 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val reminders by viewModel.reminderLines.collectAsStateWithLifecycle()
+    val active by viewModel.activeSchedule.collectAsStateWithLifecycle()
+    val openGaps by viewModel.openGaps.collectAsStateWithLifecycle()
     var now by remember { mutableIntStateOf(minuteNow()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -76,11 +87,19 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
             now = minuteNow()
         }
     }
+    fun keyOf(gap: Pair<Int, Int>) = "${active?.id}:${gap.first}-${gap.second}"
+    val gaps = ScheduleAxis.gaps(blocks.map { it.startMinute to it.endMinute })
+    val folded = gaps.filterNot { keyOf(it) in openGaps }
+    val axis = ScheduleAxis(folded, perMinute = HourHeight.value / 60f, bar = BarHeight.value)
+    fun at(minute: Int): Dp = Top + axis.y(minute).dp
+
     val scroll = rememberScrollState()
     val density = LocalDensity.current
-    LaunchedEffect(Unit) {
-        // An hour of context above the current time.
-        scroll.scrollTo(with(density) { (HourHeight * (maxOf(now - 60, 0) / 60f)).roundToPx() })
+    // Again once the blocks have loaded, as folding moves everything.
+    LaunchedEffect(active?.id, blocks.isEmpty()) {
+        // An hour of context above the current time (or the folded bar holding it).
+        val target = if (axis.hides(now)) axis.y(now) else axis.y(maxOf(now - 60, 0))
+        scroll.scrollTo(with(density) { target.dp.roundToPx() })
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -93,19 +112,28 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
         )
         BoxWithConstraints(Modifier.fillMaxSize().verticalScroll(scroll)) {
             val width = maxWidth
-            val hourPx = with(density) { HourHeight.toPx() }
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(HourHeight * 24 + 16.dp)
-                    .pointerInput(Unit) {
+                    .height(at(DAY) + Top * 2)
+                    .pointerInput(folded) {
                         detectTapGestures { offset ->
-                            val minute = ((offset.y - 8.dp.toPx()) / hourPx * 60).toInt() / 30 * 30
-                            onCreateAt(minute.coerceIn(0, DAY - 30))
+                            val minute = axis.minuteAt(offset.y.toDp().value - Top.value) ?: return@detectTapGestures
+                            onCreateAt((minute / 30 * 30).coerceIn(0, DAY - 30))
                         }
                     },
             ) {
-                (0 until 24).forEach { hour -> HourRow(hour) }
+                (0 until 24).filterNot { axis.hides(it * 60) }.forEach { hour -> HourRow(hour, at(hour * 60)) }
+                gaps.forEach { gap ->
+                    val isFolded = gap in folded
+                    GapBar(
+                        gap = gap,
+                        folded = isFolded,
+                        holdsNow = isFolded && now >= gap.first && now < gap.second,
+                        onToggle = { viewModel.toggleGap(keyOf(gap)) },
+                        modifier = Modifier.offset(y = at(gap.first)).padding(start = Gutter - 4.dp, end = 8.dp),
+                    )
+                }
                 val columnWidth = width - Gutter - 8.dp
                 ScheduleLayout.place(blocks, { it.startMinute }, { it.endMinute }).forEach { placed ->
                     val block = placed.item
@@ -118,12 +146,53 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
                         hasReminder = ref in reminders,
                         onClick = { onOpen(ref) },
                         modifier = Modifier
-                            .offset(x = Gutter + slot * placed.column, y = 8.dp + minuteOffset(block.startMinute) + 1.dp)
+                            .offset(x = Gutter + slot * placed.column, y = at(block.startMinute) + 1.dp)
                             .width(slot - 2.dp)
-                            .height(maxOf(minuteOffset(block.endMinute - block.startMinute) - 2.dp, 24.dp)),
+                            .height(maxOf(at(block.endMinute) - at(block.startMinute) - 2.dp, 24.dp)),
                     )
                 }
-                NowLine(now)
+                if (!axis.hides(now)) NowLine(at(now))
+            }
+        }
+    }
+}
+
+/**
+ * A free stretch of [gap]: folded, a slim bar saying how long it is (with a red "now" when the
+ * time now falls in it); open, a small tab at its top to fold it again.
+ */
+@Composable
+private fun GapBar(gap: Pair<Int, Int>, folded: Boolean, holdsNow: Boolean, onToggle: () -> Unit, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val range = "${minuteText(gap.first)} – ${minuteText(gap.second)}"
+    val free = "${durationText(gap.second - gap.first)} free"
+    Surface(
+        onClick = onToggle,
+        shape = RoundedCornerShape(8.dp),
+        color = if (folded) colors.surfaceVariant else Color.Transparent,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(if (folded) BarHeight - 2.dp else 24.dp)
+            .semantics { contentDescription = if (folded) "$range, $free. Tap to show." else "$range, $free. Tap to fold." },
+    ) {
+        Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(
+                painterResource(if (folded) R.drawable.ic_expand_more else R.drawable.ic_expand_less),
+                contentDescription = null,
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                if (folded) "$range · $free" else "Fold $free",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (holdsNow) {
+                Box(Modifier.size(8.dp).background(colors.error, CircleShape))
+                Text("now", style = MaterialTheme.typography.labelMedium, color = colors.error)
             }
         }
     }
@@ -131,12 +200,10 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
 
 private fun minuteNow(): Int = LocalTime.now().let { it.hour * 60 + it.minute }
 
-private fun minuteOffset(minutes: Int): Dp = HourHeight * (minutes / 60f)
-
 /** The hour's label in the gutter and its line across the day. */
 @Composable
-private fun HourRow(hour: Int) {
-    Box(Modifier.offset(y = 8.dp + HourHeight * hour).fillMaxWidth()) {
+private fun HourRow(hour: Int, y: Dp) {
+    Box(Modifier.offset(y = y).fillMaxWidth()) {
         HorizontalDivider(Modifier.padding(start = Gutter - 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Text(
             minuteText(hour * 60),
@@ -149,13 +216,16 @@ private fun HourRow(hour: Int) {
 }
 
 @Composable
-private fun NowLine(minute: Int) {
+private fun NowLine(y: Dp) {
     val red = MaterialTheme.colorScheme.error
-    Box(Modifier.offset(y = 8.dp + minuteOffset(minute) - 1.dp).fillMaxWidth()) {
+    Box(Modifier.offset(y = y - 1.dp).fillMaxWidth()) {
         Box(Modifier.padding(start = Gutter - 4.dp).fillMaxWidth().height(2.dp).background(red))
         Box(Modifier.offset(x = Gutter - 8.dp, y = (-4).dp).size(10.dp).background(red, CircleShape))
     }
 }
+
+/** "8:00 – 10:00 AM · 2 h". */
+private fun timeAndLength(block: BlockEntity) = "${blockTimeText(block)} · ${durationText(block.endMinute - block.startMinute)}"
 
 /** A block as the schedule shows it: title, time, notes, tags and links, as much as its height holds. */
 @Composable
@@ -184,14 +254,14 @@ private fun BlockCard(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (short) {
-                    Text(blockTimeText(block), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Text(timeAndLength(block), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
                 if (hasReminder) {
                     Icon(painterResource(R.drawable.ic_notifications), contentDescription = "Has reminders", Modifier.size(14.dp))
                 }
             }
             if (!short) {
-                Text(blockTimeText(block), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Text(timeAndLength(block), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 if (block.notes.isNotBlank()) {
                     Text(block.notes, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
