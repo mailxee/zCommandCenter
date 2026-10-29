@@ -694,15 +694,19 @@ the installed app, so a new key would force an uninstall, losing the app's data.
 it is the key the installed app was signed with (SHA-256
 `10:2F:74:41:06:D8:76:25:35:03:0D:F9:8F:00:C1:42:59:B3:C9:18:91:34:55:A1:E1:9E:D4:F5:E9:46:50:36`).
 
-### 2.39 Habit calendar on cards
+### 2.39 Habit calendar
 
 Each card in the Habits tab ends with a month calendar (`ui/common/HabitCalendar`, passed as
-`ItemCard`'s new full-width `footer`): a `HorizontalPager` of months from the habit's first month
-(its start date, or an earlier mark) to the current one, opening on the current one. Weeks start
-on Monday. Marked days are filled, in the Habits tab's color for a habit to build and the error
-color for one to avoid; today is outlined; days before the start or after today are dimmed. It
-only shows marks (`HabitSummary.marks`); marking stays with the "Done today" chip and the detail
-screen.
+`ItemCard`'s full-width `footer`), and the habit's page shows the same calendar in place of the
+old history chips. It is a `HorizontalPager` of months from the habit's first month (its start
+date, or an earlier mark) to the current one, opening on the current one; weeks start on Monday.
+
+Every habit follows one rule (`dayStatus`): a due day from the start through today is done
+(filled in the Habits tab's color) or missed (red outline). A positive habit stores its done
+days, so an unmarked past due day is missed and today stays pending; a negative habit stores its
+missed days, so an unmarked due day is done. On the habit's page, tapping a due day toggles its
+mark, switching it between done and missed for either kind; the card's calendar only shows. The
+"Missed today" chip turns red with a cross when selected (`HabitTodayChip`).
 
 ### 2.40 Picking a book, then a chapter
 

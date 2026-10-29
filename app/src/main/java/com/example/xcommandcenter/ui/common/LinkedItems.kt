@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -128,11 +127,7 @@ private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpe
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (control is CardControl.Habit) {
-                    FilterChip(
-                        selected = control.markedToday,
-                        onClick = { viewModel.toggleLinkedHabitToday(card.ref.id) },
-                        label = { Text(if (control.positive) "Done today" else "Missed today") },
-                    )
+                    HabitTodayChip(control.positive, control.markedToday) { viewModel.toggleLinkedHabitToday(card.ref.id) }
                 }
                 if (removable) {
                     IconButton(onClick = { viewModel.unlink(card.ref) }) {

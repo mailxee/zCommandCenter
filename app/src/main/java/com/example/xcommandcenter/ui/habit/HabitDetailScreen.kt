@@ -1,10 +1,7 @@
 package com.example.xcommandcenter.ui.habit
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -13,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.HabitCategory
@@ -22,6 +18,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
+import com.example.xcommandcenter.ui.common.HabitCalendar
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
@@ -31,9 +28,7 @@ import com.example.xcommandcenter.ui.common.SectionTitle
 import com.example.xcommandcenter.ui.common.TagsSection
 import com.example.xcommandcenter.ui.common.times
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
-private val chipDate = DateTimeFormatter.ofPattern("EEE d MMM")
 
 @Composable
 fun HabitDetailScreen(
@@ -122,20 +117,11 @@ fun HabitDetailScreen(
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
-                if (positive) "Tap an occurrence to mark it done. Unmarked days are unknown and do not count."
-                else "Tap an occurrence to mark it missed. Unmarked occurrences count as done.",
+                "Tap a due day to switch it between done (filled) and missed (red outline). Swipe for other months.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                HabitStats.recentDueDates(saved.category, saved.recurrence, saved.startDate, marks, today, 21).forEach { date ->
-                    FilterChip(
-                        selected = date in marks,
-                        onClick = { viewModel.toggleMark(date) },
-                        label = { Text(if (date == today) "Today" else date.format(chipDate)) },
-                    )
-                }
-            }
+            HabitCalendar(saved, marks, onToggle = viewModel::toggleMark, today = today)
         }
 
     }

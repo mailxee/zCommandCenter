@@ -49,6 +49,7 @@ import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.HabitCalendar
+import com.example.xcommandcenter.ui.common.HabitTodayChip
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
 import com.example.xcommandcenter.ui.common.goalCardText
@@ -231,14 +232,10 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                         viewModel.reorder(ItemType.HABIT, drag.rows.map { it.habit.id })
                     } ?: {
                         if (summary.scheduledToday) {
-                            FilterChip(
-                                selected = summary.markedToday,
-                                onClick = { viewModel.toggleHabitToday(habit.id) },
-                                label = { Text(if (summary.positive) "Done today" else "Missed today") },
-                            )
+                            HabitTodayChip(summary.positive, summary.markedToday) { viewModel.toggleHabitToday(habit.id) }
                         }
                     },
-                    footer = { HabitCalendar(summary.marks, habit.startDate, summary.positive) },
+                    footer = { HabitCalendar(habit, summary.marks) },
                 )
             }
         }
