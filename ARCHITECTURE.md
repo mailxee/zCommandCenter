@@ -662,8 +662,9 @@ page still lists the chapters in Linked items.
 A link button sits beside the (now narrower) search box. Pressed, the next card tapped on any
 tab becomes the root instead of opening; every tab then shows only the root's network: the items
 linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
-walk over the undirected links). A chapter and its book count as one item, so reaching either
-reaches the book and all its chapters. A line under the search box names the root; pressing the
+walk over the undirected links). Books are not followed: the walk goes only through the other
+tabs' items, and a book (with all its chapters; a chapter's links count as its book's) shows when
+it is linked to one of them. A book as the root starts the walk from the items linked to it. A line under the search box names the root; pressing the
 button again goes back to normal mode.
 
 The state lives in `LinkRepository` (in memory: `picking`, the root, and the `network` flow), so
@@ -690,6 +691,16 @@ build machine would generate anew. Android only installs an update signed with t
 the installed app, so a new key would force an uninstall, losing the app's data. Keep this file:
 it is the key the installed app was signed with (SHA-256
 `10:2F:74:41:06:D8:76:25:35:03:0D:F9:8F:00:C1:42:59:B3:C9:18:91:34:55:A1:E1:9E:D4:F5:E9:46:50:36`).
+
+### 2.39 Habit calendar on cards
+
+Each card in the Habits tab ends with a month calendar (`ui/common/HabitCalendar`, passed as
+`ItemCard`'s new full-width `footer`): a `HorizontalPager` of months from the habit's first month
+(its start date, or an earlier mark) to the current one, opening on the current one. Weeks start
+on Monday. Marked days are filled, in the Habits tab's color for a habit to build and the error
+color for one to avoid; today is outlined; days before the start or after today are dimmed. It
+only shows marks (`HabitSummary.marks`); marking stays with the "Done today" chip and the detail
+screen.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

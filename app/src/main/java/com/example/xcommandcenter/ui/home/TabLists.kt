@@ -48,6 +48,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
+import com.example.xcommandcenter.ui.common.HabitCalendar
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
 import com.example.xcommandcenter.ui.common.goalCardText
@@ -237,6 +238,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                             )
                         }
                     },
+                    footer = { HabitCalendar(summary.marks, habit.startDate, summary.positive) },
                 )
             }
         }
