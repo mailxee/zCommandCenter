@@ -1,5 +1,11 @@
 package com.example.xcommandcenter.ui.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,8 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalIconToggleButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,9 +33,12 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,16 +47,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,6 +71,9 @@ import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.itemSpanStyle
 import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
+import com.example.xcommandcenter.ui.common.onTabAccent
+import com.example.xcommandcenter.ui.common.tabAccent
+import com.example.xcommandcenter.ui.common.tabIcon
 
 @Composable
 fun HomeScreen(
@@ -77,10 +95,19 @@ fun HomeScreen(
     // While picking a root for link mode, a tapped card becomes the root instead of opening.
     val open: (ItemRef) -> Unit = { ref -> if (picking) viewModel.pickLinkRoot(ref) else onOpen(ref) }
 
+    // The title bar slides away while the list scrolls down and back on the way up; the add button
+    // shrinks to its icon meanwhile, so it covers less of the cards.
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val fabExpanded = scrollBehavior.state.collapsedFraction < 0.5f
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    val accent = tabAccent(selected)
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text(if (reorder) "Reorder" else stringResource(R.string.app_name)) },
+                scrollBehavior = scrollBehavior,
                 actions = {
                     if (reorder) {
                         IconButton(onClick = { viewModel.setReorderMode(false) }) {
@@ -106,14 +133,32 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onCreate(selected) }) {
-                Icon(painterResource(R.drawable.ic_add), contentDescription = "New ${selected.singular.lowercase()}")
-            }
+            val label = "New ${selected.singular.lowercase()}"
+            ExtendedFloatingActionButton(
+                onClick = { onCreate(selected) },
+                expanded = fabExpanded,
+                icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
+                text = { Text(label) },
+                containerColor = accent,
+                contentColor = onTabAccent(),
+                modifier = Modifier.semantics { contentDescription = label },
+            )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // Narrow tabs, so the first five fit on a phone without scrolling.
-            PrimaryScrollableTabRow(selectedTabIndex = order.indexOf(selected), edgePadding = 4.dp, minTabWidth = 0.dp) {
+            PrimaryScrollableTabRow(
+                selectedTabIndex = order.indexOf(selected),
+                edgePadding = 4.dp,
+                minTabWidth = 0.dp,
+                indicator = {
+                    TabRowDefaults.PrimaryIndicator(
+                        Modifier.tabIndicatorOffset(order.indexOf(selected), matchContentSize = true),
+                        width = Dp.Unspecified,
+                        color = accent,
+                    )
+                },
+            ) {
                 order.forEach { tab ->
                     Tab(
                         selected = tab == selected,
@@ -123,7 +168,7 @@ fun HomeScreen(
                             if (reorder && tab in priorityTabs) viewModel.setPrioritySort(tab, PrioritySort.CUSTOM)
                         },
                     ) {
-                        TabLabel(tab, counts[tab])
+                        TabLabel(tab, counts[tab], tab == selected)
                     }
                 }
             }
@@ -132,40 +177,85 @@ fun HomeScreen(
                 modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp),
             ) {
                 SearchBar(viewModel, selected, Modifier.weight(1f))
+                FilterButton(viewModel, selected, showFilters) { showFilters = !showFilters }
                 LinkModeButton(viewModel, picking)
             }
             LinkModeStatus(viewModel, picking)
-            TagFilterBar(viewModel, selected)
-            when (selected) {
-                ItemType.TASK -> TasksTab(viewModel, open)
-                ItemType.GOAL -> GoalsTab(viewModel, open)
-                ItemType.HABIT -> HabitsTab(viewModel, open)
-                ItemType.PLAN -> PlansTab(viewModel, open)
-                ItemType.NOTE -> NotesTab(viewModel, open)
-                ItemType.BOOK -> BooksTab(viewModel, open)
-                ItemType.QUOTE -> QuotesTab(viewModel, open)
-                ItemType.BLOCK -> ScheduleTab(viewModel, open, onCreateBlock)
-                ItemType.CHAPTER -> Unit // Not a tab.
+            AnimatedVisibility(visible = showFilters) {
+                TagFilterBar(viewModel, selected)
+            }
+            CompositionLocalProvider(LocalCreateItem provides onCreate) {
+                AnimatedContent(
+                    targetState = selected,
+                    transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(90)) },
+                    label = "tab",
+                ) { tab ->
+                    when (tab) {
+                        ItemType.TASK -> TasksTab(viewModel, open, showFilters)
+                        ItemType.GOAL -> GoalsTab(viewModel, open, showFilters)
+                        ItemType.HABIT -> HabitsTab(viewModel, open, showFilters)
+                        ItemType.PLAN -> PlansTab(viewModel, open, showFilters)
+                        ItemType.NOTE -> NotesTab(viewModel, open, showFilters)
+                        ItemType.BOOK -> BooksTab(viewModel, open, showFilters)
+                        ItemType.QUOTE -> QuotesTab(viewModel, open, showFilters)
+                        ItemType.BLOCK -> ScheduleTab(viewModel, open, onCreateBlock)
+                        ItemType.CHAPTER -> Unit // Not a tab.
+                    }
+                }
             }
         }
     }
 }
 
-/** The tab's name, in its item style, with "shown/total" below it. */
+/** The tab's icon and name, the icon in the tab's color when selected, with "shown/total" below. */
 @Composable
-private fun TabLabel(tab: ItemType, count: TabCount?) {
+private fun TabLabel(tab: ItemType, count: TabCount?, selected: Boolean) {
+    val colors = MaterialTheme.colorScheme
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).semantics(mergeDescendants = true) {
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).semantics(mergeDescendants = true) {
             if (count != null) contentDescription = "${tab.tabLabel}, ${count.shown} of ${count.total} shown"
         },
     ) {
-        Text(tab.tabLabel, style = itemTextStyle(tab, MaterialTheme.typography.titleSmall))
+        Icon(
+            painterResource(tabIcon(tab)),
+            contentDescription = null,
+            tint = if (selected) tabAccent(tab) else colors.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            tab.tabLabel,
+            style = itemTextStyle(tab, MaterialTheme.typography.titleSmall),
+            color = if (selected) colors.onSurface else colors.onSurfaceVariant,
+        )
         Text(
             count?.let { "${it.shown}/${it.total}" } ?: " ",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = colors.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Shows or hides the filters: the tag chips and, at the top of the list, the tab's sort and filter
+ * rows. A dot on the button says a filter is hiding items, even while they are folded away.
+ */
+@Composable
+private fun FilterButton(viewModel: HomeViewModel, tab: ItemType, shown: Boolean, onToggle: () -> Unit) {
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val priorityFilters by viewModel.priorityFilters.collectAsStateWithLifecycle()
+    val repeat by viewModel.repeatFilter.collectAsStateWithLifecycle()
+    val filtering = tagFilter.active || priorityFilters[tab].orEmpty().isNotEmpty() || (tab == ItemType.TASK && repeat != RepeatFilter.ALL)
+    FilledTonalIconToggleButton(
+        checked = shown,
+        onCheckedChange = { onToggle() },
+        modifier = Modifier.padding(start = 4.dp).semantics {
+            stateDescription = (if (shown) "Shown" else "Hidden") + if (filtering) ", filters on" else ""
+        },
+    ) {
+        BadgedBox(badge = { if (filtering) Badge(containerColor = MaterialTheme.colorScheme.primary) }) {
+            Icon(painterResource(R.drawable.ic_filter), contentDescription = "Filters")
+        }
     }
 }
 
@@ -213,31 +303,44 @@ private fun LinkModeButton(viewModel: HomeViewModel, picking: Boolean) {
     }
 }
 
-/** Under the search bar while link mode is picking or on: what to do, or whose network is shown. */
+/**
+ * A banner under the search bar while link mode is picking or on: what to do, or whose network is
+ * shown, with a cross that leaves link mode as the link button does.
+ */
 @Composable
 private fun LinkModeStatus(viewModel: HomeViewModel, picking: Boolean) {
     val root by viewModel.linkRoot.collectAsStateWithLifecycle()
     val current = root
-    val style = MaterialTheme.typography.bodyMedium
-    when {
-        picking -> Text(
-            "Tap a card to show only the items linked to it",
-            style = style,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        )
-        current != null -> Text(
-            buildAnnotatedString {
-                append("Linked to ")
-                withStyle(itemSpanStyle(current.type.tab)) { append(current.title) }
-            },
-            style = style,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                .semantics { contentDescription = "Link mode: showing items linked to ${current.title}" },
-        )
+    AnimatedVisibility(visible = picking || current != null) {
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
+                Icon(painterResource(R.drawable.ic_link), contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                val style = MaterialTheme.typography.bodyMedium
+                if (current == null) {
+                    Text("Tap a card to show only the items linked to it", style = style, modifier = Modifier.weight(1f))
+                } else {
+                    Text(
+                        buildAnnotatedString {
+                            append("Linked to ")
+                            withStyle(itemSpanStyle(current.type.tab).merge(SpanStyle(fontWeight = FontWeight.Bold))) { append(current.title) }
+                        },
+                        style = style,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Link mode: showing items linked to ${current.title}" },
+                    )
+                }
+                IconButton(onClick = viewModel::toggleLinkMode) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = "Leave link mode", modifier = Modifier.size(20.dp))
+                }
+            }
+        }
     }
 }
 

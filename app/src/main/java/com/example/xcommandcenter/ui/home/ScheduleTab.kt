@@ -31,8 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -56,6 +59,7 @@ import com.example.xcommandcenter.ui.common.blockTimeText
 import com.example.xcommandcenter.ui.common.itemTextStyle
 import com.example.xcommandcenter.ui.common.label
 import com.example.xcommandcenter.ui.common.minuteText
+import com.example.xcommandcenter.ui.common.tabAccent
 import kotlinx.coroutines.delay
 import android.text.format.DateFormat
 import java.time.LocalTime
@@ -250,14 +254,21 @@ private fun BlockCard(
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
+    // A light tint of the Schedule tab's color, with a solid edge on the left as calendars draw events.
+    val accent = tabAccent(ItemType.BLOCK)
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = lerp(MaterialTheme.colorScheme.surface, accent, 0.18f),
         modifier = modifier,
     ) {
         val short = block.endMinute - block.startMinute < 45
-        Column(Modifier.padding(horizontal = 8.dp, vertical = if (short) 2.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(
+            Modifier
+                .drawBehind { drawRect(accent, size = Size(3.dp.toPx(), size.height)) }
+                .padding(start = 11.dp, end = 8.dp, top = if (short) 2.dp else 4.dp, bottom = if (short) 2.dp else 4.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     block.title,

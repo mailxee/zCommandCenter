@@ -25,13 +25,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.takeOrElse
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.xcommandcenter.R
@@ -67,7 +67,7 @@ fun dayStatus(date: LocalDate, marked: Boolean, due: Boolean, positive: Boolean,
 /**
  * A habit's done and missed days, a month at a time: swipe between months, from the habit's first
  * month (its start, or an earlier mark) to the current one, which it opens on. Done days are
- * filled in the Habits tab's color, missed ones outlined in red; today is outlined. With
+ * tinted in the Habits tab's color, missed ones in red; today is outlined. With
  * [onToggle], tapping a due day from the start through today switches it between done and missed.
  */
 @Composable
@@ -132,18 +132,19 @@ private fun MonthGrid(month: YearMonth, status: (LocalDate) -> DayStatus, today:
 
 @Composable
 private fun RowScope.DayCell(date: LocalDate?, status: DayStatus, today: LocalDate, onToggle: ((LocalDate) -> Unit)?) {
-    Box(Modifier.weight(1f).height(32.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.weight(1f).height(28.dp), contentAlignment = Alignment.Center) {
         if (date == null) return@Box
         val colors = MaterialTheme.colorScheme
-        val fill = itemSpanStyle(ItemType.HABIT).color.takeOrElse { colors.primary }
+        val fill = tabAccent(ItemType.HABIT)
         val isToday = date == today
-        var circle = Modifier.size(28.dp)
+        // Soft tints rather than solid circles, so a month of marks stays calm to look at.
+        var circle = Modifier.size(24.dp)
         when (status) {
-            DayStatus.DONE -> circle = circle.background(fill, CircleShape)
-            DayStatus.MISSED -> circle = circle.border(1.5.dp, colors.error, CircleShape)
+            DayStatus.DONE -> circle = circle.background(fill.copy(alpha = 0.22f), CircleShape)
+            DayStatus.MISSED -> circle = circle.background(colors.error.copy(alpha = 0.12f), CircleShape)
             else -> Unit
         }
-        if (isToday && status != DayStatus.MISSED) circle = circle.border(1.5.dp, colors.onSurface, CircleShape)
+        if (isToday) circle = circle.border(1.5.dp, if (status == DayStatus.MISSED) colors.error else colors.primary, CircleShape)
         val tappable = onToggle != null && status != DayStatus.NONE && !date.isAfter(today)
         if (tappable) {
             val state = when (status) {
@@ -159,8 +160,9 @@ private fun RowScope.DayCell(date: LocalDate?, status: DayStatus, today: LocalDa
             Text(
                 date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (status == DayStatus.DONE || status == DayStatus.MISSED || isToday) FontWeight.Bold else null,
                 color = when {
-                    status == DayStatus.DONE -> if (fill.luminance() > 0.5f) Color.Black else Color.White
+                    status == DayStatus.DONE -> if (isDarkSurface()) fill else lerp(fill, Color.Black, 0.2f)
                     status == DayStatus.MISSED -> colors.error
                     status == DayStatus.NONE && date.isAfter(today) -> colors.onSurface.copy(alpha = 0.38f)
                     status == DayStatus.NONE -> colors.onSurfaceVariant

@@ -435,7 +435,7 @@ item is struck through, and a critical open task is shown in red.
   "Delete everything" resets them) and provided once at the root through `LocalItemStyles`, so no
   view model has to pass styles around.
 - Each palette color has a darker shade for light surfaces and a lighter one for dark surfaces
-  (`StyleColor.toColor`), so text stays readable in both themes and with wallpaper colors.
+  (`StyleColor.toColor`), so text stays readable in both themes.
 
 | Alternative | Why rejected |
 |---|---|
@@ -702,7 +702,7 @@ old history chips. It is a `HorizontalPager` of months from the habit's first mo
 date, or an earlier mark) to the current one, opening on the current one; weeks start on Monday.
 
 Every habit follows one rule (`dayStatus`): a due day from the start through today is done
-(filled in the Habits tab's color) or missed (red outline). A positive habit stores its done
+(tinted in the Habits tab's color) or missed (tinted red). A positive habit stores its done
 days, so an unmarked past due day is missed and today stays pending; a negative habit stores its
 missed days, so an unmarked due day is done. On the habit's page, tapping a due day toggles its
 mark, switching it between done and missed for either kind; the card's calendar only shows. The
@@ -793,6 +793,34 @@ block shorter than about 25 minutes is drawn 24 dp tall; it is laid out by that 
 the block after it sits beside it rather than under it, and on its single line the title gets two
 thirds of the room and the time shortens. In link lines, blocks of the same name from different
 schedules carry their schedule's name ("Morning reflection (Weekday)").
+
+### 2.48 Look and feel
+
+A visual pass only; nothing works differently.
+
+- **Colors.** A fixed palette taken from the app icon (an orange accent on cool charcoal greys),
+  light or dark with the system, replacing the wallpaper-based colors (`ui/theme/Theme.kt`).
+- **Tab colors and icons** (`ui/common/Accents.kt`). Every tab has an icon and a color: Schedule
+  teal, Goals purple, Plans indigo, Tasks blue, Habits green, Notes amber, Books brown, Quotes pink.
+  A color set for a tab's items in Settings takes its place. The color tints the selected tab's
+  icon and indicator, the add button, the "Plans:" names in link lines, the empty-list icon,
+  Schedule blocks and the habit calendar.
+- **Cards.** A strip down the left edge in the priority's color (Critical red, High orange, Medium
+  blue-grey, Low grey). Under the title, the priority as a small colored label, then the short
+  facts as quiet chips (due date, repeat, checklist, habit kind and streak, list size, chapters):
+  `CardText.priority` and `CardText.meta`, so the cards read the same on the tabs and on detail
+  pages. The reminder line has a bell, and a thin rule sets the link lines apart.
+- **Filters fold away.** A filter button beside the search box shows or hides the tag chips and
+  the tab's sort and filter rows (`showFilters`, kept until the app closes); a dot on it says a
+  filter is hiding items. Opening them scrolls the list to the top, where the rows are. The
+  completed-items chips stay in the list.
+- **Top bar and add button.** The title bar slides away as the list scrolls down and comes back
+  on the way up; the add button says "New goal" and so on, shrinking to its icon while scrolling.
+- **Link mode** shows a banner ("Linked to …") with a cross that leaves link mode, as the link
+  button does.
+- **Empty lists** show the tab's icon, why the list is empty, and a "New …" button; tabs fade
+  into each other.
+- **Habit calendar.** Smaller days with soft tints: green for done, red for missed, today ringed.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -926,7 +954,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | File | Purpose |
 |---|---|
 | `ui/AppViewModelProvider.kt` | `ViewModelProvider.Factory` that builds every ViewModel from the container. |
-| `ui/theme/Theme.kt` | Material 3 theme (dynamic color on Android 12+, light/dark fallback). |
+| `ui/theme/Theme.kt` | Material 3 theme in the app icon's colors, light and dark (§2.48). |
+| `ui/common/Accents.kt` | Each tab's color and icon, and the priority colors (§2.48). |
 | `ui/navigation/Routes.kt` | Route strings: home, settings, `item/{type}/{id}?parent=`. |
 | `ui/navigation/AppNavHost.kt` | Navigation graph; dispatches the item route to the right detail screen; opens a task from a reminder. |
 | `ui/common/DragHandle.kt` | The drag handle shown while reordering, with Move up / Move down accessibility actions. |

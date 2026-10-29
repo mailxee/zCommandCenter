@@ -117,7 +117,7 @@ fun HabitDetailScreen(
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
-                "Tap a due day to switch it between done (filled) and missed (red outline). Swipe for other months.",
+                "Tap a due day to switch it between done (green) and missed (red). Swipe for other months.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

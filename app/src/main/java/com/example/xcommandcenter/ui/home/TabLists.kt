@@ -1,7 +1,9 @@
 package com.example.xcommandcenter.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,15 +11,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,15 +33,18 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
@@ -57,6 +66,8 @@ import com.example.xcommandcenter.ui.common.habitCardText
 import com.example.xcommandcenter.ui.common.noteCardText
 import com.example.xcommandcenter.ui.common.planCardText
 import com.example.xcommandcenter.ui.common.quoteCardText
+import com.example.xcommandcenter.ui.common.tabAccent
+import com.example.xcommandcenter.ui.common.tabIcon
 import com.example.xcommandcenter.ui.common.taskCardText
 import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import sh.calvin.reorderable.ReorderableCollectionItemScope
@@ -65,7 +76,7 @@ import sh.calvin.reorderable.ReorderableLazyListState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
-fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val tasks by viewModel.tasks.collectAsStateWithLifecycle()
     val sort by viewModel.taskSort.collectAsStateWithLifecycle()
     val repeat by viewModel.repeatFilter.collectAsStateWithLifecycle()
@@ -86,12 +97,13 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     // Either filter can empty the list; then say so instead of "No tasks yet".
     val rows = drag.rows
     ItemList(
+        ItemType.TASK,
         empty = tasks.isEmpty(),
         emptyText = "No tasks yet.",
         filtered = viewModel.filtering(tagFilter) || repeat != RepeatFilter.ALL || priorityView.filtered || (!showCompleted && completedCount > 0),
-        state = drag.listState,
+        controls = controls, state = drag.listState,
     ) {
-        item {
+        if (controls) item {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 TaskSort.entries.forEachIndexed { index, option ->
                     SegmentedButton(
@@ -103,7 +115,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
-        item {
+        if (controls) item {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 RepeatFilter.entries.forEachIndexed { index, option ->
                     SegmentedButton(
@@ -115,7 +127,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
                 }
             }
         }
-        priorityFilterChips(ItemType.TASK, priorityView, viewModel)
+        if (controls) priorityFilterChips(ItemType.TASK, priorityView, viewModel)
         if (completedCount > 0) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -175,7 +187,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val goals by viewModel.goals.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
@@ -184,8 +196,8 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.GOAL)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
-        priorityControls(ItemType.GOAL, view, viewModel)
+    ItemList(ItemType.GOAL, empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, controls = controls, state = drag.listState) {
+        if (controls) priorityControls(ItemType.GOAL, view, viewModel)
         itemsIndexed(rows, key = { _, goal -> goal.id }) { index, goal ->
             val ref = ItemRef(ItemType.GOAL, goal.id)
             ReorderableItem(drag.state, key = goal.id, enabled = movable) {
@@ -206,7 +218,7 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val habits by viewModel.habits.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
@@ -215,8 +227,8 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.HABIT)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
-        priorityControls(ItemType.HABIT, view, viewModel)
+    ItemList(ItemType.HABIT, empty = habits.isEmpty(), emptyText = "No habits yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, controls = controls, state = drag.listState) {
+        if (controls) priorityControls(ItemType.HABIT, view, viewModel)
         itemsIndexed(rows, key = { _, summary -> summary.habit.id }) { index, summary ->
             val habit = summary.habit
             val ref = ItemRef(ItemType.HABIT, habit.id)
@@ -243,7 +255,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val rows by viewModel.planTree.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val showCompleted by viewModel.showCompletedPlans.collectAsStateWithLifecycle()
@@ -264,12 +276,13 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val shownRows = dragging?.let { plan -> withoutRowsUnder(drag.rows, plan.id) } ?: drag.rows
     val siblings = shownRows.filterIsInstance<PlanTreeItem.Plan>().groupBy({ it.plan.parentId }, { it.plan.id })
     ItemList(
+        ItemType.PLAN,
         empty = rows.isEmpty(),
         emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
         filtered = viewModel.filtering(tagFilter) || view.filtered,
-        state = drag.listState,
+        controls = controls, state = drag.listState,
     ) {
-        priorityControls(ItemType.PLAN, view, viewModel)
+        if (controls) priorityControls(ItemType.PLAN, view, viewModel)
         if (completedCount > 0 || completedTaskCount > 0) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -390,7 +403,7 @@ private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: Check
 }
 
 @Composable
-fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val listCounts by viewModel.noteListCounts.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
@@ -401,12 +414,13 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val drag = rememberDragOrder(notes, key = { it.id })
     val rows = drag.rows
     ItemList(
+        ItemType.NOTE,
         empty = notes.isEmpty(),
         emptyText = "No notes yet.",
         filtered = viewModel.filtering(tagFilter) || view.filtered,
-        state = drag.listState,
+        controls = controls, state = drag.listState,
     ) {
-        priorityControls(ItemType.NOTE, view, viewModel)
+        if (controls) priorityControls(ItemType.NOTE, view, viewModel)
         itemsIndexed(rows, key = { _, note -> note.id }) { index, note ->
             val ref = ItemRef(ItemType.NOTE, note.id)
             ReorderableItem(drag.state, key = note.id, enabled = movable) {
@@ -427,7 +441,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val books by viewModel.books.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
@@ -436,8 +450,8 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.BOOK)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = books.isEmpty(), emptyText = "No books yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
-        priorityControls(ItemType.BOOK, view, viewModel)
+    ItemList(ItemType.BOOK, empty = books.isEmpty(), emptyText = "No books yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, controls = controls, state = drag.listState) {
+        if (controls) priorityControls(ItemType.BOOK, view, viewModel)
         itemsIndexed(rows, key = { _, item -> item.book.id }) { index, item ->
             val ref = ItemRef(ItemType.BOOK, item.book.id)
             ReorderableItem(drag.state, key = item.book.id, enabled = movable) {
@@ -458,7 +472,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
 }
 
 @Composable
-fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
     val quotes by viewModel.quotes.collectAsStateWithLifecycle()
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
@@ -467,8 +481,8 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
     val rows = drag.rows
     val view = viewModel.priorityView(ItemType.QUOTE)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, state = drag.listState) {
-        priorityControls(ItemType.QUOTE, view, viewModel)
+    ItemList(ItemType.QUOTE, empty = quotes.isEmpty(), emptyText = "No quotes yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, controls = controls, state = drag.listState) {
+        if (controls) priorityControls(ItemType.QUOTE, view, viewModel)
         itemsIndexed(rows, key = { _, quote -> quote.id }) { index, quote ->
             val ref = ItemRef(ItemType.QUOTE, quote.id)
             ReorderableItem(drag.state, key = quote.id, enabled = movable) {
@@ -549,29 +563,59 @@ private fun LazyListScope.priorityFilterChips(tab: ItemType, view: PriorityView,
     }
 }
 
+/** What the add button does, for the empty lists' own add button. */
+val LocalCreateItem = staticCompositionLocalOf<(ItemType) -> Unit> { {} }
+
 @Composable
 private fun ItemList(
+    type: ItemType,
     empty: Boolean,
     emptyText: String,
     filtered: Boolean = false,
+    controls: Boolean = false,
     state: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
+    // The sort and filter rows open at the top of the list; scroll up to them, or they would open
+    // above the cards in view, out of sight.
+    LaunchedEffect(controls) { if (controls) state.scrollToItem(0) }
     LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         content()
         if (empty) {
-            item {
-                Text(
-                    if (filtered) "Nothing here matches the current filters." else "$emptyText Tap + to add one.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
-                )
+            item { EmptyList(type, if (filtered) "Nothing here matches the current filters." else emptyText, offerAdd = !filtered) }
+        }
+    }
+}
+
+/** An empty list: the tab's icon, why it is empty, and a button to add the first item. */
+@Composable
+private fun EmptyList(type: ItemType, text: String, offerAdd: Boolean) {
+    val create = LocalCreateItem.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 16.dp),
+    ) {
+        val accent = tabAccent(type)
+        Box(Modifier.size(72.dp).background(accent.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) {
+            Icon(painterResource(tabIcon(type)), contentDescription = null, tint = accent, modifier = Modifier.size(36.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (offerAdd) {
+            FilledTonalButton(onClick = { create(type) }) {
+                Icon(painterResource(R.drawable.ic_add), contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("New ${type.singular.lowercase()}")
             }
         }
     }
