@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
@@ -57,8 +58,8 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
-import com.example.xcommandcenter.ui.common.HabitCalendar
-import com.example.xcommandcenter.ui.common.HabitTodayChip
+import com.example.xcommandcenter.ui.common.HabitWeek
+import com.example.xcommandcenter.ui.common.HabitTodayButton
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
 import com.example.xcommandcenter.ui.common.goalCardText
@@ -96,6 +97,12 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     var draggingCompleted by remember { mutableStateOf<Boolean?>(null) }
     // Either filter can empty the list; then say so instead of "No tasks yet".
     val rows = drag.rows
+    // The completed row arrives after the tasks, above them, and the list keeps its first task in
+    // place, which would leave the row out of sight. Scroll up to it while still at the top.
+    val hasCompleted = completedCount > 0
+    LaunchedEffect(hasCompleted) {
+        if (hasCompleted && drag.listState.firstVisibleItemIndex <= 1) drag.listState.scrollToItem(0)
+    }
     ItemList(
         ItemType.TASK,
         empty = tasks.isEmpty(),
@@ -130,14 +137,14 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
         if (controls) priorityFilterChips(ItemType.TASK, priorityView, viewModel)
         if (completedCount > 0) {
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // The chip takes the room the button leaves, so its label stays on one line.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                     FilterChip(
                         selected = showCompleted,
                         onClick = { viewModel.setShowCompletedTasks(!showCompleted) },
-                        label = { Text("Completed tasks ($completedCount)") },
+                        label = { Text("Completed tasks ($completedCount)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    Spacer(Modifier.weight(1f))
                     TextButton(onClick = { confirmDelete = true }) { Text("Delete completed") }
                 }
             }
@@ -244,10 +251,11 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
                         viewModel.reorder(ItemType.HABIT, drag.rows.map { it.habit.id })
                     } ?: {
                         if (summary.scheduledToday) {
-                            HabitTodayChip(summary.positive, summary.markedToday) { viewModel.toggleHabitToday(habit.id) }
+                            HabitTodayButton(summary.positive, summary.markedToday) { viewModel.toggleHabitToday(habit.id) }
                         }
                     },
-                    footer = { HabitCalendar(habit, summary.marks) },
+                    // This week only; the habit's page has the full calendar.
+                    footer = { HabitWeek(habit, summary.marks) },
                 )
             }
         }
@@ -582,8 +590,8 @@ private fun ItemList(
     LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 88.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         content()
         if (empty) {

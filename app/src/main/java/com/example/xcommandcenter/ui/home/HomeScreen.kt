@@ -20,6 +20,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -28,7 +35,7 @@ import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -266,18 +273,43 @@ private fun FilterButton(viewModel: HomeViewModel, tab: ItemType, shown: Boolean
 @Composable
 private fun SearchBar(viewModel: HomeViewModel, tab: ItemType, modifier: Modifier) {
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
-    OutlinedTextField(
+    // Shorter than a standard text field (44 dp, not 56), with the same look.
+    val interaction = remember { MutableInteractionSource() }
+    val colors = OutlinedTextFieldDefaults.colors()
+    BasicTextField(
         value = query,
         onValueChange = viewModel::setSearchQuery,
-        placeholder = { Text("Search ${tab.tabLabel.lowercase()}") },
-        leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
-        trailingIcon = if (query.isEmpty()) null else {
-            { IconButton(onClick = { viewModel.setSearchQuery("") }) { Icon(painterResource(R.drawable.ic_close), contentDescription = "Clear search") } }
-        },
         singleLine = true,
-        shape = RoundedCornerShape(28.dp),
-        modifier = modifier,
-    )
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        interactionSource = interaction,
+        modifier = modifier.height(44.dp),
+    ) { field ->
+        OutlinedTextFieldDefaults.DecorationBox(
+            value = query,
+            innerTextField = field,
+            enabled = true,
+            singleLine = true,
+            visualTransformation = VisualTransformation.None,
+            interactionSource = interaction,
+            placeholder = { Text("Search ${tab.tabLabel.lowercase()}") },
+            leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
+            trailingIcon = if (query.isEmpty()) null else {
+                { IconButton(onClick = { viewModel.setSearchQuery("") }) { Icon(painterResource(R.drawable.ic_close), contentDescription = "Clear search") } }
+            },
+            colors = colors,
+            contentPadding = PaddingValues(vertical = 0.dp),
+            container = {
+                OutlinedTextFieldDefaults.Container(
+                    enabled = true,
+                    isError = false,
+                    interactionSource = interaction,
+                    colors = colors,
+                    shape = RoundedCornerShape(22.dp),
+                )
+            },
+        )
+    }
 }
 
 /**

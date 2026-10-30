@@ -696,17 +696,18 @@ it is the key the installed app was signed with (SHA-256
 
 ### 2.39 Habit calendar
 
-Each card in the Habits tab ends with a month calendar (`ui/common/HabitCalendar`, passed as
-`ItemCard`'s full-width `footer`), and the habit's page shows the same calendar in place of the
-old history chips. It is a `HorizontalPager` of months from the habit's first month (its start
+Each card in the Habits tab ends with this week's days (`HabitWeek`, passed as `ItemCard`'s
+full-width `footer`; see §2.49), and the habit's page shows a month calendar
+(`ui/common/HabitCalendar`) in place of the old history chips. It is a `HorizontalPager` of months from the habit's first month (its start
 date, or an earlier mark) to the current one, opening on the current one; weeks start on Monday.
 
 Every habit follows one rule (`dayStatus`): a due day from the start through today is done
 (tinted in the Habits tab's color) or missed (tinted red). A positive habit stores its done
 days, so an unmarked past due day is missed and today stays pending; a negative habit stores its
 missed days, so an unmarked due day is done. On the habit's page, tapping a due day toggles its
-mark, switching it between done and missed for either kind; the card's calendar only shows. The
-"Missed today" chip turns red with a cross when selected (`HabitTodayChip`).
+mark, switching it between done and missed for either kind; the card's week only shows. The
+card's button for today is a check for a positive habit and a cross for a negative one, filled
+red once a miss is marked (`HabitTodayButton`).
 
 ### 2.40 Picking a book, then a chapter
 
@@ -822,17 +823,37 @@ A visual pass only; nothing works differently.
   into each other.
 - **Habit calendar.** Smaller days with soft tints: green for done, red for missed, today ringed.
 
+### 2.49 Compact cards
+
+A second visual pass, to fit more on the screen; nothing works differently.
+
+- **Priority letter.** The priority shows as its letter (C, H, M or L) on a tint of its color,
+  just before the title on every tab (`CardTitle`, an inline text placeholder), in place of the
+  "High" label. The colored strip down the edge stays.
+- **Tags** follow the title on the same line, smaller, and wrap with it; a tag never splits.
+- **Links fold away.** A card with links shows a small button with the link icon and their count;
+  tapping it shows or hides the link lines (kept per card until the app closes). A card without
+  links has no button.
+- **Facts on one line.** The short facts are plain text joined by " · " rather than chips, and a
+  due date in the current year leaves out the year ("Due Nov 1").
+- **Tighter spacing.** 8 dp inside cards and at the list's edges, 6 dp between cards, 12 dp
+  corners, and a compact checkbox (40 dp touch area).
+- **Habit cards** show this week only (`HabitWeek`, Monday to Sunday) instead of the month; the
+  habit's page keeps the full calendar. Marking today is a round check button (a cross for a
+  negative habit) rather than a "Done today" chip, on the tab and on detail pages.
+- **Search box** is 44 dp tall rather than 56 (a `BasicTextField` with the outlined field's look).
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
-The user taps the **"Done today"** chip on *Read 20 pages*.
+The user taps the **"Done today"** check button on *Read 20 pages*.
 
-1. **Tap → ViewModel.** In `HabitsTab` (`ui/home/TabLists.kt`), the chip's `onClick` calls `HomeViewModel.toggleHabitToday(habit.id)`.
+1. **Tap → ViewModel.** In `HabitsTab` (`ui/home/TabLists.kt`), the button's `onClick` calls `HomeViewModel.toggleHabitToday(habit.id)`.
 2. **ViewModel → repository.** `toggleHabitToday` launches a coroutine in `viewModelScope` and calls `HabitRepository.toggleMark(habitId, LocalDate.now())`.
 3. **Repository → DAO.** This forwards to `HabitDao.toggleMark`, a `@Transaction` method. It counts existing marks for that habit and date. If there are none, it runs `insertMark(HabitMarkEntity(habitId, date))`; otherwise `deleteMark(...)`. Room runs it on its query executor, off the main thread.
 4. **Database write.** SQLite inserts a row into `habit_marks`. The `Converters` class stores the date as an epoch day. When the transaction commits, Room's `InvalidationTracker` marks the `habit_marks` table as changed.
 5. **Invalidation → Flow.** `HabitDao.observeAllMarks()` watches `habit_marks`, so Room re-runs it and emits the new list. `HabitRepository.observeAllMarks()` maps it to `Map<habitId, Set<LocalDate>>`.
 6. **Recompute.** In `HomeViewModel.habits`, `combine(habits, marks)` emits again. For each habit it calls the pure `HabitStats.streak(...)` and counts the marks, producing a new `HabitSummary` (streak 7, done 7 times, `markedToday = true`) in a `StateFlow`.
-7. **Screen update.** `HabitsTab` collects that `StateFlow` with `collectAsStateWithLifecycle()`. The new value recomposes the row: the chip shows as selected and the text reads "Streak 7 · done 7 times".
+7. **Screen update.** `HabitsTab` collects that `StateFlow` with `collectAsStateWithLifecycle()`. The new value recomposes the row: the button shows as checked and the text reads "Streak 7 · done 7 times".
 
 The UI never updates itself optimistically: the database is the single source of truth, and the
 same path keeps any other open screen in sync, such as the habit's detail screen, which observes
@@ -967,7 +988,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/LinkedItems.kt` | "Linked items" section: linked items as tab cards with their controls, grouped by tab; and the two-step link picker dialog with search. |
 | `ui/common/ListEditor.kt` | The bulleted list editor shared by task checklists and note lists. |
 | `ui/common/WebLinkText.kt` | Tappable web links in card text and under description fields. |
-| `ui/common/ItemCard.kt` | The item card shared by the tabs and the linked items, the per-type card text, and habit summaries (§2.22). |
+| `ui/common/ItemCard.kt` | The item card shared by the tabs and the linked items, the per-type card text, and habit summaries (§2.22, §2.49). |
 | `ui/common/ItemCardSource.kt` | Card data (text, control, tags, links) for every item, and the card controls' actions, for detail pages (§2.22). |
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, plan tree, …), the shared tag filter and quick actions. |

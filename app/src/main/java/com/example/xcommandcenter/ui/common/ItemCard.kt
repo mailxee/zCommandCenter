@@ -1,16 +1,29 @@
 package com.example.xcommandcenter.ui.common
 
 import androidx.compose.foundation.background
+import android.text.format.DateFormat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,12 +41,17 @@ import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
@@ -51,11 +69,14 @@ import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * The text of an item's card. Built by the functions below, so an item reads the same in its own
- * tab and as a linked item on another item's page. [priority] colors the card's edge and leads its
- * row of small [meta] facts (due date, streak, chapter count); [lines] are the longer texts.
+ * tab and as a linked item on another item's page. [priority] colors the card's edge and puts its
+ * letter before the title; [meta] are small facts (due date, streak, chapter count) on one line;
+ * [lines] are the longer texts.
  */
 data class CardText(
     val title: String,
@@ -94,7 +115,7 @@ fun taskCardText(task: TaskEntity, checklist: ChecklistCount?) = CardText(
     emphasis = task.priority == Priority.CRITICAL && !task.completed,
     priority = task.priority,
     meta = listOfNotNull(
-        task.dueDate?.let { "Due ${it.display()}" },
+        task.dueDate?.let { "Due ${it.short()}" },
         task.recurrence?.let { "Repeats: ${it.describe()}" },
         checklist?.let { "Checklist ${it.done}/${it.total}" },
     ),
@@ -178,13 +199,21 @@ fun blockCardText(block: BlockEntity, schedule: String? = null) = CardText(
 /** Chapters have no tab of their own; their card names the book they are in. */
 fun chapterCardText(entry: ItemIndexEntry) = CardText(entry.title, listOfNotNull(entry.describe()))
 
+/** "Nov 1" (or "1 Nov", as the phone's language orders them) this year, the full date in any other. */
+private fun LocalDate.short(): String = if (year == LocalDate.now().year) format(shortDate) else display()
+
+private val shortDate by lazy {
+    DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMd"))
+}
+
 fun times(count: Int): String = if (count == 1) "once" else "$count times"
 
 /**
- * An item's card: title in its tab's style, detail lines, its [reminder] line (see
- * [reminderLine]; not shown once the item is done), the item's tags, and what it is linked to: a
- * line per tab, in the user's tab order ("Tasks: …"). Used by the tab lists and by the linked
- * items on detail pages.
+ * An item's card: the priority's letter, the title in its tab's style with the item's tags after
+ * it, a row of small facts, detail lines, and its [reminder] line (see [reminderLine]; not shown
+ * once the item is done). What it is linked to (a line per tab, in the user's tab order:
+ * "Tasks: …") is folded away behind a button with the number of links. Used by the tab lists and
+ * by the linked items on detail pages.
  */
 @Composable
 fun ItemCard(
@@ -201,6 +230,7 @@ fun ItemCard(
 ) {
     // A strip down the left edge in the priority's color, faded once the item is done.
     val strip = text.priority?.let { priorityColor(it).copy(alpha = if (text.done) 0.35f else 1f) }
+    var showLinks by rememberSaveable { mutableStateOf(false) }
     val content: @Composable ColumnScope.() -> Unit = {
         Column(
             Modifier.drawBehind {
@@ -208,22 +238,14 @@ fun ItemCard(
             },
         ) {
             Row(
-                Modifier.padding(start = if (strip != null) 12.dp + StripWidth else 12.dp, top = 12.dp, end = 12.dp, bottom = 12.dp),
+                Modifier.padding(start = CardPadding + StripWidth, top = CardPadding, end = CardPadding, bottom = CardPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                leading?.invoke()
+                // A compact checkbox, so it takes less of the card's width.
+                leading?.let { CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) { it() } }
                 Column(Modifier.weight(1f).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // The tab's style, except that a critical task stays red and a done item is struck through.
-                    val titleStyle = itemTextStyle(type, MaterialTheme.typography.titleMedium)
-                    Text(
-                        text.title,
-                        style = titleStyle,
-                        textDecoration = TextDecoration.combine(listOfNotNull(titleStyle.textDecoration, TextDecoration.LineThrough.takeIf { text.done })),
-                        color = if (text.emphasis) MaterialTheme.colorScheme.error else titleStyle.color.takeOrElse { MaterialTheme.colorScheme.onSurface },
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    MetaRow(text.priority, text.meta)
+                    CardTitle(type, text, tags)
+                    MetaRow(text.meta, links.size, showLinks) { showLinks = !showLinks }
                     text.lines.forEach { line ->
                         Text(
                             linkified(line),
@@ -250,25 +272,18 @@ fun ItemCard(
                             )
                         }
                     }
-                    if (tags.isNotEmpty()) {
-                        Text(
-                            tags.joinToString("  ") { it.label() },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (links.isNotEmpty()) {
+                    AnimatedVisibility(visible = showLinks && links.isNotEmpty()) {
                         // The links read as a footnote, apart from the item's own text.
-                        HorizontalDivider(Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                        LinkLines(links)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            HorizontalDivider(Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            LinkLines(links)
+                        }
                     }
                 }
                 trailing?.invoke()
             }
-            // Full width below the text and controls, such as a habit's calendar.
-            footer?.let { Box(Modifier.padding(start = if (strip != null) 12.dp + StripWidth else 12.dp, end = 12.dp, bottom = 12.dp)) { it() } }
+            // Full width below the text and controls, such as a habit's week.
+            footer?.let { Box(Modifier.padding(start = CardPadding + StripWidth, end = CardPadding, bottom = CardPadding)) { it() } }
         }
     }
     if (outlined) {
@@ -277,7 +292,7 @@ fun ItemCard(
         Card(
             onClick = onClick,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             content = content,
@@ -286,44 +301,108 @@ fun ItemCard(
 }
 
 private val StripWidth = 4.dp
+private val CardPadding = 8.dp
 
 /**
- * The card's small facts in one wrapping row: the priority (a colored dot and its name), then
- * [meta] as quiet chips.
+ * The priority's letter (C, H, M or L), then the title in the tab's style (a critical item red, a
+ * done one struck through), then the tags, smaller, wrapping on after it.
  */
 @Composable
-private fun MetaRow(priority: Priority?, meta: List<String>) {
-    if (priority == null && meta.isEmpty()) return
+private fun CardTitle(type: ItemType, text: CardText, tags: List<TagEntity>) {
+    val titleStyle = itemTextStyle(type, MaterialTheme.typography.titleMedium)
+    val decoration = TextDecoration.combine(listOfNotNull(titleStyle.textDecoration, TextDecoration.LineThrough.takeIf { text.done }))
+    val tagStyle = SpanStyle(
+        color = MaterialTheme.colorScheme.tertiary,
+        fontSize = MaterialTheme.typography.labelMedium.fontSize,
+        fontWeight = FontWeight.Medium,
+        fontStyle = FontStyle.Normal,
+        textDecoration = TextDecoration.None,
+    )
+    val priority = text.priority
+    Text(
+        buildAnnotatedString {
+            if (priority != null) {
+                appendInlineContent(PriorityKey, priority.label)
+                append(" ")
+            }
+            withStyle(SpanStyle(textDecoration = decoration)) { append(text.title) }
+            tags.forEach { tag ->
+                append("  ")
+                // Each tag stays whole on one line.
+                withStyle(tagStyle) { append(tag.label().replace(" ", "\u00A0")) }
+            }
+        },
+        style = titleStyle.copy(textDecoration = null),
+        color = if (text.emphasis) MaterialTheme.colorScheme.error else titleStyle.color.takeOrElse { MaterialTheme.colorScheme.onSurface },
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        inlineContent = if (priority == null) emptyMap() else mapOf(
+            PriorityKey to InlineTextContent(Placeholder(20.sp, 18.sp, PlaceholderVerticalAlign.TextCenter)) {
+                PriorityLetter(priority, text.done)
+            },
+        ),
+    )
+}
+
+private const val PriorityKey = "priority"
+
+/** The priority's first letter on a tint of its color. */
+@Composable
+private fun PriorityLetter(priority: Priority, done: Boolean) {
+    val color = priorityColor(priority).copy(alpha = if (done) 0.5f else 1f)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(end = 2.dp)
+            .background(color.copy(alpha = 0.14f), RoundedCornerShape(5.dp))
+            .clearAndSetSemantics { contentDescription = "${priority.label} priority" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(priority.label.take(1), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+/**
+ * The card's small facts in one wrapping line, then, when the item has links, a button with their
+ * count that shows or hides them.
+ */
+@Composable
+private fun MetaRow(meta: List<String>, linkCount: Int, showLinks: Boolean, onToggleLinks: () -> Unit) {
+    if (meta.isEmpty() && linkCount == 0) return
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        if (priority != null) {
-            val color = priorityColor(priority)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .background(color.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                    .clearAndSetSemantics { contentDescription = "${priority.label} priority" },
-            ) {
-                Box(Modifier.size(6.dp).background(color, CircleShape))
-                Text(priority.label, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
-            }
-        }
-        meta.forEach { fact ->
+        if (meta.isNotEmpty()) {
             Text(
-                fact,
+                meta.joinToString("  ·  "),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
             )
+        }
+        if (linkCount > 0) {
+            val colors = MaterialTheme.colorScheme
+            val color = if (showLinks) colors.onPrimaryContainer else colors.primary
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (showLinks) colors.primaryContainer else colors.primary.copy(alpha = 0.08f))
+                    .clickable(onClickLabel = if (showLinks) "Hide links" else "Show links", onClick = onToggleLinks)
+                    .semantics(mergeDescendants = true) { contentDescription = if (linkCount == 1) "1 link" else "$linkCount links" }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Icon(painterResource(R.drawable.ic_link), contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+                Text("$linkCount", style = MaterialTheme.typography.labelMedium, color = color)
+                Icon(
+                    painterResource(if (showLinks) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
         }
     }
 }
