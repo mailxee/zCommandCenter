@@ -30,13 +30,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -213,7 +216,8 @@ fun times(count: Int): String = if (count == 1) "once" else "$count times"
  * it, a row of small facts, detail lines, and its [reminder] line (see [reminderLine]; not shown
  * once the item is done). What it is linked to (a line per tab, in the user's tab order:
  * "Tasks: …") is folded away behind a button with the number of links. Used by the tab lists and
- * by the linked items on detail pages.
+ * by the linked items on detail pages. In the Plans outline, [outline] makes it a row of its
+ * top-level plan's card ([shape] squares the joins): smaller, indented, with tree lines.
  */
 @Composable
 fun ItemCard(
@@ -223,13 +227,17 @@ fun ItemCard(
     onClick: () -> Unit,
     tags: List<TagEntity> = emptyList(),
     reminder: String? = null,
-    outlined: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     footer: (@Composable () -> Unit)? = null,
+    shape: Shape = RoundedCornerShape(12.dp),
+    outline: OutlineGuides? = null,
 ) {
+    val depth = outline?.depth ?: 0
+    val child = depth > 0
     // A strip down the left edge in the priority's color, faded once the item is done.
-    val strip = text.priority?.let { priorityColor(it).copy(alpha = if (text.done) 0.35f else 1f) }
+    val strip = text.priority?.takeIf { !child }?.let { priorityColor(it).copy(alpha = if (text.done) 0.35f else 1f) }
+    val guideColor = MaterialTheme.colorScheme.outlineVariant
     var showLinks by rememberSaveable { mutableStateOf(false) }
     val content: @Composable ColumnScope.() -> Unit = {
         Column(
@@ -238,20 +246,27 @@ fun ItemCard(
             },
         ) {
             Row(
-                Modifier.padding(start = CardPadding + StripWidth, top = CardPadding, end = CardPadding, bottom = CardPadding),
+                Modifier
+                    .then(if (outline != null) Modifier.drawBehind { drawGuides(outline, guideColor) } else Modifier)
+                    .padding(
+                        start = CardPadding + StripWidth + OutlineIndent * depth,
+                        top = if (child) 4.dp else CardPadding,
+                        end = CardPadding,
+                        bottom = if (child) 4.dp else CardPadding,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // A compact checkbox, so it takes less of the card's width.
                 leading?.let { CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) { it() } }
                 Column(Modifier.weight(1f).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    CardTitle(type, text, tags)
+                    CardTitle(type, text, tags, small = child)
                     MetaRow(text.meta, links.size, showLinks) { showLinks = !showLinks }
                     text.lines.forEach { line ->
                         Text(
                             linkified(line),
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = if (child) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
+                            maxLines = if (child) 1 else 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -286,21 +301,51 @@ fun ItemCard(
             footer?.let { Box(Modifier.padding(start = CardPadding + StripWidth, end = CardPadding, bottom = CardPadding)) { it() } }
         }
     }
-    if (outlined) {
-        OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), content = content)
-    } else {
-        Card(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            content = content,
-        )
-    }
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        // An outline's rows join into one card, so they cast no shadows onto each other.
+        elevation = CardDefaults.cardElevation(defaultElevation = if (outline != null) 0.dp else 1.dp),
+        content = content,
+    )
 }
 
 private val StripWidth = 4.dp
+private val OutlineIndent = 28.dp
+
+/**
+ * Where a row sits in an outline (the Plans tab): its [depth], whether the line at each level
+ * above it carries on below it ([continues], one per level), and whether children follow it.
+ */
+data class OutlineGuides(val depth: Int, val continues: List<Boolean>, val hasChildrenBelow: Boolean)
+
+/**
+ * The outline's tree lines: from each parent's checkbox down past its children, with a short
+ * branch to each child's checkbox.
+ */
+private fun DrawScope.drawGuides(outline: OutlineGuides, color: Color) {
+    val stroke = 1.5.dp.toPx()
+    val center = size.height / 2
+    if (outline.depth > 0) {
+        val start = (CardPadding + StripWidth + OutlineIndent * outline.depth).toPx()
+        drawLine(color.copy(alpha = 0.6f), Offset(start, 0f), Offset(size.width, 0f), 1.dp.toPx())
+    }
+    fun x(level: Int) = (CardPadding + StripWidth + OutlineIndent * level + 20.dp).toPx()
+    for (level in 0 until outline.depth) {
+        val last = level == outline.depth - 1
+        if (outline.continues[level]) {
+            drawLine(color, Offset(x(level), 0f), Offset(x(level), size.height), stroke)
+        } else if (last) {
+            drawLine(color, Offset(x(level), 0f), Offset(x(level), center), stroke)
+        }
+        if (last) drawLine(color, Offset(x(level), center), Offset(x(level + 1) - 14.dp.toPx(), center), stroke)
+    }
+    if (outline.hasChildrenBelow) {
+        drawLine(color, Offset(x(outline.depth), center + 12.dp.toPx()), Offset(x(outline.depth), size.height), stroke)
+    }
+}
 private val CardPadding = 8.dp
 
 /**
@@ -308,8 +353,8 @@ private val CardPadding = 8.dp
  * done one struck through), then the tags, smaller, wrapping on after it.
  */
 @Composable
-private fun CardTitle(type: ItemType, text: CardText, tags: List<TagEntity>) {
-    val titleStyle = itemTextStyle(type, MaterialTheme.typography.titleMedium)
+private fun CardTitle(type: ItemType, text: CardText, tags: List<TagEntity>, small: Boolean = false) {
+    val titleStyle = itemTextStyle(type, if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium)
     val decoration = TextDecoration.combine(listOfNotNull(titleStyle.textDecoration, TextDecoration.LineThrough.takeIf { text.done }))
     val tagStyle = SpanStyle(
         color = MaterialTheme.colorScheme.tertiary,
