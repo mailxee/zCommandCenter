@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalIconToggleButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -173,24 +173,49 @@ private fun RowScope.DayCell(date: LocalDate?, status: DayStatus, today: LocalDa
     }
 }
 
+/** This week, Monday to Sunday, marked as [HabitCalendar] marks a month: for a habit's card. */
+@Composable
+fun HabitWeek(habit: HabitEntity, marks: Set<LocalDate>, today: LocalDate = LocalDate.now()) {
+    val due = remember(habit, marks, today) {
+        HabitStats.dueDates(habit.category, habit.recurrence, habit.startDate, marks, today, until = today).toSet()
+    }
+    val positive = habit.category == HabitCategory.POSITIVE
+    val monday = today.minusDays(today.dayOfWeek.value - 1L)
+    val days = (0L..6L).map { monday.plusDays(it) }
+    val status = days.associateWith { dayStatus(it, it in marks, it in due, positive, habit.startDate, today) }
+    Row(
+        Modifier.fillMaxWidth().clearAndSetSemantics {
+            contentDescription = "This week: done ${status.values.count { it == DayStatus.DONE }}, missed ${status.values.count { it == DayStatus.MISSED }}"
+        },
+    ) {
+        days.forEach { date ->
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row { DayCell(date, status.getValue(date), today, null) }
+            }
+        }
+    }
+}
+
 /**
- * The card's chip for marking today: "Done today" for a positive habit, "Missed today" for a
- * negative one, which shows red with a cross when selected, so a miss never looks like a success.
+ * The card's button for marking today: a check for a positive habit, a cross for a negative one,
+ * filled in the habit color, or red for a miss, once marked.
  */
 @Composable
-fun HabitTodayChip(positive: Boolean, marked: Boolean, onClick: () -> Unit) {
+fun HabitTodayButton(positive: Boolean, marked: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    FilterChip(
-        selected = marked,
-        onClick = onClick,
-        label = { Text(if (positive) "Done today" else "Missed today") },
-        leadingIcon = if (marked) {
-            { Icon(painterResource(if (positive) R.drawable.ic_check else R.drawable.ic_close), contentDescription = null, Modifier.size(18.dp)) }
-        } else null,
-        colors = if (positive) FilterChipDefaults.filterChipColors() else FilterChipDefaults.filterChipColors(
-            selectedContainerColor = colors.errorContainer,
-            selectedLabelColor = colors.onErrorContainer,
-            selectedLeadingIconColor = colors.onErrorContainer,
+    val on = if (positive) tabAccent(ItemType.HABIT) else colors.error
+    FilledTonalIconToggleButton(
+        checked = marked,
+        onCheckedChange = { onClick() },
+        colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+            checkedContainerColor = on, checkedContentColor = onTabAccent(),
         ),
-    )
+    ) {
+        Icon(painterResource(if (positive) R.drawable.ic_check else R.drawable.ic_close), contentDescription = if (positive) "Done today" else "Missed today")
+    }
 }

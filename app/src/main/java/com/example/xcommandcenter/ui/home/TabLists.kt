@@ -57,8 +57,8 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
-import com.example.xcommandcenter.ui.common.HabitCalendar
-import com.example.xcommandcenter.ui.common.HabitTodayChip
+import com.example.xcommandcenter.ui.common.HabitWeek
+import com.example.xcommandcenter.ui.common.HabitTodayButton
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
 import com.example.xcommandcenter.ui.common.goalCardText
@@ -244,10 +244,11 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
                         viewModel.reorder(ItemType.HABIT, drag.rows.map { it.habit.id })
                     } ?: {
                         if (summary.scheduledToday) {
-                            HabitTodayChip(summary.positive, summary.markedToday) { viewModel.toggleHabitToday(habit.id) }
+                            HabitTodayButton(summary.positive, summary.markedToday) { viewModel.toggleHabitToday(habit.id) }
                         }
                     },
-                    footer = { HabitCalendar(habit, summary.marks) },
+                    // This week only; the habit's page has the full calendar.
+                    footer = { HabitWeek(habit, summary.marks) },
                 )
             }
         }
@@ -582,8 +583,8 @@ private fun ItemList(
     LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 88.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         content()
         if (empty) {

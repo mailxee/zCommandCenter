@@ -127,7 +127,7 @@ private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpe
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (control is CardControl.Habit) {
-                    HabitTodayChip(control.positive, control.markedToday) { viewModel.toggleLinkedHabitToday(card.ref.id) }
+                    HabitTodayButton(control.positive, control.markedToday) { viewModel.toggleLinkedHabitToday(card.ref.id) }
                 }
                 if (removable) {
                     IconButton(onClick = { viewModel.unlink(card.ref) }) {
