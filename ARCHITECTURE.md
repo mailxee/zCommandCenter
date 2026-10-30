@@ -234,7 +234,7 @@ is completed only if every plan below it is completed.
   the task sort). Hiding never orphans an open plan, because of the rule.
 
 **Plans tab as an outline (confirmed with the user):** each plan's linked tasks are listed
-right below it, ahead of its subplans, as outlined cards with their own checkbox. A task linked
+right below it, ahead of its subplans, as rows with their own checkbox (see §2.50 for the look). A task linked
 to several plans appears under each. Open tasks come first, and completed tasks are hidden unless
 the "Completed tasks" chip is on. The plan's "Linked:" line leaves tasks out, since they are
 rows of their own. A chevron on any plan with visible tasks or subplans collapses all of
@@ -842,6 +842,21 @@ A second visual pass, to fit more on the screen; nothing works differently.
   habit's page keeps the full calendar. Marking today is a round check button (a cross for a
   negative habit) rather than a "Done today" chip, on the tab and on detail pages.
 - **Search box** is 44 dp tall rather than 56 (a `BasicTextField` with the outlined field's look).
+
+### 2.50 Plans outline as one card per plan
+
+A visual pass on the Plans tab; nothing works differently. Each top-level plan and everything
+shown under it (subplans and their linked tasks) read as one card: the rows sit with no gap, only
+the first has rounded top corners and only the last rounded bottom ones (`shape`), and the gap
+falls between top-level plans (`ItemList(spacing = 0.dp)`, 6 dp above each top-level row). The
+rows cast no shadows, so no seams show where they join.
+
+Rows below the top level (`ItemCard(outline = …)`) are smaller: a smaller title, a one-line
+smaller description, less padding, a thin divider above them from their indent, and no priority
+strip (the letter stays). They are indented 28 dp a level, and tree lines run from each plan's
+checkbox down past its children with a short branch to each child's checkbox.
+`outlineGuides` works out, for each row and each level above it, whether a later row still hangs
+from that level's line, so a line stops at its last child.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

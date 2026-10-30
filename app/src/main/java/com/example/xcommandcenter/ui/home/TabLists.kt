@@ -46,7 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ChecklistCount
@@ -59,6 +62,7 @@ import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.ui.common.DragHandle
 import com.example.xcommandcenter.ui.common.HabitWeek
+import com.example.xcommandcenter.ui.common.OutlineGuides
 import com.example.xcommandcenter.ui.common.HabitTodayButton
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
@@ -289,6 +293,8 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
         emptyText = if (allHidden) "All plans are completed." else "No plans yet.",
         filtered = viewModel.filtering(tagFilter) || view.filtered,
         controls = controls, state = drag.listState,
+        // A plan and everything under it read as one card; the gap is between top-level plans.
+        spacing = 0.dp,
     ) {
         if (controls) priorityControls(ItemType.PLAN, view, viewModel)
         if (completedCount > 0 || completedTaskCount > 0) {
@@ -311,17 +317,24 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                 }
             }
         }
-        items(shownRows, key = { it.key }) { row ->
+        val guides = outlineGuides(shownRows)
+        itemsIndexed(shownRows, key = { _, row -> row.key }) { i, row ->
+            val last = shownRows.getOrNull(i + 1)?.depth?.let { it == 0 } ?: true
+            val round = 12.dp
+            val shape = RoundedCornerShape(
+                topStart = if (row.depth == 0) round else 0.dp, topEnd = if (row.depth == 0) round else 0.dp,
+                bottomStart = if (last) round else 0.dp, bottomEnd = if (last) round else 0.dp,
+            )
             // Only plans with the dragged plan's parent make way for it; task rows never move on their own.
             val enabled = movable && row is PlanTreeItem.Plan && dragging.let { it == null || it.parentId == row.plan.parentId }
             ReorderableItem(drag.state, key = row.key, enabled = enabled) {
-                Box(Modifier.padding(start = (row.depth * 20).dp)) {
+                Box(Modifier.padding(top = if (row.depth == 0) 6.dp else 0.dp)) {
                     when (row) {
                         is PlanTreeItem.Plan -> {
                             val group = siblings[row.plan.parentId].orEmpty()
                             val index = group.indexOf(row.plan.id)
                             PlanRow(
-                                row, links, tagFilter, viewModel, onOpen,
+                                row, links, tagFilter, viewModel, onOpen, shape, guides[i],
                                 dragHandle = dragHandleIf(
                                     reorder = movable,
                                     canMoveUp = index > 0,
@@ -339,7 +352,7 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                                 ),
                             )
                         }
-                        is PlanTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen)
+                        is PlanTreeItem.Task -> PlanTaskRow(row.task, tagFilter, checklists[row.task.id], viewModel, onOpen, shape, guides[i])
                     }
                 }
             }
@@ -354,6 +367,17 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     }
 }
 
+/**
+ * Each row's place in the outline: for every level above it, whether a later row at the level
+ * below still hangs from that line, so the line runs on past this row.
+ */
+private fun outlineGuides(rows: List<PlanTreeItem>): List<OutlineGuides> = rows.mapIndexed { i, row ->
+    val continues = (0 until row.depth).map { level ->
+        rows.drop(i + 1).takeWhile { it.depth > level }.any { it.depth == level + 1 }
+    }
+    OutlineGuides(row.depth, continues, hasChildrenBelow = (rows.getOrNull(i + 1)?.depth ?: 0) > row.depth)
+}
+
 /** @param dragHandle shown instead of the collapse button while reordering. */
 @Composable
 private fun PlanRow(
@@ -362,6 +386,8 @@ private fun PlanRow(
     tagFilter: TagFilter,
     viewModel: HomeViewModel,
     onOpen: (ItemRef) -> Unit,
+    shape: Shape,
+    outline: OutlineGuides,
     dragHandle: (@Composable () -> Unit)?,
 ) {
     val plan = row.plan
@@ -379,6 +405,8 @@ private fun PlanRow(
         tags = tagFilter.tagsOf(ref),
         reminder = viewModel.reminderOf(ref),
         onClick = { onOpen(ref) },
+        shape = shape,
+        outline = outline,
         leading = {
             Checkbox(checked = plan.completed, onCheckedChange = { viewModel.setPlanCompleted(plan, it) })
         },
@@ -395,9 +423,17 @@ private fun PlanRow(
     )
 }
 
-/** A task linked to the plan above it; outlined so it reads differently from a plan. */
+/** A task linked to the plan above it, a row of the plan's card. */
 @Composable
-private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: ChecklistCount?, viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit) {
+private fun PlanTaskRow(
+    task: TaskEntity,
+    tagFilter: TagFilter,
+    checklist: ChecklistCount?,
+    viewModel: HomeViewModel,
+    onOpen: (ItemRef) -> Unit,
+    shape: Shape,
+    outline: OutlineGuides,
+) {
     val ref = ItemRef(ItemType.TASK, task.id)
     ItemCard(
         ItemType.TASK,
@@ -405,7 +441,8 @@ private fun PlanTaskRow(task: TaskEntity, tagFilter: TagFilter, checklist: Check
         links = emptyList(),
         tags = tagFilter.tagsOf(ref),
         onClick = { onOpen(ref) },
-        outlined = true,
+        shape = shape,
+        outline = outline,
         leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
     )
 }
@@ -582,6 +619,7 @@ private fun ItemList(
     filtered: Boolean = false,
     controls: Boolean = false,
     state: LazyListState = rememberLazyListState(),
+    spacing: Dp = 6.dp,
     content: LazyListScope.() -> Unit,
 ) {
     // The sort and filter rows open at the top of the list; scroll up to them, or they would open
@@ -591,7 +629,7 @@ private fun ItemList(
         state = state,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(spacing),
     ) {
         content()
         if (empty) {
