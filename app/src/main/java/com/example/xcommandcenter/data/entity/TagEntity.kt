@@ -29,6 +29,9 @@ data class TagEntity(
 )
 data class ItemTagEntity(val type: ItemType, val itemId: Long, val tagId: Long)
 
+/** A tag with the number of items carrying it, for Settings. */
+data class TagUsage(val id: Long, val name: String, val uses: Int)
+
 /** One tag on one item, with the tag's name. */
 data class ItemTag(val type: ItemType, val itemId: Long, val tagId: Long, val name: String) {
     val ref: ItemRef get() = ItemRef(type, itemId)

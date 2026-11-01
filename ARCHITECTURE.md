@@ -607,6 +607,8 @@ wraps or gains lines.
   book's title, author and description, a quote's text, author and source. The text stays when
   switching tabs and combines with the other filters. On the Plans tab it works like the tag filter:
   matching plans and tasks show, with the plans above them.
+  The search also looks through text kept beside an item (§2.51): a task's checklist, a note's
+  list, a book's chapter titles, and every item's tag names.
 - **Untagged:** the first chip of the tag bar. Tap it to show only items without tags; press and
   hold to hide them. It is a pseudo-tag (`TagFilter.UNTAGGED`, id -1) that an item without tags
   carries, so it combines with tags like any other.
@@ -857,6 +859,18 @@ strip (the letter stays). They are indented 28 dp a level, and tree lines run fr
 checkbox down past its children with a short branch to each child's checkbox.
 `outlineGuides` works out, for each row and each level above it, whether a later row still hangs
 from that level's line, so a line stops at its last child.
+
+### 2.51 Search covers sub-items and tags; deleting tags
+
+- **Search** (`SearchScope`) carries, besides the query, the text each item keeps in other
+  tables: checklist items (Tasks), list items (Notes), chapter titles (Books) and tag names (all
+  tabs, Schedule blocks included). A word may come from the item or from that text, so "milk"
+  finds the Groceries task whose checklist has Milk. The extra text is only gathered while
+  something is typed.
+- **Deleting tags:** Settings has a Tags section listing every tag in use with its item count.
+  Deleting one (after a confirmation) takes it off every item in one transaction
+  (`TagDao.deleteTag`); the items stay. A tag filter using it falls away, because the filter only
+  keeps tags still in use.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

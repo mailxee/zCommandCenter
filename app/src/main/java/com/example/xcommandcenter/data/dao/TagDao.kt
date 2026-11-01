@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import com.example.xcommandcenter.data.entity.ItemTag
 import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.TagEntity
+import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +17,22 @@ interface TagDao {
     /** Tags on at least one item. Tags left behind by deleted items are not offered anywhere. */
     @Query("SELECT * FROM tags WHERE id IN (SELECT tagId FROM item_tags) ORDER BY name")
     fun observeInUse(): Flow<List<TagEntity>>
+
+    @Query("SELECT t.id, t.name, COUNT(*) AS uses FROM tags t JOIN item_tags it ON it.tagId = t.id GROUP BY t.id ORDER BY t.name")
+    fun observeUsage(): Flow<List<TagUsage>>
+
+    @Query("DELETE FROM item_tags WHERE tagId = :tagId")
+    suspend fun deleteItemTagsOf(tagId: Long)
+
+    @Query("DELETE FROM tags WHERE id = :tagId")
+    suspend fun deleteTagRow(tagId: Long)
+
+    /** Takes the tag off every item, then deletes it. */
+    @Transaction
+    suspend fun deleteTag(tagId: Long) {
+        deleteItemTagsOf(tagId)
+        deleteTagRow(tagId)
+    }
 
     @Query("SELECT it.type, it.itemId, t.id AS tagId, t.name FROM item_tags it JOIN tags t ON t.id = it.tagId ORDER BY t.name")
     fun observeAllItemTags(): Flow<List<ItemTag>>

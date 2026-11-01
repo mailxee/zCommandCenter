@@ -8,8 +8,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.backup.ImportException
+import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
+import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemStyle
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.TabOrder
@@ -25,7 +27,20 @@ class SettingsViewModel(
     private val itemStyleRepository: ItemStyleRepository,
     private val reminderScheduler: ReminderScheduler,
     private val backup: BackupRepository,
+    private val tags: TagRepository,
 ) : ViewModel() {
+
+    /** Every tag in use, with its item count, for the Tags section. */
+    val tagUsage: StateFlow<List<TagUsage>> = tags.observeUsage()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Takes the tag off every item and deletes it. */
+    fun deleteTag(tag: TagUsage) {
+        viewModelScope.launch {
+            tags.delete(tag.id)
+            message = "Deleted the tag \"${tag.name}\"."
+        }
+    }
 
     val order: StateFlow<List<ItemType>> = tabOrderRepository.order
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabOrder.default)

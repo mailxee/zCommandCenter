@@ -82,6 +82,10 @@ interface TaskDao {
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId ORDER BY position")
     suspend fun checklist(taskId: Long): List<ChecklistItemEntity>
 
+    /** Every checklist item, for the search. */
+    @Query("SELECT * FROM checklist_items ORDER BY taskId, position")
+    fun observeAllChecklistItems(): Flow<List<ChecklistItemEntity>>
+
     @Query("SELECT taskId, COUNT(*) AS total, SUM(done) AS done FROM checklist_items GROUP BY taskId")
     fun observeChecklistCounts(): Flow<List<ChecklistCount>>
 

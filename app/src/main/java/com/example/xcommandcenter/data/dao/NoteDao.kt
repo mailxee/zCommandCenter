@@ -49,6 +49,10 @@ interface NoteDao {
     @Query("SELECT * FROM note_list_items WHERE noteId = :noteId ORDER BY position")
     suspend fun listItems(noteId: Long): List<NoteListItemEntity>
 
+    /** Every note's list items, for the search. */
+    @Query("SELECT * FROM note_list_items ORDER BY noteId, position")
+    fun observeAllListItems(): Flow<List<NoteListItemEntity>>
+
     @Query("SELECT noteId, COUNT(*) AS total FROM note_list_items GROUP BY noteId")
     fun observeListCounts(): Flow<List<NoteListCount>>
 

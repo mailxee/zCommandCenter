@@ -13,6 +13,10 @@ class NoteRepository(private val dao: NoteDao, private val reminders: ReminderRe
 
     suspend fun listItems(noteId: Long): List<NoteListItemEntity> = dao.listItems(noteId)
 
+    /** List item texts per note id, for the search. */
+    fun observeListTexts(): Flow<Map<Long, List<String>>> =
+        dao.observeAllListItems().map { items -> items.groupBy({ it.noteId }, { it.text }) }
+
     /** Number of list items per note id. */
     fun observeListCounts(): Flow<Map<Long, Int>> =
         dao.observeListCounts().map { counts -> counts.associate { it.noteId to it.total } }

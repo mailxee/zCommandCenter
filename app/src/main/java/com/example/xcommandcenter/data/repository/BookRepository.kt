@@ -5,6 +5,7 @@ import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /** Books and their table of contents. */
 class BookRepository(private val dao: BookDao, private val reminders: ReminderRepository) {
@@ -40,6 +41,10 @@ class BookRepository(private val dao: BookDao, private val reminders: ReminderRe
         dao.delete(id)
         reminders.removeOrphans()
     }
+
+    /** Chapter titles per book id, for the search. */
+    fun observeChapterTitles(): Flow<Map<Long, List<String>>> =
+        dao.observeAllChapters().map { chapters -> chapters.groupBy({ it.bookId }, { it.title }) }
 
     fun observeChapters(bookId: Long): Flow<List<ChapterEntity>> = dao.observeChapters(bookId)
 

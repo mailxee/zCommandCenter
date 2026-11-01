@@ -79,6 +79,10 @@ interface BookDao {
         deleteRow(id)
     }
 
+    /** Every book's chapters, for the search. */
+    @Query("SELECT * FROM chapters ORDER BY bookId, position")
+    fun observeAllChapters(): Flow<List<ChapterEntity>>
+
     @Query("SELECT * FROM chapters WHERE bookId = :bookId ORDER BY position")
     fun observeChapters(bookId: Long): Flow<List<ChapterEntity>>
 

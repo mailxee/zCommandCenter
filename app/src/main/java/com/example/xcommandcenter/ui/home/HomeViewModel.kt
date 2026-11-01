@@ -19,7 +19,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.PlanTree
-import com.example.xcommandcenter.domain.Search
+import com.example.xcommandcenter.domain.SearchScope
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.ui.common.HabitSummary
 import com.example.xcommandcenter.ui.common.habitSummary
@@ -164,6 +164,24 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** The search box: every tab shows only the items whose text contains each word typed. */
     val searchQuery = MutableStateFlow("")
 
+    /** The search with each item's checklist, list, chapters and tag names, which it also looks through. */
+    private val search: Flow<SearchScope> = combine(
+        searchQuery,
+        tasksRepo.observeChecklistTexts(),
+        notesRepo.observeListTexts(),
+        booksRepo.observeChapterTitles(),
+        tagsRepo.observeTagsByItem(),
+    ) { query, checklists, lists, chapters, tags ->
+        if (query.isBlank()) return@combine SearchScope(query)
+        val extra = HashMap<ItemRef, MutableList<String>>()
+        fun add(ref: ItemRef, texts: List<String>) = extra.getOrPut(ref) { mutableListOf() }.addAll(texts)
+        checklists.forEach { (id, texts) -> add(ItemRef(ItemType.TASK, id), texts) }
+        lists.forEach { (id, texts) -> add(ItemRef(ItemType.NOTE, id), texts) }
+        chapters.forEach { (id, texts) -> add(ItemRef(ItemType.BOOK, id), texts) }
+        tags.forEach { (ref, itemTags) -> add(ref, itemTags.map { it.name }) }
+        SearchScope(query, extra)
+    }
+
     /** Each item's reminder line for its card (see [reminderLine]). */
     val reminderLines: StateFlow<Map<ItemRef, String>> = container.itemCardSource.reminderLines.stateIn(emptyMap())
 
@@ -199,9 +217,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             tasksRepo.observeAll(),
             taskSort,
             combine(repeatFilter, showCompletedTasks, ::Pair),
-            combine(tagFilter, searchQuery, network, ::Triple),
+            combine(tagFilter, search, network, ::Triple),
             priorityFilters.map { it[ItemType.TASK].orEmpty() },
-        ) { tasks, sort, (repeat, showCompleted), (tags, query, network), priorities ->
+        ) { tasks, sort, (repeat, showCompleted), (tags, search, network), priorities ->
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -212,7 +230,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             tasks.filter {
                 network.has(ItemRef(ItemType.TASK, it.id)) && (showCompleted || !it.completed) && repeat.matches(it) &&
                     (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.TASK, it.id)) &&
-                    Search.matches(query, it.title, it.description)
+                    search.matches(ItemRef(ItemType.TASK, it.id), it.title, it.description)
             }
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
@@ -258,17 +276,18 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         tasksByPlan,
         combine(showCompletedPlans, showCompletedPlanTasks, ::Pair),
         container.collapsedPlansRepository.collapsed,
-        combine(combine(tagFilter, searchQuery, network, ::Triple), prioritySorts, priorityFilters, ::Triple),
+        combine(combine(tagFilter, search, network, ::Triple), prioritySorts, priorityFilters, ::Triple),
     ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tagsQueryNetwork, sorts, filters) ->
-        val (tags, query, network) = tagsQueryNetwork
-        val narrowed = tags.active || query.isNotBlank() || network != null
+        val (tags, search, network) = tagsQueryNetwork
+        val narrowed = tags.active || search.active || network != null
         // Sorting the plans sorts siblings: the tree keeps each plan's children in the order given.
         val sorted = if (sorts[ItemType.PLAN] == PrioritySort.PRIORITY) all.sortedByDescending { it.priority.ordinal } else all
         val shown = if (showPlans) sorted else sorted.filterNot { it.completed }
         val priorities = filters[ItemType.PLAN].orEmpty()
         fun tasksOf(planId: Long) = tasksByPlan[planId].orEmpty()
             .filter {
-                (showTasks || !it.completed) && tags.matches(ItemRef(ItemType.TASK, it.id)) && Search.matches(query, it.title, it.description)
+                (showTasks || !it.completed) && tags.matches(ItemRef(ItemType.TASK, it.id)) &&
+                    search.matches(ItemRef(ItemType.TASK, it.id), it.title, it.description)
             }
         val visible = if (!narrowed && priorities.isEmpty()) {
             shown
@@ -277,7 +296,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             val hits = shown.filter { plan ->
                 (priorities.isEmpty() || plan.priority in priorities) &&
                     (!narrowed || (network.has(ItemRef(ItemType.PLAN, plan.id)) && tags.matches(ItemRef(ItemType.PLAN, plan.id)) &&
-                        Search.matches(query, plan.title, plan.description)) ||
+                        search.matches(ItemRef(ItemType.PLAN, plan.id), plan.title, plan.description)) ||
                         (!tags.excludes(ItemRef(ItemType.PLAN, plan.id)) && tasksOf(plan.id).isNotEmpty()))
             }.map { it.id }
             val keep = hits.toSet() + hits.flatMap { PlanTree.ancestorIds(it, shown, { p -> p.id }, { p -> p.parentId }) }
@@ -338,10 +357,10 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
 
     /** The Schedule tab: the active schedule's blocks by start time, passing link mode, the tag filter and the search. */
     val blocks: StateFlow<List<BlockEntity>> =
-        combine(activeBlocks, tagFilter, searchQuery, network) { blocks, tags, query, network ->
+        combine(activeBlocks, tagFilter, search, network) { blocks, tags, search, network ->
             blocks.filter {
                 val ref = ItemRef(ItemType.BLOCK, it.id)
-                network.has(ref) && tags.matches(ref) && Search.matches(query, it.title, it.notes)
+                network.has(ref) && tags.matches(ref) && search.matches(ref, it.title, it.notes)
             }
         }.stateIn(emptyList())
 
@@ -608,11 +627,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         priority: (T) -> Priority,
         text: (T) -> List<String>,
     ): StateFlow<List<T>> =
-        combine(this, tagFilter, prioritySorts, priorityFilters, combine(searchQuery, network, ::Pair)) { items, tags, sorts, filters, (query, network) ->
+        combine(this, tagFilter, prioritySorts, priorityFilters, combine(search, network, ::Pair)) { items, tags, sorts, filters, (search, network) ->
             val priorities = filters[type].orEmpty()
             val shown = items.filter {
                 network.has(ItemRef(type, id(it))) && (priorities.isEmpty() || priority(it) in priorities) && tags.matches(ItemRef(type, id(it))) &&
-                    Search.matches(query, *text(it).toTypedArray())
+                    search.matches(ItemRef(type, id(it)), *text(it).toTypedArray())
             }
             if (sorts[type] == PrioritySort.PRIORITY) shown.sortedByDescending { priority(it).ordinal } else shown
         }.stateIn(emptyList())

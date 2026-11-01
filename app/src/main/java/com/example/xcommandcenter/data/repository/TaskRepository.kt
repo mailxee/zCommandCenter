@@ -20,6 +20,10 @@ class TaskRepository(
 
     suspend fun checklist(taskId: Long): List<ChecklistItemEntity> = dao.checklist(taskId)
 
+    /** Checklist item texts per task id, for the search. */
+    fun observeChecklistTexts(): Flow<Map<Long, List<String>>> =
+        dao.observeAllChecklistItems().map { items -> items.groupBy({ it.taskId }, { it.text }) }
+
     /** Checklist progress per task id. */
     fun observeChecklistCounts(): Flow<Map<Long, ChecklistCount>> =
         dao.observeChecklistCounts().map { counts -> counts.associateBy { it.taskId } }

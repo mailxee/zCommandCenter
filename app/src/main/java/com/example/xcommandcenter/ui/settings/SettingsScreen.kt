@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
+import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.TabOrder
 import com.example.xcommandcenter.reminder.Notifications
@@ -67,6 +68,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val order by viewModel.order.collectAsStateWithLifecycle()
+    val tagUsage by viewModel.tagUsage.collectAsStateWithLifecycle()
+    var deletingTag by remember { mutableStateOf<TagUsage?>(null) }
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
@@ -157,6 +160,32 @@ fun SettingsScreen(
             }
             TextButton(onClick = viewModel::reset) { Text("Reset to default order") }
 
+            SectionTitle("Tags")
+            if (tagUsage.isEmpty()) {
+                Text("No tags yet. Add them on an item's page.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Text(
+                    "Deleting a tag takes it off every item that has it. The items themselves are kept.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Card(Modifier.fillMaxWidth()) {
+                    tagUsage.forEach { tag ->
+                        key(tag.id) {
+                            ListItem(
+                                colors = clearListItemColors(),
+                                headlineContent = { Text("#${tag.name}") },
+                                supportingContent = { Text(itemCount(tag.uses)) },
+                                trailingContent = {
+                                    IconButton(onClick = { deletingTag = tag }) {
+                                        Icon(painterResource(R.drawable.ic_delete), contentDescription = "Delete tag ${tag.name}")
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
             SectionTitle("Reminders")
             Text(
                 if (notificationsAllowed) "Notifications are allowed."
@@ -239,6 +268,21 @@ fun SettingsScreen(
         )
     }
 
+    deletingTag?.let { tag ->
+        AlertDialog(
+            onDismissRequest = { deletingTag = null },
+            title = { Text("Delete #${tag.name}?") },
+            text = { Text("The tag is taken off ${itemCount(tag.uses)}. The items themselves are kept.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { deletingTag = null; viewModel.deleteTag(tag) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deletingTag = null }) { Text("Cancel") } },
+        )
+    }
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -259,5 +303,7 @@ fun SettingsScreen(
         )
     }
 }
+
+private fun itemCount(n: Int) = if (n == 1) "1 item" else "$n items"
 
 private const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -2,6 +2,7 @@ package com.example.xcommandcenter.data.repository
 
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.entity.TagEntity
+import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.domain.ItemRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +21,12 @@ class TagRepository(private val dao: TagDao) {
         val trimmed = name.trim().removePrefix("#").trim()
         if (trimmed.isNotEmpty()) dao.addTag(ref.type, ref.id, trimmed.take(MAX_LENGTH))
     }
+
+    /** Tags in use, with how many items carry each. */
+    fun observeUsage(): Flow<List<TagUsage>> = dao.observeUsage()
+
+    /** Removes the tag from every item and deletes it. */
+    suspend fun delete(tagId: Long) = dao.deleteTag(tagId)
 
     /** A tag no item carries any more is deleted. */
     suspend fun remove(ref: ItemRef, tagId: Long) = dao.removeTag(ref.type, ref.id, tagId)
