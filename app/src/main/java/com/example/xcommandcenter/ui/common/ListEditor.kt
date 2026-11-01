@@ -1,6 +1,10 @@
 package com.example.xcommandcenter.ui.common
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -8,10 +12,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -54,31 +61,51 @@ fun ListEditor(
     ReorderableColumn(list = lines, onSettle = onMove) { index, line, _ ->
         key(line.key) {
             ReorderableItem {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (checkable) {
-                        Checkbox(checked = line.done, onCheckedChange = { done -> onUpdate(line.key) { it.copy(done = done) } })
-                    } else {
-                        Text("•", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 12.dp))
+                // Each item is its own soft box, so items read apart; the controls sit level with
+                // the first line of the text rather than the middle of a long item.
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)) {
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+                            if (checkable) {
+                                Checkbox(checked = line.done, onCheckedChange = { done -> onUpdate(line.key) { it.copy(done = done) } })
+                            } else {
+                                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                    Text("•", style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
+                        val struck = checkable && line.done
+                        BasicTextField(
+                            value = line.text,
+                            onValueChange = { text -> onUpdate(line.key) { it.copy(text = text) } },
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = if (struck) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                                textDecoration = if (struck) TextDecoration.LineThrough else null,
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f).padding(start = 4.dp, top = 8.dp, bottom = 8.dp),
+                        )
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+                            IconButton(onClick = { onRemove(line.key) }, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    painterResource(R.drawable.ic_close),
+                                    contentDescription = "Remove item",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        DragHandle(
+                            Modifier.draggableHandle(),
+                            onMoveUp = if (index > 0) ({ onMove(index, index - 1) }) else null,
+                            onMoveDown = if (index < lines.lastIndex) ({ onMove(index, index + 1) }) else null,
+                            compact = true,
+                        )
                     }
-                    val struck = checkable && line.done
-                    BasicTextField(
-                        value = line.text,
-                        onValueChange = { text -> onUpdate(line.key) { it.copy(text = text) } },
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = if (struck) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                            textDecoration = if (struck) TextDecoration.LineThrough else null,
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = { onRemove(line.key) }) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove item")
-                    }
-                    DragHandle(
-                        Modifier.draggableHandle(),
-                        onMoveUp = if (index > 0) ({ onMove(index, index - 1) }) else null,
-                        onMoveDown = if (index < lines.lastIndex) ({ onMove(index, index + 1) }) else null,
-                    )
                 }
             }
         }

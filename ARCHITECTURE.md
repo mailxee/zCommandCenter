@@ -872,6 +872,14 @@ from that level's line, so a line stops at its last child.
   (`TagDao.deleteTag`); the items stay. A tag filter using it falls away, because the filter only
   keeps tags still in use.
 
+### 2.52 Checklist and list rows
+
+A task's checklist and a note's list (`ListEditor`) show each item in its own soft rounded box
+(`surfaceContainerLow`, 4 dp apart) so items read separately. The row is top-aligned: the
+checkbox (or bullet), the remove button and the drag handle sit level with the first line of the
+text instead of the middle of a long item. The remove button and the grip are smaller and drawn in
+the muted colour (`DragHandle(compact = true)`), leaving more width for the text.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
