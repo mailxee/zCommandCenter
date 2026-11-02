@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.home
 
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -157,6 +160,7 @@ fun ScheduleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, onCreateAt:
                         links = links[ref].orEmpty(),
                         hasReminder = ref in reminders,
                         onClick = { onOpen(ref) },
+                        onLongClick = { viewModel.showNetwork(ref) },
                         modifier = Modifier
                             .offset(x = Gutter + slot * placed.column, y = at(block.startMinute) + 1.dp)
                             .width(slot - 2.dp)
@@ -252,12 +256,13 @@ private fun BlockCard(
     links: List<ItemIndexEntry>,
     hasReminder: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
     // A light tint of the Schedule tab's color, with a solid edge on the left as calendars draw events.
     val accent = tabAccent(ItemType.BLOCK)
     Surface(
-        onClick = onClick,
         shape = RoundedCornerShape(8.dp),
         color = lerp(MaterialTheme.colorScheme.surface, accent, 0.18f),
         modifier = modifier,
@@ -265,6 +270,15 @@ private fun BlockCard(
         val short = block.endMinute - block.startMinute < 45
         Column(
             Modifier
+                // Press and hold shows the block's network, as on the other tabs' cards.
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick()
+                    },
+                    onLongClickLabel = "Show linked items",
+                )
                 .drawBehind { drawRect(accent, size = Size(3.dp.toPx(), size.height)) }
                 .padding(start = 11.dp, end = 8.dp, top = if (short) 2.dp else 4.dp, bottom = if (short) 2.dp else 4.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.remember
+import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.AssistChip
@@ -98,9 +99,7 @@ fun HomeScreen(
     val selected = order.firstOrNull { it.name == selectedName } ?: order.first()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val counts by viewModel.tabCounts.collectAsStateWithLifecycle()
-    val picking by viewModel.linkPicking.collectAsStateWithLifecycle()
-    // While picking a root for link mode, a tapped card becomes the root instead of opening.
-    val open: (ItemRef) -> Unit = { ref -> if (picking) viewModel.pickLinkRoot(ref) else onOpen(ref) }
+    val open: (ItemRef) -> Unit = onOpen
 
     // The title bar slides away while the list scrolls down and back on the way up; the add button
     // shrinks to its icon meanwhile, so it covers less of the cards.
@@ -185,9 +184,8 @@ fun HomeScreen(
             ) {
                 SearchBar(viewModel, selected, Modifier.weight(1f))
                 FilterButton(viewModel, selected, showFilters) { showFilters = !showFilters }
-                LinkModeButton(viewModel, picking)
             }
-            LinkModeStatus(viewModel, picking)
+            LinkModeStatus(viewModel)
             AnimatedVisibility(visible = showFilters) {
                 TagFilterBar(viewModel, selected)
             }
@@ -313,37 +311,17 @@ private fun SearchBar(viewModel: HomeViewModel, tab: ItemType, modifier: Modifie
 }
 
 /**
- * Link mode: pressed, the next card tapped becomes the root, and every tab then shows only the
- * items linked to it, directly or through other items. Pressed again, back to normal mode.
+ * Link mode, turned on by pressing and holding a card: a banner under the search bar naming whose
+ * network every tab shows, with a cross that goes back to normal mode.
  */
 @Composable
-private fun LinkModeButton(viewModel: HomeViewModel, picking: Boolean) {
+private fun LinkModeStatus(viewModel: HomeViewModel) {
     val root by viewModel.linkRoot.collectAsStateWithLifecycle()
-    val on = picking || root != null
-    FilledTonalIconToggleButton(
-        checked = on,
-        onCheckedChange = { viewModel.toggleLinkMode() },
-        modifier = Modifier.padding(start = 4.dp).semantics {
-            stateDescription = when {
-                picking -> "Choosing an item"
-                root != null -> "On"
-                else -> "Off"
-            }
-        },
-    ) {
-        Icon(painterResource(R.drawable.ic_link), contentDescription = "Link mode")
-    }
-}
-
-/**
- * A banner under the search bar while link mode is picking or on: what to do, or whose network is
- * shown, with a cross that leaves link mode as the link button does.
- */
-@Composable
-private fun LinkModeStatus(viewModel: HomeViewModel, picking: Boolean) {
-    val root by viewModel.linkRoot.collectAsStateWithLifecycle()
-    val current = root
-    AnimatedVisibility(visible = picking || current != null) {
+    // Kept while the banner slides away, so its text doesn't vanish first.
+    var shown by remember { mutableStateOf<ItemIndexEntry?>(null) }
+    root?.let { shown = it }
+    val current = shown
+    AnimatedVisibility(visible = root != null) {
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -354,9 +332,7 @@ private fun LinkModeStatus(viewModel: HomeViewModel, picking: Boolean) {
                 Icon(painterResource(R.drawable.ic_link), contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 val style = MaterialTheme.typography.bodyMedium
-                if (current == null) {
-                    Text("Tap a card to show only the items linked to it", style = style, modifier = Modifier.weight(1f))
-                } else {
+                if (current != null) {
                     Text(
                         buildAnnotatedString {
                             append("Linked to ")
@@ -368,7 +344,7 @@ private fun LinkModeStatus(viewModel: HomeViewModel, picking: Boolean) {
                         modifier = Modifier.weight(1f).semantics { contentDescription = "Link mode: showing items linked to ${current.title}" },
                     )
                 }
-                IconButton(onClick = viewModel::toggleLinkMode) {
+                IconButton(onClick = viewModel::exitLinkMode) {
                     Icon(painterResource(R.drawable.ic_close), contentDescription = "Leave link mode", modifier = Modifier.size(20.dp))
                 }
             }

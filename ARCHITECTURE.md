@@ -661,17 +661,21 @@ page still lists the chapters in Linked items.
 
 ### 2.36 Link mode
 
-A link button sits beside the (now narrower) search box. Pressed, the next card tapped on any
-tab becomes the root instead of opening; every tab then shows only the root's network: the items
+Pressing and holding a card on any tab (a Schedule block or a Plans outline row included) turns
+link mode on with that item as the root (`ItemCard(onLongClick = …)` → `HomeViewModel.showNetwork`,
+with a vibration and a "Show linked items" accessibility action); pressing and holding another card
+while it is on moves the root there. A tap still opens the item. Reordering mode ignores the press.
+This replaced an earlier link button beside the search box and its "tap a card" picking step.
+Every tab then shows only the root's network: the items
 linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
 walk over the undirected links). Notes, quotes and books are end points, never followed: the walk
 goes only through tasks, goals, habits and plans, and an end point (a book with all its chapters; a
 chapter's links count as its book's) shows when it is linked to one of them. An end point as the
 root starts the walk from the items linked to it, and also shows the end points linked to it
-directly (one step), so a new note, quote or book saved from it stays visible. A line under the search box names the root; pressing the
-button again goes back to normal mode.
+directly (one step), so a new note, quote or book saved from it stays visible. A banner under the search box names the root; its cross goes
+back to normal mode.
 
-The state lives in `LinkRepository` (in memory: `picking`, the root, and the `network` flow), so
+The state lives in `LinkRepository` (in memory: the root and the `network` flow), so
 both the home screen and the detail screens see it. `HomeViewModel` keeps only network items in
 every tab, the plan tree (plans above a network plan stay as headings), the tag chips, the
 completed counts and "Delete completed"; the link picker searches only the network. A new item

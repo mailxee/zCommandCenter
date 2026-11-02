@@ -138,9 +138,6 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val linksByOwner: StateFlow<Map<ItemRef, List<ItemIndexEntry>>> =
         container.linkRepository.observeLinksByOwner().stateIn(emptyMap())
 
-    /** True after the link mode button is pressed, until a card is tapped to become the root. */
-    val linkPicking: StateFlow<Boolean> = linksRepo.picking
-
     /** Link mode's root; null in normal mode. */
     val linkRoot: StateFlow<ItemIndexEntry?> = linksRepo.linkRoot.stateIn(null)
 
@@ -475,13 +472,14 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         }
     }
 
-    /** The link mode button: starts picking a root, or goes back to normal mode. */
-    fun toggleLinkMode() {
-        if (linkPicking.value || linkRoot.value != null) linksRepo.exitLinkMode() else linksRepo.startPicking()
+    /** A card pressed and held: link mode on with it as the root (or the root moved to it). Off while reordering. */
+    fun showNetwork(ref: ItemRef) {
+        if (!reorderMode.value) linksRepo.showNetwork(ref)
     }
 
-    fun pickLinkRoot(ref: ItemRef) {
-        linksRepo.pickRoot(ref)
+    /** The banner's cross: back to normal mode. */
+    fun exitLinkMode() {
+        linksRepo.exitLinkMode()
     }
 
     fun setTaskSort(sort: TaskSort) {

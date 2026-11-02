@@ -161,6 +161,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                     text = taskCardText(task, checklists[task.id]),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
                     reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     leading = { Checkbox(checked = task.completed, onCheckedChange = { viewModel.setTaskCompleted(task.id, it) }) },
@@ -218,6 +219,7 @@ fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                     links[ref].orEmpty(),
                     { onOpen(ref) },
                     tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
                     reminder = viewModel.reminderOf(ref),
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.GOAL, goal.id, it) }) {
                         viewModel.reorder(ItemType.GOAL, drag.rows.map { it.id })
@@ -249,6 +251,7 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
                     text = habitCardText(summary),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
                     reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.HABIT, habit.id, it) }) {
@@ -403,6 +406,7 @@ private fun PlanRow(
         text = planCardText(plan, hidden.takeIf { row.collapsed && it.isNotEmpty() }?.joinToString(" · ", postfix = " hidden")),
         links = otherLinks,
         tags = tagFilter.tagsOf(ref),
+        onLongClick = { viewModel.showNetwork(ref) },
         reminder = viewModel.reminderOf(ref),
         onClick = { onOpen(ref) },
         shape = shape,
@@ -440,6 +444,7 @@ private fun PlanTaskRow(
         text = taskCardText(task, checklist),
         links = emptyList(),
         tags = tagFilter.tagsOf(ref),
+        onLongClick = { viewModel.showNetwork(ref) },
         onClick = { onOpen(ref) },
         shape = shape,
         outline = outline,
@@ -474,6 +479,7 @@ fun NotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                     text = noteCardText(note, listCounts[note.id] ?: 0),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
                     reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.NOTE, note.id, it) }) {
@@ -505,6 +511,7 @@ fun BooksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                     text = bookCardText(item),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
                     reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.BOOK, item.book.id, it) }) {
@@ -536,6 +543,7 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
                     text = quoteCardText(quote),
                     links = links[ref].orEmpty(),
                     tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
                     reminder = viewModel.reminderOf(ref),
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {

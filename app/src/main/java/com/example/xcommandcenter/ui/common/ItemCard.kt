@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -218,6 +221,8 @@ fun times(count: Int): String = if (count == 1) "once" else "$count times"
  * "Tasks: …") is folded away behind a button with the number of links. Used by the tab lists and
  * by the linked items on detail pages. In the Plans outline, [outline] makes it a row of its
  * top-level plan's card ([shape] squares the joins): smaller, indented, with tree lines.
+ * [onLongClick], given on the main screen's tabs, is pressing and holding the card: it shows the
+ * item's network (link mode).
  */
 @Composable
 fun ItemCard(
@@ -232,7 +237,9 @@ fun ItemCard(
     footer: (@Composable () -> Unit)? = null,
     shape: Shape = RoundedCornerShape(12.dp),
     outline: OutlineGuides? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
+    val haptics = LocalHapticFeedback.current
     val depth = outline?.depth ?: 0
     val child = depth > 0
     // A strip down the left edge in the priority's color, faded once the item is done.
@@ -301,15 +308,28 @@ fun ItemCard(
             footer?.let { Box(Modifier.padding(start = CardPadding + StripWidth, end = CardPadding, bottom = CardPadding)) { it() } }
         }
     }
+    // Material's clickable Card takes no long press, so the card's content handles both.
     Card(
-        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         // An outline's rows join into one card, so they cast no shadows onto each other.
         elevation = CardDefaults.cardElevation(defaultElevation = if (outline != null) 0.dp else 1.dp),
-        content = content,
-    )
+    ) {
+        Column(
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick?.let { show ->
+                    {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        show()
+                    }
+                },
+                onLongClickLabel = if (onLongClick != null) "Show linked items" else null,
+            ),
+            content = content,
+        )
+    }
 }
 
 private val StripWidth = 4.dp

@@ -8,8 +8,6 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LinkNetwork
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -18,12 +16,9 @@ import kotlinx.coroutines.flow.flowOf
 class LinkRepository(private val dao: LinkDao) {
 
     /**
-     * Link mode, kept in memory for as long as the app runs: [picking] while waiting for the card
-     * that becomes the root, then the root's [network] is all the app shows.
+     * Link mode, kept in memory for as long as the app runs: once a card is pressed and held, it is
+     * the root and the root's [network] is all the app shows.
      */
-    private val _picking = MutableStateFlow(false)
-    val picking: StateFlow<Boolean> = _picking.asStateFlow()
-
     private val rootRef = MutableStateFlow<ItemRef?>(null)
 
     /** The root while link mode is on; null in normal mode, and once the root is deleted. */
@@ -45,20 +40,13 @@ class LinkRepository(private val dao: LinkDao) {
         }
     }
 
-    /** The link mode button: waits for a card to pick as the root. */
-    fun startPicking() {
-        rootRef.value = null
-        _picking.value = true
-    }
-
-    fun pickRoot(ref: ItemRef) {
-        _picking.value = false
+    /** Turns link mode on with [ref] as the root, or moves the root to [ref] when already on. */
+    fun showNetwork(ref: ItemRef) {
         rootRef.value = ref
     }
 
-    /** Back to normal mode, from picking or from link mode. */
+    /** Back to normal mode. */
     fun exitLinkMode() {
-        _picking.value = false
         rootRef.value = null
     }
 
