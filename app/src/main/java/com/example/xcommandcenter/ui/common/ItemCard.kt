@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.common
 
+import com.example.xcommandcenter.domain.Profiles
+import com.example.xcommandcenter.data.repository.PersonLists
+import com.example.xcommandcenter.data.entity.PersonEntity
 import androidx.compose.foundation.background
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
@@ -191,6 +194,18 @@ fun quoteCardText(quote: QuoteEntity): CardText {
         priority = quote.priority,
     )
 }
+
+/** A person: their bio, and which platforms they are on and how many items they have. */
+fun personCardText(person: PersonEntity, lists: PersonLists?) = CardText(
+    title = person.name,
+    lines = listOfNotNull(person.bio.ifBlank { null }),
+    emphasis = critical(person.priority),
+    priority = person.priority,
+    meta = listOfNotNull(
+        lists?.profiles?.map { Profiles.platformOf(it).label }?.distinct()?.joinToString(" · ")?.ifBlank { null },
+        lists?.items?.size?.takeIf { it > 0 }?.items(),
+    ),
+)
 
 /** "7:00 – 7:45 AM": a block's time of day. */
 fun blockTimeText(block: BlockEntity): String = "${minuteText(block.startMinute)} – ${minuteText(block.endMinute)}"

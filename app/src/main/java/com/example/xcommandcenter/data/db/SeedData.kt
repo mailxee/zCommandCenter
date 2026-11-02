@@ -15,6 +15,7 @@ import com.example.xcommandcenter.domain.ItemType.GOAL
 import com.example.xcommandcenter.domain.ItemType.HABIT
 import com.example.xcommandcenter.domain.ItemType.NOTE
 import com.example.xcommandcenter.domain.ItemType.PLAN
+import com.example.xcommandcenter.domain.ItemType.PERSON
 import com.example.xcommandcenter.domain.ItemType.QUOTE
 import com.example.xcommandcenter.domain.ItemType.TASK
 import com.example.xcommandcenter.domain.Priority
@@ -193,6 +194,30 @@ internal object SeedData {
         row("quotes", "id" to 5L, "text" to "The miracle isn't that I finished. The miracle is that I had the courage to start.",
             "source" to "", "author" to "John Bingham")
 
+        // People: the Stoics behind the books and quotes, each with a profile and a few items.
+        row("people", "id" to 1L, "sortOrder" to 0, "name" to "Marcus Aurelius", "bio" to "Roman emperor and Stoic. His private notes became the Meditations.",
+            "priority" to Priority.HIGH)
+        row("people", "id" to 2L, "sortOrder" to 1, "name" to "Seneca", "bio" to "Statesman, playwright and Stoic; wrote letters on how to live.")
+        row("people", "id" to 3L, "sortOrder" to 2, "name" to "Epictetus", "bio" to "Born a slave, became a teacher. Taught the dichotomy of control.")
+        fun personList(table: String, column: String, personId: Long, vararg texts: String) = texts.forEachIndexed { index, text ->
+            db.insert(table, SQLiteDatabase.CONFLICT_ABORT,
+                ContentValues().apply { put("personId", personId); put("position", index); put(column, text) })
+        }
+        personList("person_profiles", "url", 1, "en.wikipedia.org/wiki/Marcus_Aurelius")
+        personList("person_profiles", "url", 2, "en.wikipedia.org/wiki/Seneca_the_Younger")
+        personList("person_profiles", "url", 3, "en.wikipedia.org/wiki/Epictetus")
+        personList("person_items", "text", 1,
+            "Begin the morning by expecting difficult people, and meet them without anger.",
+            "The view from above: picture the whole world to keep today's worries small.",
+            "Meditations, free to read: https://www.gutenberg.org/ebooks/2680")
+        personList("person_items", "text", 2,
+            "Time is the one thing truly ours; guard it.",
+            "Rehearse hardship now and then, so it holds no terror.",
+            "Moral letters to Lucilius: https://en.wikisource.org/wiki/Moral_letters_to_Lucilius")
+        personList("person_items", "text", 3,
+            "Some things are up to us and some are not.",
+            "It is not things that disturb us, but our judgments about them.")
+
         // Schedules: the first (created with the database) becomes "Weekday"; "Weekend" is added. Automatic switching stays off.
         db.execSQL("UPDATE schedules SET name = 'Weekday', days = ${Recurrence.maskFromDays(DayOfWeek.entries.take(5).toSet())} WHERE id = 1")
         db.insert("schedules", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
@@ -260,6 +285,14 @@ internal object SeedData {
             BLOCK to 10L to (PLAN to 1L),
             BLOCK to 11L to (PLAN to 5L),
             BLOCK to 12L to (HABIT to 2L),
+            PERSON to 1L to (BOOK to 1L),
+            PERSON to 1L to (QUOTE to 1L),
+            PERSON to 1L to (QUOTE to 2L),
+            PERSON to 1L to (GOAL to 1L),
+            PERSON to 2L to (BOOK to 2L),
+            PERSON to 2L to (QUOTE to 3L),
+            PERSON to 3L to (QUOTE to 4L),
+            PERSON to 3L to (NOTE to 1L),
         ).forEach { (from, to) -> link(db, from, to, created()) }
 
         // Tags (no createdAt column, so not through row()).
@@ -271,6 +304,7 @@ internal object SeedData {
             GOAL to 2L to 2L, HABIT to 3L to 2L, PLAN to 5L to 2L, TASK to 3L to 2L, TASK to 4L to 2L, NOTE to 3L to 2L, BLOCK to 6L to 2L,
             GOAL to 3L to 3L, HABIT to 4L to 3L, PLAN to 1L to 3L, TASK to 1L to 3L, TASK to 2L to 3L, NOTE to 2L to 3L, BLOCK to 10L to 3L,
             BOOK to 1L to 4L, BOOK to 2L to 4L, BOOK to 3L to 4L, BLOCK to 8L to 4L,
+            PERSON to 1L to 1L, PERSON to 2L to 1L, PERSON to 3L to 1L,
         ).forEach { (item, tagId) ->
             db.insert("item_tags", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
                 put("type", item.first.name)

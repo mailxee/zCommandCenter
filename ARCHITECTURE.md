@@ -668,7 +668,7 @@ while it is on moves the root there. A tap still opens the item. Reordering mode
 This replaced an earlier link button beside the search box and its "tap a card" picking step.
 Every tab then shows only the root's network: the items
 linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
-walk over the undirected links). Notes, quotes and books are end points, never followed: the walk
+walk over the undirected links). Notes, quotes, books and people (§2.53) are end points, never followed: the walk
 goes only through tasks, goals, habits and plans, and an end point (a book with all its chapters; a
 chapter's links count as its book's) shows when it is linked to one of them. An end point as the
 root starts the walk from the items linked to it, and also shows the end points linked to it
@@ -884,6 +884,31 @@ checkbox (or bullet), the remove button and the drag handle sit level with the f
 text instead of the middle of a long item. The remove button and the grip are smaller and drawn in
 the muted colour (`DragHandle(compact = true)`), leaving more width for the text.
 
+### 2.53 People tab
+
+A tab for people worth keeping track of (`ItemType.PERSON`, orange, a person icon), added last in
+the default tab order so an existing order gets it at the end (`TabOrder.parse`).
+
+- **Data** (database version 8, an automatic migration): `people` (name, bio, priority, order),
+  `person_profiles` (web addresses such as "x.com/name", stored without "https://") and
+  `person_items` (free text: an idea, or a video or post with its link), both ordered and
+  deleted with the person through their foreign keys. People are in `item_index`, so links, the
+  link picker, tags and reminders work as for every other item.
+- **Profiles** (`domain/Profiles`): "@name" becomes an X profile and "youtube @name" (any
+  platform's name or badge, such as "yt: @name") that platform's; an address loses its scheme,
+  "www." and trailing slash. The platform comes from the host (`platformOf`, matching whole
+  domains so "notx.com" isn't X) and shows as a small badge, or a globe for a website; tapping it
+  opens the profile.
+- **Items:** the kind comes from the first link (`kindOf`): video sites give a play icon, social
+  networks a post icon, any other link a link icon, and no link a lightbulb (an idea). Tapping the
+  icon opens the link. Both lists use the checklist row layout (`ListEditor(leading = …)`).
+- **Card:** name, tags, the platforms and item count on the meta line, two lines of bio.
+- **Search** also looks through profiles and items (`SearchScope`).
+- **Links:** a person is an end point of link mode's network, like notes, quotes and books
+  (`LinkNetwork`): holding a goal shows its people, but not what those people link to.
+- **Backup:** a People sheet, plus Profiles and Person items sheets. All three are optional on
+  import, so older workbooks still load.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1046,6 +1071,9 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/book/BookDetailViewModel.kt`, `BookDetailScreen.kt` | Book form and table of contents (add, +1 read, internalized, reorder); tags; links. |
 | `ui/book/ChapterDetailViewModel.kt`, `ChapterDetailScreen.kt` | Chapter title, read count ±1, internalized, parent book, delete; tags; links. |
 | `ui/quote/QuoteDetailViewModel.kt`, `QuoteDetailScreen.kt` | Quote text, optional author and source; tags; links. |
+| `ui/person/PersonDetailViewModel.kt`, `PersonDetailScreen.kt` | A person's name, bio, profiles (platform badges) and items (kind icons); tags; links (§2.53). |
+| `data/entity/PersonEntity.kt`, `data/dao/PersonDao.kt`, `data/repository/PersonRepository.kt` | People with their profiles and items (§2.53). |
+| `domain/Profiles.kt` | Profile handles to addresses, platform from host, item kind from its link (§2.53). |
 
 ### Resources
 | File | Purpose |

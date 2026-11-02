@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.data.backup
 
+import com.example.xcommandcenter.data.entity.PersonProfileEntity
+import com.example.xcommandcenter.data.entity.PersonItemEntity
+import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
@@ -58,15 +61,19 @@ data class BackupData(
     val reminders: List<ReminderEntity> = emptyList(),
     val blocks: List<BlockEntity> = emptyList(),
     val schedules: List<ScheduleEntity> = emptyList(),
+    val people: List<PersonEntity> = emptyList(),
+    val personProfiles: List<PersonProfileEntity> = emptyList(),
+    val personItems: List<PersonItemEntity> = emptyList(),
 ) {
-    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size
+    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size
 }
 
 /** A problem that stops an import; [message] says where, in words the user can act on. */
 class ImportException(message: String) : Exception(message)
 
 /**
- * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists, Chapters,
+ * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists,
+ * Profiles and Person items (a person's two lists), Chapters,
  * Habit history, Links, Tags, Reminders, Settings (the tab order and each tab's item style) and
  * Schedules (the Schedule tab's schedules, which is on show, and automatic switching), so
  * that an import restores everything. Columns are found by header name, so
@@ -80,6 +87,8 @@ object BackupFormat {
     const val TAGS = "Tags"
     const val CHECKLISTS = "Checklists"
     const val NOTE_LISTS = "Note lists"
+    const val PROFILES = "Profiles"
+    const val PERSON_ITEMS = "Person items"
     const val REMINDERS = "Reminders"
     const val SETTINGS = "Settings"
     const val SCHEDULES = "Schedules"
@@ -173,6 +182,11 @@ object BackupFormat {
                         listOf(it.id.toString(), it.text, it.source, it.author, time(it.createdAt), it.sortOrder.toString(), it.priority.label)
                     },
             ),
+            ItemType.PERSON to Sheet(
+                ItemType.PERSON.tabLabel,
+                listOf(listOf("ID", "Name", "Bio", "Created", "Order", "Priority")) +
+                    data.people.map { listOf(it.id.toString(), it.name, it.bio, time(it.createdAt), it.sortOrder.toString(), it.priority.label) },
+            ),
             ItemType.BLOCK to Sheet(
                 ItemType.BLOCK.tabLabel,
                 listOf(listOf("ID", "Title", "Start", "End", "Notes", "Created", "Schedule ID", "Schedule")) +
@@ -206,6 +220,20 @@ object BackupFormat {
             listOf(listOf("Note ID", "Note", "Position", "Item")) +
                 data.noteListItems.sortedWith(compareBy({ it.noteId }, { it.position })).map {
                     listOf(it.noteId.toString(), title(ItemRef(ItemType.NOTE, it.noteId)), (it.position + 1).toString(), it.text)
+                },
+        )
+        val profiles = Sheet(
+            PROFILES,
+            listOf(listOf("Person ID", "Person", "Position", "Profile")) +
+                data.personProfiles.sortedWith(compareBy({ it.personId }, { it.position })).map {
+                    listOf(it.personId.toString(), title(ItemRef(ItemType.PERSON, it.personId)), (it.position + 1).toString(), it.url)
+                },
+        )
+        val personItems = Sheet(
+            PERSON_ITEMS,
+            listOf(listOf("Person ID", "Person", "Position", "Item")) +
+                data.personItems.sortedWith(compareBy({ it.personId }, { it.position })).map {
+                    listOf(it.personId.toString(), title(ItemRef(ItemType.PERSON, it.personId)), (it.position + 1).toString(), it.text)
                 },
         )
         val history = Sheet(
@@ -263,7 +291,7 @@ object BackupFormat {
                     )
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, chapters, history, links, tags, reminders, settings, schedules)
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, profiles, personItems, chapters, history, links, tags, reminders, settings, schedules)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -276,6 +304,7 @@ object BackupFormat {
         data.chapters.forEach { put(ItemRef(ItemType.CHAPTER, it.id), it.title) }
         data.quotes.forEach { put(ItemRef(ItemType.QUOTE, it.id), it.text.take(40)) }
         data.blocks.forEach { put(ItemRef(ItemType.BLOCK, it.id), it.title) }
+        data.people.forEach { put(ItemRef(ItemType.PERSON, it.id), it.name) }
     }
 
     /** A minute of the day as "HH:mm"; the end of the day, 1440, as "24:00". */
@@ -413,6 +442,30 @@ object BackupFormat {
             group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
         }
 
+        // People came after the first workbooks, so their sheets are optional.
+        val people = sheet(ItemType.PERSON.tabLabel, false)?.items("Name") { r ->
+            PersonEntity(
+                id = r.id(), name = r.required("Name"), bio = r.text("Bio"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(),
+                priority = r.priority(),
+            )
+        }.orEmpty().withIds(ItemType.PERSON.tabLabel) { p, id -> p.copy(id = id) }
+        val personIds = people.map { it.id }.toSet()
+        // Positions are renumbered 0..n-1 per person, in the order given.
+        val personProfiles = sheet(PROFILES, false)?.rows("Profile").orEmpty().mapNotNull { r ->
+            val personId = r.long("Person ID") ?: r.fail("Person ID is required")
+            if (personId !in personIds) return@mapNotNull null.also { skipped++ }
+            PersonProfileEntity(personId = personId, position = r.int("Position", 1, 1..100_000) - 1, url = r.required("Profile"))
+        }.groupBy { it.personId }.values.flatMap { group ->
+            group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
+        }
+        val personItems = sheet(PERSON_ITEMS, false)?.rows("Item").orEmpty().mapNotNull { r ->
+            val personId = r.long("Person ID") ?: r.fail("Person ID is required")
+            if (personId !in personIds) return@mapNotNull null.also { skipped++ }
+            PersonItemEntity(personId = personId, position = r.int("Position", 1, 1..100_000) - 1, text = r.required("Item"))
+        }.groupBy { it.personId }.values.flatMap { group ->
+            group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
+        }
+
         val habitIds = habits.map { it.id }.toSet()
         val marks = sheet(HABIT_HISTORY, false)?.rows("Date").orEmpty().mapNotNull { r ->
             val habitId = r.long("Habit ID") ?: r.fail("Habit ID is required")
@@ -430,6 +483,7 @@ object BackupFormat {
             chapters.forEach { add(ItemRef(ItemType.CHAPTER, it.id)) }
             quotes.forEach { add(ItemRef(ItemType.QUOTE, it.id)) }
             blocks.forEach { add(ItemRef(ItemType.BLOCK, it.id)) }
+            people.forEach { add(ItemRef(ItemType.PERSON, it.id)) }
         }
 
         val links = sheet(LINKS, false)?.rows("ID A", "ID B").orEmpty().mapNotNull { r ->
@@ -500,7 +554,7 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders, blocks, schedules,
+                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems,
             ),
             skipped,
             settings,

@@ -16,6 +16,9 @@ import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
+import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.entity.PersonItemEntity
+import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
@@ -96,6 +99,12 @@ class BackupFormatTest {
             ScheduleEntity(1, "Workday", 0, Recurrence.maskFromDays(DayOfWeek.entries.take(5).toSet())),
             ScheduleEntity(4, "Weekend", 1, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY))),
         ),
+        people = listOf(PersonEntity(3, "Seneca", "Wrote letters on how to live.", created, sortOrder = 1, priority = Priority.HIGH)),
+        personProfiles = listOf(
+            PersonProfileEntity(personId = 3, position = 0, url = "x.com/seneca"),
+            PersonProfileEntity(personId = 3, position = 1, url = "en.wikipedia.org/wiki/Seneca_the_Younger"),
+        ),
+        personItems = listOf(PersonItemEntity(personId = 3, position = 0, text = "Time is the one thing truly ours.")),
     )
 
     @Test
@@ -120,6 +129,17 @@ class BackupFormatTest {
         assertEquals(data.reminders, back.reminders)
         assertEquals(data.blocks, back.blocks)
         assertEquals(data.schedules, back.schedules)
+        assertEquals(data.people, back.people)
+        assertEquals(data.personProfiles, back.personProfiles)
+        assertEquals(data.personItems, back.personItems)
+    }
+
+    @Test
+    fun `a workbook without the People sheets imports with no people`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name in setOf("People", "Profiles", "Person items") }
+        val back = BackupFormat.fromSheets(sheets, zone).data
+        assertTrue(back.people.isEmpty())
+        assertTrue(back.personProfiles.isEmpty())
     }
 
     @Test
@@ -219,7 +239,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Chapters", "Habit history", "Links", "Tags", "Reminders", "Settings", "Schedules"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Tags", "Reminders", "Settings", "Schedules"), names)
     }
 
     @Test

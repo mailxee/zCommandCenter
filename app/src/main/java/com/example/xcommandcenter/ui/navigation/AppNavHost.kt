@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.navigation
 
+import com.example.xcommandcenter.ui.person.PersonDetailScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
@@ -77,6 +78,7 @@ fun AppNavHost(
                 ItemType.CHAPTER -> ChapterDetailScreen(onBack = back, onOpen = open)
                 ItemType.QUOTE -> QuoteDetailScreen(onBack = back, onOpen = open)
                 ItemType.BLOCK -> BlockDetailScreen(onBack = back, onOpen = open)
+                ItemType.PERSON -> PersonDetailScreen(onBack = back, onOpen = open)
             }
         }
     }

@@ -56,4 +56,14 @@ class LinkNetworkTest {
         val links = listOf(note(1) to quote(2), note(1) to book(3), quote(2) to note(4))
         assertEquals(setOf(note(1), quote(2), book(3)), LinkNetwork.of(note(1), links, emptyMap()))
     }
+
+    @Test
+    fun `people linked to the network show but are not followed`() {
+        val person = ItemRef(ItemType.PERSON, 1)
+        // Goal 1 links to person 1, who also links to task 2 and quote 3: neither joins goal 1's network.
+        val links = listOf(goal(1) to person, person to task(2), person to quote(3))
+        assertEquals(setOf(goal(1), person), LinkNetwork.of(goal(1), links, emptyMap()))
+        // From the person: what is linked to them, and the end points linked directly.
+        assertEquals(setOf(person, goal(1), task(2), quote(3)), LinkNetwork.of(person, links, emptyMap()))
+    }
 }

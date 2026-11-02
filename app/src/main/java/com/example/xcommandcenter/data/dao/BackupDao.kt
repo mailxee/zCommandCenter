@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.data.dao
 
+import com.example.xcommandcenter.data.entity.PersonProfileEntity
+import com.example.xcommandcenter.data.entity.PersonItemEntity
+import com.example.xcommandcenter.data.entity.PersonEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -44,12 +47,15 @@ interface BackupDao {
     @Query("SELECT * FROM reminders ORDER BY itemType, itemId, time") suspend fun reminders(): List<ReminderEntity>
     @Query("SELECT * FROM blocks ORDER BY id") suspend fun blocks(): List<BlockEntity>
     @Query("SELECT * FROM schedules ORDER BY sortOrder, id") suspend fun schedules(): List<ScheduleEntity>
+    @Query("SELECT * FROM people ORDER BY id") suspend fun people(): List<PersonEntity>
+    @Query("SELECT * FROM person_profiles ORDER BY personId, position") suspend fun personProfiles(): List<PersonProfileEntity>
+    @Query("SELECT * FROM person_items ORDER BY personId, position") suspend fun personItems(): List<PersonItemEntity>
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(), blocks(), schedules(),
+        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -69,6 +75,9 @@ interface BackupDao {
     @Insert suspend fun insertReminders(rows: List<ReminderEntity>)
     @Insert suspend fun insertBlocks(rows: List<BlockEntity>)
     @Insert suspend fun insertSchedules(rows: List<ScheduleEntity>)
+    @Insert suspend fun insertPeople(rows: List<PersonEntity>)
+    @Insert suspend fun insertPersonProfiles(rows: List<PersonProfileEntity>)
+    @Insert suspend fun insertPersonItems(rows: List<PersonItemEntity>)
 
     // Children before parents, so foreign keys never point at a deleted row mid-way.
     @Query("DELETE FROM item_tags") suspend fun deleteItemTags()
@@ -88,6 +97,9 @@ interface BackupDao {
     @Query("DELETE FROM quotes") suspend fun deleteQuotes()
     @Query("DELETE FROM blocks") suspend fun deleteBlocks()
     @Query("DELETE FROM schedules") suspend fun deleteSchedules()
+    @Query("DELETE FROM person_profiles") suspend fun deletePersonProfiles()
+    @Query("DELETE FROM person_items") suspend fun deletePersonItems()
+    @Query("DELETE FROM people") suspend fun deletePeople()
 
     @Transaction
     suspend fun deleteAll() {
@@ -108,6 +120,9 @@ interface BackupDao {
         deleteQuotes()
         deleteBlocks()
         deleteSchedules()
+        deletePersonProfiles()
+        deletePersonItems()
+        deletePeople()
     }
 
     /** [deleteAll], leaving the one schedule there always is. */
@@ -138,6 +153,9 @@ interface BackupDao {
         insertQuotes(data.quotes)
         insertSchedules(data.schedules.ifEmpty { listOf(ScheduleEntity(id = 1, name = AppDatabase.FIRST_SCHEDULE)) })
         insertBlocks(data.blocks)
+        insertPeople(data.people)
+        insertPersonProfiles(data.personProfiles)
+        insertPersonItems(data.personItems)
         insertLinks(data.links)
         insertTags(data.tags)
         insertItemTags(data.itemTags)

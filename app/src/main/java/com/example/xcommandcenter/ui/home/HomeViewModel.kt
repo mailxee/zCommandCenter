@@ -1,5 +1,7 @@
 package com.example.xcommandcenter.ui.home
 
+import com.example.xcommandcenter.data.repository.PersonLists
+import com.example.xcommandcenter.data.entity.PersonEntity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.AppContainer
@@ -46,7 +48,7 @@ enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priorit
 enum class PrioritySort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
 
 /** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts but the same priority filter. */
-val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE)
+val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.PERSON)
 
 enum class RepeatFilter(val label: String) {
     ALL("All"),
@@ -128,6 +130,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val notesRepo = container.noteRepository
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
+    private val peopleRepo = container.personRepository
     private val blocksRepo = container.blockRepository
     private val schedulesRepo = container.scheduleRepository
     private val taskSortRepo = container.taskSortRepository
@@ -161,20 +164,21 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** The search box: every tab shows only the items whose text contains each word typed. */
     val searchQuery = MutableStateFlow("")
 
-    /** The search with each item's checklist, list, chapters and tag names, which it also looks through. */
+    /** The search with each item's checklist, list, chapters, profiles and items, and tag names, which it also looks through. */
     private val search: Flow<SearchScope> = combine(
         searchQuery,
         tasksRepo.observeChecklistTexts(),
-        notesRepo.observeListTexts(),
+        combine(notesRepo.observeListTexts(), peopleRepo.observeLists(), ::Pair),
         booksRepo.observeChapterTitles(),
         tagsRepo.observeTagsByItem(),
-    ) { query, checklists, lists, chapters, tags ->
+    ) { query, checklists, (lists, personLists), chapters, tags ->
         if (query.isBlank()) return@combine SearchScope(query)
         val extra = HashMap<ItemRef, MutableList<String>>()
         fun add(ref: ItemRef, texts: List<String>) = extra.getOrPut(ref) { mutableListOf() }.addAll(texts)
         checklists.forEach { (id, texts) -> add(ItemRef(ItemType.TASK, id), texts) }
         lists.forEach { (id, texts) -> add(ItemRef(ItemType.NOTE, id), texts) }
         chapters.forEach { (id, texts) -> add(ItemRef(ItemType.BOOK, id), texts) }
+        personLists.forEach { (id, person) -> add(ItemRef(ItemType.PERSON, id), person.profiles + person.items) }
         tags.forEach { (ref, itemTags) -> add(ref, itemTags.map { it.name }) }
         SearchScope(query, extra)
     }
@@ -340,6 +344,12 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val quotes: StateFlow<List<QuoteEntity>> =
         quotesRepo.observeAll().sortedAndFiltered(ItemType.QUOTE, { it.id }, { it.priority }) { listOf(it.text, it.author, it.source) }
 
+    val people: StateFlow<List<PersonEntity>> =
+        peopleRepo.observeAll().sortedAndFiltered(ItemType.PERSON, { it.id }, { it.priority }) { listOf(it.name, it.bio) }
+
+    /** Each person's profiles and items by id, for their cards. */
+    val personLists: StateFlow<Map<Long, PersonLists>> = peopleRepo.observeLists().stateIn(emptyMap())
+
     /** Every schedule, for the Schedule tab's switcher. */
     val schedules: StateFlow<List<ScheduleEntity>> = schedulesRepo.schedules.stateIn(emptyList())
 
@@ -432,6 +442,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 count(ItemType.BOOK, books, booksRepo.observeAllWithProgress().map { all -> all.map { it.book.id } }),
                 count(ItemType.QUOTE, quotes, quotesRepo.observeAll().map { all -> all.map { it.id } }),
                 count(ItemType.BLOCK, blocks, activeBlocks.map { all -> all.map { it.id } }),
+                count(ItemType.PERSON, people, peopleRepo.observeAll().map { all -> all.map { it.id } }),
             ),
         ) { it.toMap() }.stateIn(emptyMap())
     }
@@ -523,6 +534,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 ItemType.NOTE -> notes.value.map { it.id }
                 ItemType.BOOK -> books.value.map { it.book.id }
                 ItemType.QUOTE -> quotes.value.map { it.id }
+                ItemType.PERSON -> people.value.map { it.id }
                 ItemType.BLOCK -> return@launch // Blocks are ordered by time.
                 ItemType.CHAPTER -> return@launch // Chapters are ordered on their book's page.
             }
@@ -545,6 +557,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.NOTE -> notesRepo.observeAll().first().map { it.id }
         ItemType.BOOK -> booksRepo.observeAllWithProgress().first().map { it.book.id }
         ItemType.QUOTE -> quotesRepo.observeAll().first().map { it.id }
+        ItemType.PERSON -> peopleRepo.observeAll().first().map { it.id }
         ItemType.BLOCK -> emptyList()
         ItemType.CHAPTER -> emptyList()
     }
@@ -557,6 +570,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.NOTE -> notesRepo.reorder(ids)
         ItemType.BOOK -> booksRepo.reorder(ids)
         ItemType.QUOTE -> quotesRepo.reorder(ids)
+        ItemType.PERSON -> peopleRepo.reorder(ids)
         ItemType.BLOCK -> Unit
         ItemType.CHAPTER -> Unit
     }

@@ -203,6 +203,7 @@ fun HomeScreen(
                         ItemType.NOTE -> NotesTab(viewModel, open, showFilters)
                         ItemType.BOOK -> BooksTab(viewModel, open, showFilters)
                         ItemType.QUOTE -> QuotesTab(viewModel, open, showFilters)
+                        ItemType.PERSON -> PeopleTab(viewModel, open, showFilters)
                         ItemType.BLOCK -> ScheduleTab(viewModel, open, onCreateBlock)
                         ItemType.CHAPTER -> Unit // Not a tab.
                     }

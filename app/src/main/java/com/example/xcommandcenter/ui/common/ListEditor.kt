@@ -40,7 +40,9 @@ data class ListLine(val key: Long, val text: String, val done: Boolean = false)
 /**
  * A bulleted list edited in place: edit, remove or drag items to a new place, and add new ones at
  * the end. With [checkable], each item has a checkbox instead of a bullet (a task's checklist);
- * without, items are plain bullets (a note's list). [onMove] gets the item's old and new index.
+ * without, items are plain bullets (a note's list). [leading], when given, draws the start of each
+ * row instead (a person's profiles and items show what each one is). [onMove] gets the item's old
+ * and new index; [addLabel] labels the field that adds an item.
  */
 @Composable
 fun ListEditor(
@@ -51,6 +53,8 @@ fun ListEditor(
     onUpdate: (key: Long, transform: (ListLine) -> ListLine) -> Unit,
     onRemove: (key: Long) -> Unit,
     onMove: (from: Int, to: Int) -> Unit,
+    addLabel: String = "Add an item",
+    leading: (@Composable (ListLine) -> Unit)? = null,
 ) {
     var newItem by rememberSaveable { mutableStateOf("") }
     val add = {
@@ -70,7 +74,9 @@ fun ListEditor(
                 ) {
                     Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)) {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-                            if (checkable) {
+                            if (leading != null) {
+                                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { leading(line) }
+                            } else if (checkable) {
                                 Checkbox(checked = line.done, onCheckedChange = { done -> onUpdate(line.key) { it.copy(done = done) } })
                             } else {
                                 Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
@@ -114,7 +120,7 @@ fun ListEditor(
         OutlinedTextField(
             value = newItem,
             onValueChange = { newItem = it },
-            label = { Text("Add an item") },
+            label = { Text(addLabel) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { add() }),

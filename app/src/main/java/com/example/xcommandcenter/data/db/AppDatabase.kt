@@ -16,6 +16,7 @@ import com.example.xcommandcenter.data.dao.GoalDao
 import com.example.xcommandcenter.data.dao.HabitDao
 import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.dao.NoteDao
+import com.example.xcommandcenter.data.dao.PersonDao
 import com.example.xcommandcenter.data.dao.PlanDao
 import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.dao.ReminderDao
@@ -34,6 +35,9 @@ import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
+import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.entity.PersonItemEntity
+import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
@@ -60,6 +64,9 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         ReminderEntity::class,
         BlockEntity::class,
         ScheduleEntity::class,
+        PersonEntity::class,
+        PersonProfileEntity::class,
+        PersonItemEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -69,7 +76,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 5: the old single-reminder columns are dropped (two steps, so step 4 can still read them).
     // 6: the Schedule tab's blocks.
     // 7: several schedules; existing blocks go into the first.
-    version = 7,
+    // 8: the People tab: people with their profiles and items.
+    version = 8,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -77,6 +85,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 4, to = 5, spec = AppDatabase.DropSingleReminders::class),
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7, spec = AppDatabase.AddSchedules::class),
+        AutoMigration(from = 7, to = 8),
     ],
 )
 @TypeConverters(Converters::class)
@@ -94,6 +103,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun blockDao(): BlockDao
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun personDao(): PersonDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {

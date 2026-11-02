@@ -4,7 +4,8 @@ package com.example.xcommandcenter.domain
  * Every kind of thing that can take part in a link. The stored name is what goes into the
  * `links` table and the `item_index` view, so renaming an entry requires a migration.
  *
- * [CHAPTER] is linkable but is not a tab: chapters live inside the Books tab.
+ * [CHAPTER] is linkable but is not a tab: chapters live inside the Books tab. New entries go at the
+ * end, before [CHAPTER], so existing stored names keep their meaning.
  */
 enum class ItemType(val tabLabel: String, val singular: String, val isTab: Boolean = true) {
     TASK("Tasks", "Task"),
@@ -15,6 +16,7 @@ enum class ItemType(val tabLabel: String, val singular: String, val isTab: Boole
     BOOK("Books", "Book"),
     QUOTE("Quotes", "Quote"),
     BLOCK("Schedule", "Block"),
+    PERSON("People", "Person"),
     CHAPTER("Chapters", "Chapter", isTab = false);
 
     /**

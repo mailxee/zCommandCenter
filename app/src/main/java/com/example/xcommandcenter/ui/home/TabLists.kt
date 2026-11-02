@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.home
 
+import com.example.xcommandcenter.ui.common.personCardText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -548,6 +549,39 @@ fun QuotesTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
                     onClick = { onOpen(ref) },
                     trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.QUOTE, quote.id, it) }) {
                         viewModel.reorder(ItemType.QUOTE, drag.rows.map { it.id })
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PeopleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
+    val people by viewModel.people.collectAsStateWithLifecycle()
+    val lists by viewModel.personLists.collectAsStateWithLifecycle()
+    val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    val drag = rememberDragOrder(people, key = { it.id })
+    val rows = drag.rows
+    val view = viewModel.priorityView(ItemType.PERSON)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
+    ItemList(ItemType.PERSON, empty = people.isEmpty(), emptyText = "No people yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, controls = controls, state = drag.listState) {
+        if (controls) priorityControls(ItemType.PERSON, view, viewModel)
+        itemsIndexed(rows, key = { _, person -> person.id }) { index, person ->
+            val ref = ItemRef(ItemType.PERSON, person.id)
+            ReorderableItem(drag.state, key = person.id, enabled = movable) {
+                ItemCard(
+                    ItemType.PERSON,
+                    text = personCardText(person, lists[person.id]),
+                    links = links[ref].orEmpty(),
+                    tags = tagFilter.tagsOf(ref),
+                    onLongClick = { viewModel.showNetwork(ref) },
+                    reminder = viewModel.reminderOf(ref),
+                    onClick = { onOpen(ref) },
+                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.PERSON, person.id, it) }) {
+                        viewModel.reorder(ItemType.PERSON, drag.rows.map { it.id })
                     },
                 )
             }

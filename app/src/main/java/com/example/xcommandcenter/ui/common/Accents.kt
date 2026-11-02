@@ -19,6 +19,7 @@ private fun defaultAccent(tab: ItemType): StyleColor = when (tab) {
     ItemType.NOTE -> StyleColor.AMBER
     ItemType.BOOK, ItemType.CHAPTER -> StyleColor.BROWN
     ItemType.QUOTE -> StyleColor.PINK
+    ItemType.PERSON -> StyleColor.ORANGE
 }
 
 /** [type]'s tab color, readable on the theme's surface: for its icon, the tab indicator and the add button. */
@@ -42,6 +43,7 @@ fun tabIcon(type: ItemType): Int = when (type.tab) {
     ItemType.NOTE -> R.drawable.ic_tab_note
     ItemType.BOOK, ItemType.CHAPTER -> R.drawable.ic_tab_book
     ItemType.QUOTE -> R.drawable.ic_tab_quote
+    ItemType.PERSON -> R.drawable.ic_tab_person
 }
 
 /** The strip down a card's left edge and its priority label: red, orange, blue-grey, light grey. */

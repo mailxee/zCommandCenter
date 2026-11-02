@@ -1,5 +1,9 @@
 package com.example.xcommandcenter.ui.common
 
+import com.example.xcommandcenter.data.entity.ScheduleEntity
+import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.repository.PersonLists
+import com.example.xcommandcenter.data.repository.PersonRepository
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
@@ -61,6 +65,7 @@ class ItemCardSource(
     private val books: BookRepository,
     private val quotes: QuoteRepository,
     private val blocks: BlockRepository,
+    private val people: PersonRepository,
     private val schedules: ScheduleRepository,
     private val links: LinkRepository,
     private val tags: TagRepository,
@@ -71,9 +76,11 @@ class ItemCardSource(
         combine(habits.observeAll(), habits.observeAllMarks(), plans.observeAll(), ::Triple),
         combine(
             notes.observeAll(), notes.observeListCounts(), books.observeAllWithProgress(), quotes.observeAll(),
-            combine(blocks.observeAll(), schedules.schedules, ::Pair),
-        ) { a, b, c, d, e -> NoteBookQuote(a, b, c, d, e.first, e.second.takeIf { it.size > 1 }?.associate { it.id to it.name }.orEmpty()) },
-    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList, scheduleNames) ->
+            combine(blocks.observeAll(), schedules.schedules, people.observeAll(), people.observeLists(), ::BlocksAndPeople),
+        ) { a, b, c, d, e ->
+            NoteBookQuote(a, b, c, d, e.blocks, e.schedules.takeIf { it.size > 1 }?.associate { it.id to it.name }.orEmpty(), e.people, e.personLists)
+        },
+    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList, scheduleNames, personList, personLists) ->
         val today = LocalDate.now()
         buildMap {
             taskList.forEach { put(ItemRef(ItemType.TASK, it.id), taskCardText(it, checklists[it.id]) to CardControl.Task(it.completed)) }
@@ -88,6 +95,7 @@ class ItemCardSource(
             bookList.forEach { put(ItemRef(ItemType.BOOK, it.book.id), bookCardText(it) to null) }
             quoteList.forEach { put(ItemRef(ItemType.QUOTE, it.id), quoteCardText(it) to null) }
             blockList.forEach { put(ItemRef(ItemType.BLOCK, it.id), blockCardText(it, scheduleNames[it.scheduleId]) to null) }
+            personList.forEach { put(ItemRef(ItemType.PERSON, it.id), personCardText(it, personLists[it.id]) to null) }
         }
     }
 
@@ -99,6 +107,15 @@ class ItemCardSource(
         val blocks: List<BlockEntity>,
         /** Schedule names by id, only when there are several to tell apart. */
         val scheduleNames: Map<Long, String>,
+        val people: List<PersonEntity>,
+        val personLists: Map<Long, PersonLists>,
+    )
+
+    private data class BlocksAndPeople(
+        val blocks: List<BlockEntity>,
+        val schedules: List<ScheduleEntity>,
+        val people: List<PersonEntity>,
+        val personLists: Map<Long, PersonLists>,
     )
 
     /** Each item's reminder line (see [reminderLine]); a habit's names its next reminder, so it needs the habit and its marks. */
