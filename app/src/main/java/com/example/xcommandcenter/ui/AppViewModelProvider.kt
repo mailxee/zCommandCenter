@@ -14,6 +14,8 @@ import com.example.xcommandcenter.ui.book.ChapterDetailViewModel
 import com.example.xcommandcenter.ui.goal.GoalDetailViewModel
 import com.example.xcommandcenter.ui.habit.HabitDetailViewModel
 import com.example.xcommandcenter.ui.home.HomeViewModel
+import com.example.xcommandcenter.ui.links.MapViewModel
+import com.example.xcommandcenter.ui.links.TidyViewModel
 import com.example.xcommandcenter.ui.note.NoteDetailViewModel
 import com.example.xcommandcenter.ui.plan.PlanDetailViewModel
 import com.example.xcommandcenter.ui.quote.QuoteDetailViewModel
@@ -24,7 +26,9 @@ import com.example.xcommandcenter.ui.task.TaskDetailViewModel
 object AppViewModelProvider {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
         initializer { with(container()) { HomeViewModel(this) } }
-        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository) } }
+        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository) } }
+        initializer { with(container()) { MapViewModel(createSavedStateHandle(), linkRepository) } }
+        initializer { with(container()) { TidyViewModel(createSavedStateHandle(), linkRepository) } }
         initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }

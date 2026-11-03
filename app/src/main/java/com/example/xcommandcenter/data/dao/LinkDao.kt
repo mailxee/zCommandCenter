@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.xcommandcenter.data.entity.ChapterBook
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.OwnedLink
 import com.example.xcommandcenter.domain.ItemType
@@ -13,9 +14,25 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LinkDao {
+    /** Every item, for the map's labels. */
+    @Query("SELECT * FROM item_index")
+    fun observeIndex(): Flow<List<ItemIndexEntry>>
+
+    @Query("SELECT `key` FROM kept_findings")
+    fun observeKept(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun keep(finding: KeptFindingEntity)
+
+    @Query("DELETE FROM kept_findings WHERE `key` = :key")
+    suspend fun unkeep(key: String)
+
     /** Linking an already-linked pair is a no-op thanks to the unique index. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(link: LinkEntity): Long
+
+    @Query("DELETE FROM links WHERE id = :id")
+    suspend fun deleteById(id: Long)
 
     @Query("DELETE FROM links WHERE aType = :aType AND aId = :aId AND bType = :bType AND bId = :bId")
     suspend fun delete(aType: ItemType, aId: Long, bType: ItemType, bId: Long)

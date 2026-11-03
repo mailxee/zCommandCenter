@@ -8,6 +8,25 @@ object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"
 
+    /** The map of links and Tidy links; [ARG_ROOT] is an item as "TYPE:id", empty for every network. */
+    const val ARG_ROOT = "root"
+    /** A Tidy links finding to select on the map, by its key. */
+    const val ARG_FOCUS = "focus"
+    const val MAP = "map?$ARG_ROOT={$ARG_ROOT}&$ARG_FOCUS={$ARG_FOCUS}"
+    const val TIDY = "tidy?$ARG_ROOT={$ARG_ROOT}"
+
+    fun map(root: ItemRef?, focus: String? = null): String =
+        "map?$ARG_ROOT=${root?.let(::encodeRef).orEmpty()}&$ARG_FOCUS=${focus.orEmpty()}"
+
+    fun tidy(root: ItemRef?): String = "tidy?$ARG_ROOT=${root?.let(::encodeRef).orEmpty()}"
+
+    fun encodeRef(ref: ItemRef): String = "${ref.type.name}:${ref.id}"
+
+    fun parseRef(text: String?): ItemRef? {
+        val (type, id) = text?.split(':')?.takeIf { it.size == 2 } ?: return null
+        return ItemType.entries.firstOrNull { it.name == type }?.let { t -> id.toLongOrNull()?.let { ItemRef(t, it) } }
+    }
+
     const val ARG_TYPE = "type"
     const val ARG_ID = "id"
     /** Optional parent for a new plan, or the book of a chapter; 0 means none. */

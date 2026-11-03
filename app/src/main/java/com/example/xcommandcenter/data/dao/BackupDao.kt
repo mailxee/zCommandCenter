@@ -100,6 +100,7 @@ interface BackupDao {
     @Query("DELETE FROM person_profiles") suspend fun deletePersonProfiles()
     @Query("DELETE FROM person_items") suspend fun deletePersonItems()
     @Query("DELETE FROM people") suspend fun deletePeople()
+    @Query("DELETE FROM kept_findings") suspend fun deleteKeptFindings()
 
     @Transaction
     suspend fun deleteAll() {
@@ -123,6 +124,8 @@ interface BackupDao {
         deletePersonProfiles()
         deletePersonItems()
         deletePeople()
+        // Kept findings name links by id, which new data reuses for other links.
+        deleteKeptFindings()
     }
 
     /** [deleteAll], leaving the one schedule there always is. */

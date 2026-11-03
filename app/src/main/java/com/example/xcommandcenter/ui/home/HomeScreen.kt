@@ -43,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -91,6 +92,8 @@ fun HomeScreen(
     onCreate: (ItemType) -> Unit,
     onCreateBlock: (minute: Int) -> Unit,
     onSettings: () -> Unit,
+    /** Opens the map of links: the shown network's, or every network (null). */
+    onMap: (ItemRef?) -> Unit = {},
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val order by viewModel.tabOrder.collectAsStateWithLifecycle()
@@ -132,6 +135,11 @@ fun HomeScreen(
                             },
                         ) {
                             Icon(painterResource(R.drawable.ic_reorder), contentDescription = "Reorder")
+                        }
+                    }
+                    if (!reorder) {
+                        IconButton(onClick = { onMap(viewModel.linkRoot.value?.ref) }) {
+                            Icon(painterResource(R.drawable.ic_map), contentDescription = "Map of links")
                         }
                     }
                     IconButton(onClick = onSettings) {
@@ -187,7 +195,7 @@ fun HomeScreen(
                 SearchBar(viewModel, selected, Modifier.weight(1f))
                 FilterButton(viewModel, selected, showFilters) { showFilters = !showFilters }
             }
-            LinkModeStatus(viewModel)
+            LinkModeStatus(viewModel, onMap)
             AnimatedVisibility(visible = showFilters) {
                 TagFilterBar(viewModel, selected)
             }
@@ -253,7 +261,9 @@ private fun FilterButton(viewModel: HomeViewModel, tab: ItemType, shown: Boolean
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val priorityFilters by viewModel.priorityFilters.collectAsStateWithLifecycle()
     val repeat by viewModel.repeatFilter.collectAsStateWithLifecycle()
-    val filtering = tagFilter.active || priorityFilters[tab].orEmpty().isNotEmpty() || (tab == ItemType.TASK && repeat != RepeatFilter.ALL)
+    val status by viewModel.taskStatus.collectAsStateWithLifecycle()
+    val filtering = tagFilter.active || priorityFilters[tab].orEmpty().isNotEmpty() ||
+        (tab == ItemType.TASK && (repeat != RepeatFilter.ALL || status.active))
     FilledTonalIconToggleButton(
         checked = shown,
         onCheckedChange = { onToggle() },
@@ -318,7 +328,7 @@ private fun SearchBar(viewModel: HomeViewModel, tab: ItemType, modifier: Modifie
  * network every tab shows, with a cross that goes back to normal mode.
  */
 @Composable
-private fun LinkModeStatus(viewModel: HomeViewModel) {
+private fun LinkModeStatus(viewModel: HomeViewModel, onMap: (ItemRef?) -> Unit) {
     val root by viewModel.linkRoot.collectAsStateWithLifecycle()
     // Kept while the banner slides away, so its text doesn't vanish first.
     var shown by remember { mutableStateOf<ItemIndexEntry?>(null) }
@@ -346,6 +356,9 @@ private fun LinkModeStatus(viewModel: HomeViewModel) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).semantics { contentDescription = "Link mode: showing items linked to ${current.title}" },
                     )
+                }
+                if (current != null) {
+                    TextButton(onClick = { onMap(current.ref) }) { Text("Map") }
                 }
                 IconButton(onClick = viewModel::exitLinkMode) {
                     Icon(painterResource(R.drawable.ic_close), contentDescription = "Leave link mode", modifier = Modifier.size(20.dp))

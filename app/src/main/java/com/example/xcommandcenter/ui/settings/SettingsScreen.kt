@@ -54,6 +54,14 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import com.example.xcommandcenter.ui.common.tabIcon
+import com.example.xcommandcenter.ui.common.tabAccent
+import com.example.xcommandcenter.domain.LinkRoute
 import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.TabOrder
@@ -69,6 +77,7 @@ import sh.calvin.reorderable.ReorderableColumn
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onTidy: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val order by viewModel.order.collectAsStateWithLifecycle()
@@ -218,6 +227,8 @@ fun SettingsScreen(
             }
             CarryOverSetting(viewModel)
 
+            LinksSettings(viewModel, onTidy)
+
             SectionTitle("Data")
             Text(
                 "Export saves everything to an Excel workbook: one sheet per tab, plus chapters, habit history, links, tags, reminders " +
@@ -337,4 +348,64 @@ private fun CarryOverSetting(viewModel: SettingsViewModel) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * The suggested route of links (`LinkRoute`): a layer for each linking type, used by the map's rows
+ * and the Tidy links suggestions, and the way to Tidy links.
+ */
+@Composable
+private fun LinksSettings(viewModel: SettingsViewModel, onTidy: () -> Unit) {
+    val route by viewModel.route.collectAsStateWithLifecycle()
+    val suggestions by viewModel.tidySuggestions.collectAsStateWithLifecycle()
+    SectionTitle("Links")
+    Text(
+        "Suggested route: how links usually run, from layer 1 at the top down. Items in the same layer are linked sideways; " +
+            "notes, quotes, books, people and blocks always end the route. Only used for the map and Tidy links: linking is never blocked.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LinkRoute.types.forEach { type ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painterResource(tabIcon(type)), contentDescription = null, tint = tabAccent(type), modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(type.tabLabel, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    val current = route.layers[type] ?: LinkRoute.DEFAULT.getValue(type)
+                    val choices = LinkRoute.choices.toList()
+                    SingleChoiceSegmentedButtonRow(Modifier.width(196.dp)) {
+                        choices.forEachIndexed { i, n ->
+                            SegmentedButton(
+                                selected = n == current,
+                                onClick = { viewModel.setLayer(type, n) },
+                                shape = SegmentedButtonDefaults.itemShape(i, choices.size),
+                                icon = {},
+                                modifier = Modifier.semantics { contentDescription = "${type.tabLabel} in layer $n" },
+                            ) { Text("$n") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    TextButton(onClick = viewModel::resetRoute) { Text("Reset to default route") }
+    Card(Modifier.fillMaxWidth().clickable(onClick = onTidy)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
+            Icon(painterResource(R.drawable.ic_map), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Tidy links", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    when (suggestions) {
+                        0 -> "No suggestions across all networks"
+                        1 -> "1 suggestion across all networks"
+                        else -> "$suggestions suggestions across all networks"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text("Open", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+    }
 }

@@ -17,6 +17,8 @@ import com.example.xcommandcenter.ui.book.ChapterDetailScreen
 import com.example.xcommandcenter.ui.goal.GoalDetailScreen
 import com.example.xcommandcenter.ui.habit.HabitDetailScreen
 import com.example.xcommandcenter.ui.home.HomeScreen
+import com.example.xcommandcenter.ui.links.MapScreen
+import com.example.xcommandcenter.ui.links.TidyScreen
 import com.example.xcommandcenter.ui.note.NoteDetailScreen
 import com.example.xcommandcenter.ui.plan.PlanDetailScreen
 import com.example.xcommandcenter.ui.quote.QuoteDetailScreen
@@ -49,10 +51,26 @@ fun AppNavHost(
                 onCreate = { type -> navController.navigate(Routes.newItem(type)) },
                 onCreateBlock = { minute -> navController.navigate(Routes.newBlock(minute)) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
+                onMap = { root -> navController.navigate(Routes.map(root)) },
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = back)
+            SettingsScreen(onBack = back, onTidy = { navController.navigate(Routes.tidy(null)) })
+        }
+        composable(
+            Routes.MAP,
+            arguments = listOf(
+                navArgument(Routes.ARG_ROOT) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_FOCUS) { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) {
+            MapScreen(onBack = back, onOpen = open, onTidy = { root -> navController.navigate(Routes.tidy(root)) })
+        }
+        composable(
+            Routes.TIDY,
+            arguments = listOf(navArgument(Routes.ARG_ROOT) { type = NavType.StringType; defaultValue = "" }),
+        ) {
+            TidyScreen(onBack = back, onShowOnMap = { root, focus -> navController.navigate(Routes.map(root, focus)) })
         }
         composable(
             Routes.ITEM,

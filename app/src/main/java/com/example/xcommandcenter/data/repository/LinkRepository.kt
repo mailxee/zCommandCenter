@@ -2,18 +2,49 @@ package com.example.xcommandcenter.data.repository
 
 import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.LinkAnalysis
+import com.example.xcommandcenter.domain.LinkRoute
 import com.example.xcommandcenter.domain.LinkNetwork
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 
-class LinkRepository(private val dao: LinkDao) {
+/**
+ * Everything the map and Tidy links draw from: every item's label, the links (a chapter's shown as
+ * its book's, see [LinkAnalysis]), and the analysis under the current route and kept findings.
+ */
+data class LinkGraph(
+    val entries: Map<ItemRef, ItemIndexEntry>,
+    /** Links by id as stored, to undo a removal. */
+    val stored: Map<Long, LinkEntity>,
+    /** Links with chapters folded into their books. */
+    val links: List<LinkAnalysis.Link>,
+    val bookOfChapter: Map<Long, Long>,
+    val route: LinkRoute,
+    val analysis: LinkAnalysis.Result,
+) {
+    /** The items in [root]'s network as the map shows them (chapters within their books), or every linked item. */
+    fun nodes(root: ItemRef?): Set<ItemRef> {
+        val all = if (root == null) {
+            links.flatMap { listOf(it.a, it.b) }.toSet()
+        } else {
+            LinkNetwork.of(root, links.map { it.a to it.b }, bookOfChapter)
+        }
+        return all.map { if (it.type == ItemType.CHAPTER) bookOfChapter[it.id]?.let { b -> ItemRef(ItemType.BOOK, b) } ?: it else it }
+            .filter { it in entries }.toSet()
+    }
+}
+
+class LinkRepository(private val dao: LinkDao, private val route: Flow<LinkRoute> = flowOf(LinkRoute())) {
 
     /**
      * Link mode, kept in memory for as long as the app runs: once a card is pressed and held, it is
@@ -76,6 +107,34 @@ class LinkRepository(private val dao: LinkDao) {
     suspend fun link(a: ItemRef, b: ItemRef) {
         if (a != b) dao.insert(LinkEntity.between(a, b))
     }
+
+    /** See [LinkGraph]; worked out off the main thread. */
+    fun observeGraph(): Flow<LinkGraph> =
+        combine(dao.observeIndex(), dao.observeAll(), dao.observeChapterBooks(), route, dao.observeKept()) { index, stored, chapterBooks, route, kept ->
+            val bookOf = chapterBooks.associate { it.chapterId to it.id }
+            fun node(ref: ItemRef) = if (ref.type == ItemType.CHAPTER) bookOf[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
+            val links = stored.map { LinkAnalysis.Link(it.id, ItemRef(it.aType, it.aId), ItemRef(it.bType, it.bId), it.createdAt) }
+            LinkGraph(
+                entries = index.associateBy { it.ref },
+                stored = stored.associateBy { it.id },
+                links = links.map { it.copy(a = node(it.a), b = node(it.b)) }.filter { it.a != it.b },
+                bookOfChapter = bookOf,
+                route = route,
+                analysis = LinkAnalysis.analyze(links, bookOf, route, kept.toSet()),
+            )
+        }.flowOn(Dispatchers.Default)
+
+    suspend fun removeLink(id: Long) = dao.deleteById(id)
+
+    /** Puts back a link removed with [removeLink]. */
+    suspend fun restore(link: LinkEntity) {
+        dao.insert(link.copy(id = 0))
+    }
+
+    /** "Keep as is" on a Tidy links finding, and its undo. */
+    suspend fun keep(key: String) = dao.keep(KeptFindingEntity(key))
+
+    suspend fun unkeep(key: String) = dao.unkeep(key)
 
     suspend fun unlink(a: ItemRef, b: ItemRef) {
         val link = LinkEntity.between(a, b)

@@ -8,7 +8,7 @@ package com.example.xcommandcenter.domain
  */
 object LinkNetwork {
     /** The tabs whose items end the walk instead of extending it. */
-    private val endPoints = setOf(ItemType.NOTE, ItemType.QUOTE, ItemType.BOOK, ItemType.CHAPTER, ItemType.BLOCK, ItemType.PERSON)
+    val endPoints = setOf(ItemType.NOTE, ItemType.QUOTE, ItemType.BOOK, ItemType.CHAPTER, ItemType.BLOCK, ItemType.PERSON)
 
     /**
      * The items reachable from [root] over [links] (pairs of linked items), [root] included.

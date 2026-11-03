@@ -11,6 +11,10 @@ import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
+import com.example.xcommandcenter.data.prefs.RoutePrefsRepository
+import com.example.xcommandcenter.data.repository.LinkRepository
+import com.example.xcommandcenter.domain.LinkRoute
+import kotlinx.coroutines.flow.map
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemStyle
@@ -30,7 +34,25 @@ class SettingsViewModel(
     private val backup: BackupRepository,
     private val tags: TagRepository,
     private val reminderPrefs: ReminderPrefsRepository,
+    private val routePrefs: RoutePrefsRepository,
+    links: LinkRepository,
 ) : ViewModel() {
+
+    /** The suggested route of links: which layer each linking type sits in. */
+    val route: StateFlow<LinkRoute> = routePrefs.route
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LinkRoute())
+
+    fun setLayer(type: ItemType, layer: Int) {
+        viewModelScope.launch { routePrefs.setRoute(route.value.with(type, layer)) }
+    }
+
+    fun resetRoute() {
+        viewModelScope.launch { routePrefs.setRoute(LinkRoute()) }
+    }
+
+    /** How many Tidy links findings suggest a change, across every network. */
+    val tidySuggestions: StateFlow<Int> = links.observeGraph().map { g -> g.analysis.findings.count { it.actionable } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /** Days until an open task's or plan's reminder is carried over; 0 is off. */
     val carryDays: StateFlow<Int> = reminderPrefs.carryDays

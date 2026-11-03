@@ -32,6 +32,7 @@ import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.ItemTagEntity
+import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
@@ -67,6 +68,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         PersonEntity::class,
         PersonProfileEntity::class,
         PersonItemEntity::class,
+        KeptFindingEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -78,7 +80,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 7: several schedules; existing blocks go into the first.
     // 8: the People tab: people with their profiles and items.
     // 9: reminders can be carried over (a flag on each).
-    version = 9,
+    // 10: Tidy links findings kept as they are.
+    version = 10,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -88,6 +91,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 6, to = 7, spec = AppDatabase.AddSchedules::class),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
     ],
 )
 @TypeConverters(Converters::class)

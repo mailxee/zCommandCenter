@@ -666,6 +666,7 @@ link mode on with that item as the root (`ItemCard(onLongClick = …)` → `Home
 with a vibration and a "Show linked items" accessibility action); pressing and holding another card
 while it is on moves the root there. A tap still opens the item. Reordering mode ignores the press.
 This replaced an earlier link button beside the search box and its "tap a card" picking step.
+The network bar's Map button opens that network on the map (§2.57).
 Every tab then shows only the root's network: the items
 linked to it, directly or through any number of other links (`domain/LinkNetwork`, a breadth-first
 walk over the undirected links). Notes, quotes, books and people (§2.53) are end points, never followed: the walk
@@ -951,6 +952,42 @@ plan tree.
   remembered across launches. Showing only completed tasks offers "Delete completed (n)".
 - A past-due task's card reads "Past due · date" instead of "Due date".
 
+### 2.57 Map of links, Tidy links and the suggested route
+
+Three parts, all pure logic in `domain/` (tested) with thin screens in `ui/links/`.
+
+- **Suggested route** (`domain/LinkRoute`, Settings → Links): a layer, 1 to 4, for each linking
+  type; by default Goals 1, Plans 2, Tasks and Habits 3. End points (notes, quotes, books,
+  people, blocks) are always the last layer. A link between neighbouring layers is on route, one
+  within a layer runs sideways, one that jumps a layer skips it; a link to an end point is always
+  on route. Stored in DataStore (`RoutePrefsRepository`). Linking is never blocked: the route only
+  feeds the map's rows and the suggestions below.
+- **Tidy links** (`domain/LinkAnalysis`, `TidyScreen`): routes run through goals, plans, tasks and
+  habits (chapters count as their books). A spanning forest keeps on-route links first, then
+  layer-skipping, then sideways ones, older before newer; every link left over closes a loop (two
+  routes between the same items) and is the one suggested for removal: a **shortcut** (goal to
+  task beside goal to plan to task), an **off-route link in a loop**, or a **second route** (a
+  task under two plans of one goal). The count of these is the network's extra routes. A
+  layer-skipping link with no loop is suggested a better place (**skips a layer**: link the task
+  or habit to a plan already under the goal, then remove the direct link) when there is one. An
+  end point linked to several items of one network is noted for information only.
+  Each card has its fix (Remove link, or Apply), **Keep as is** (stored in `kept_findings`,
+  database version 10, by a key naming the link, so it returns if the link is made again) and
+  **Show on map**. Every change offers Undo. Importing or deleting everything clears kept findings.
+- **Map** (`domain/GraphLayout`, `MapScreen`): one item's network, or every linked item
+  ("Everything"). **By route** puts each layer in a row (wide rows wrap), ordered by the average
+  place of what each item links to so lines cross less; lines within a row bow up and lines that
+  jump a row bow outwards, so they never seem to pass through an item. **Free layout** is a
+  force-directed layout started from those places, so it is the same every time. Items are pills
+  in their tab's colour; lines are grey on route, amber off route, red dashed where Tidy links
+  suggests removing, dotted for a shared end point. Pinch to zoom, drag to move; tapping an item
+  highlights it and its links, with Open, Its network and Link to… (then tap the other item);
+  tapping a line selects it, with its finding, Remove link, Apply and Keep as is. Opened from the
+  map button in the main screen's top bar (the shown network, or everything) and the Map button on
+  the network bar; Tidy links is reached from the map and from Settings.
+- `LinkRepository.observeGraph` gathers labels, links and the analysis off the main thread for both
+  screens.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1119,6 +1156,13 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/Profiles.kt` | Profile handles to addresses, platform from host, item kind from its link (§2.53). |
 | `domain/ReminderCarry.kt` | When a reminder is carried over, and to when (§2.55). |
 | `domain/TaskStatusFilter.kt` | The Tasks tab's Past due and Completed chips (§2.56). |
+| `domain/LinkRoute.kt` | The suggested route of links: a layer per type (§2.57). |
+| `domain/LinkAnalysis.kt` | Tidy links: loops, skipped layers and shared end points, with fixes (§2.57). |
+| `domain/GraphLayout.kt` | The map's layered and free layouts (§2.57). |
+| `data/prefs/RoutePrefsRepository.kt` | Stores the suggested route (§2.57). |
+| `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
+| `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57). |
+| `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
 
 ### Resources
 | File | Purpose |
