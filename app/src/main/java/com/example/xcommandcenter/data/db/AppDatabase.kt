@@ -77,7 +77,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 6: the Schedule tab's blocks.
     // 7: several schedules; existing blocks go into the first.
     // 8: the People tab: people with their profiles and items.
-    version = 8,
+    // 9: reminders can be carried over (a flag on each).
+    version = 9,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -86,6 +87,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7, spec = AppDatabase.AddSchedules::class),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9),
     ],
 )
 @TypeConverters(Converters::class)

@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
+import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemStyle
@@ -28,7 +29,16 @@ class SettingsViewModel(
     private val reminderScheduler: ReminderScheduler,
     private val backup: BackupRepository,
     private val tags: TagRepository,
+    private val reminderPrefs: ReminderPrefsRepository,
 ) : ViewModel() {
+
+    /** Days until an open task's or plan's reminder is carried over; 0 is off. */
+    val carryDays: StateFlow<Int> = reminderPrefs.carryDays
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReminderPrefsRepository.DEFAULT_CARRY_DAYS)
+
+    fun setCarryDays(days: Int) {
+        viewModelScope.launch { reminderPrefs.setCarryDays(days) }
+    }
 
     /** Every tag in use, with its item count, for the Tags section. */
     val tagUsage: StateFlow<List<TagUsage>> = tags.observeUsage()

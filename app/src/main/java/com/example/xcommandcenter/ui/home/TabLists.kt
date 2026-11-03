@@ -46,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Shape
@@ -58,6 +57,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ChipState
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
@@ -90,7 +90,7 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val checklists by viewModel.checklistCounts.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    val showCompleted by viewModel.showCompletedTasks.collectAsStateWithLifecycle()
+    val status by viewModel.taskStatus.collectAsStateWithLifecycle()
     val completedCount by viewModel.completedTaskCount.collectAsStateWithLifecycle()
     val priorityView = viewModel.priorityView(ItemType.TASK)
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
@@ -102,17 +102,17 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     var draggingCompleted by remember { mutableStateOf<Boolean?>(null) }
     // Either filter can empty the list; then say so instead of "No tasks yet".
     val rows = drag.rows
-    // The completed row arrives after the tasks, above them, and the list keeps its first task in
+    // The delete row arrives after the tasks, above them, and the list keeps its first task in
     // place, which would leave the row out of sight. Scroll up to it while still at the top.
-    val hasCompleted = completedCount > 0
-    LaunchedEffect(hasCompleted) {
-        if (hasCompleted && drag.listState.firstVisibleItemIndex <= 1) drag.listState.scrollToItem(0)
+    val hasDeleteRow = completedCount > 0 && status.completed == ChipState.ONLY
+    LaunchedEffect(hasDeleteRow) {
+        if (hasDeleteRow && drag.listState.firstVisibleItemIndex <= 1) drag.listState.scrollToItem(0)
     }
     ItemList(
         ItemType.TASK,
         empty = tasks.isEmpty(),
         emptyText = "No tasks yet.",
-        filtered = viewModel.filtering(tagFilter) || repeat != RepeatFilter.ALL || priorityView.filtered || (!showCompleted && completedCount > 0),
+        filtered = viewModel.filtering(tagFilter) || repeat != RepeatFilter.ALL || priorityView.filtered || status.active,
         controls = controls, state = drag.listState,
     ) {
         if (controls) item {
@@ -140,17 +140,11 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
             }
         }
         if (controls) priorityFilterChips(ItemType.TASK, priorityView, viewModel)
-        if (completedCount > 0) {
+        // Showing only completed tasks (the Completed chip) offers to delete them.
+        if (completedCount > 0 && status.completed == ChipState.ONLY) {
             item {
-                // The chip takes the room the button leaves, so its label stays on one line.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    FilterChip(
-                        selected = showCompleted,
-                        onClick = { viewModel.setShowCompletedTasks(!showCompleted) },
-                        label = { Text("Completed tasks ($completedCount)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    TextButton(onClick = { confirmDelete = true }) { Text("Delete completed") }
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { confirmDelete = true }) { Text("Delete completed ($completedCount)") }
                 }
             }
         }

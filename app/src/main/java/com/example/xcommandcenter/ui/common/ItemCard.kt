@@ -77,6 +77,7 @@ import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
+import com.example.xcommandcenter.domain.TaskStatusFilter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -124,7 +125,7 @@ fun taskCardText(task: TaskEntity, checklist: ChecklistCount?) = CardText(
     emphasis = task.priority == Priority.CRITICAL && !task.completed,
     priority = task.priority,
     meta = listOfNotNull(
-        task.dueDate?.let { "Due ${it.short()}" },
+        task.dueDate?.let { if (TaskStatusFilter.isPastDue(task.completed, it, LocalDate.now())) "Past due · ${it.short()}" else "Due ${it.short()}" },
         task.recurrence?.let { "Repeats: ${it.describe()}" },
         checklist?.let { "Checklist ${it.done}/${it.total}" },
     ),

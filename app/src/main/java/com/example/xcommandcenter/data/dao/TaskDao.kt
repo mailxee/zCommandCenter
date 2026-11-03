@@ -133,7 +133,7 @@ interface TaskDao {
         copyTags(id, newId)
         insertChecklist(checklist(id).map { it.copy(id = 0, taskId = newId, done = false) })
         insertReminders(
-            reminders(id).map {
+            reminders(id).filterNot { it.carried }.map {
                 val moved = Instant.ofEpochMilli(it.time).atZone(ZoneId.systemDefault()).plusDays(days).toInstant().toEpochMilli()
                 it.copy(id = 0, itemId = newId, time = moved)
             },

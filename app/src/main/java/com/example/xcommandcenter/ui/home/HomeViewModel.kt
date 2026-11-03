@@ -17,7 +17,9 @@ import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ChipState
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.TaskStatusFilter
 import com.example.xcommandcenter.domain.ManualOrder
 import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.PlanTree
@@ -207,6 +209,29 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     /** Whether the Tasks tab lists completed tasks; kept across launches. */
     val showCompletedTasks: StateFlow<Boolean> = taskSortRepo.showCompleted.stateIn(true)
 
+    private val pastDueChip = MutableStateFlow(ChipState.ANY)
+    private val completedOnly = MutableStateFlow(false)
+
+    /**
+     * The Tasks tab's Past due and Completed chips. Hiding completed tasks is kept across launches
+     * (it was the "Completed tasks" switch); the rest lasts like tag choices.
+     */
+    val taskStatus: StateFlow<TaskStatusFilter> =
+        combine(pastDueChip, completedOnly, showCompletedTasks) { pastDue, only, show ->
+            TaskStatusFilter(pastDue, if (only) ChipState.ONLY else if (!show) ChipState.HIDDEN else ChipState.ANY)
+        }.stateIn(TaskStatusFilter())
+
+    fun tapTaskStatus(chip: TaskStatusFilter.Chip) = setTaskStatus(taskStatus.value.tap(chip))
+
+    fun holdTaskStatus(chip: TaskStatusFilter.Chip) = setTaskStatus(taskStatus.value.hold(chip))
+
+    private fun setTaskStatus(filter: TaskStatusFilter) {
+        pastDueChip.value = filter.pastDue
+        completedOnly.value = filter.completed == ChipState.ONLY
+        val show = filter.completed != ChipState.HIDDEN
+        if (show != showCompletedTasks.value) setShowCompletedTasks(show)
+    }
+
     /** All completed tasks, whatever the filters: for the toggle's label and "Delete completed". */
     val completedTaskCount: StateFlow<Int> = combine(tasksRepo.observeAll(), network) { all, network ->
         all.count { it.completed && network.has(ItemRef(ItemType.TASK, it.id)) }
@@ -217,10 +242,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         combine(
             tasksRepo.observeAll(),
             taskSort,
-            combine(repeatFilter, showCompletedTasks, ::Pair),
+            combine(repeatFilter, taskStatus, ::Pair),
             combine(tagFilter, search, network, ::Triple),
             priorityFilters.map { it[ItemType.TASK].orEmpty() },
-        ) { tasks, sort, (repeat, showCompleted), (tags, search, network), priorities ->
+        ) { tasks, sort, (repeat, status), (tags, search, network), priorities ->
+            val today = LocalDate.now()
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -229,7 +255,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 TaskSort.CUSTOM -> compareBy { it.sortOrder }
             }
             tasks.filter {
-                network.has(ItemRef(ItemType.TASK, it.id)) && (showCompleted || !it.completed) && repeat.matches(it) &&
+                network.has(ItemRef(ItemType.TASK, it.id)) && status.matches(it.completed, it.dueDate, today) && repeat.matches(it) &&
                     (priorities.isEmpty() || it.priority in priorities) && tags.matches(ItemRef(ItemType.TASK, it.id)) &&
                     search.matches(ItemRef(ItemType.TASK, it.id), it.title, it.description)
             }
@@ -466,9 +492,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         searchQuery.value = query
     }
 
+    /** Also turns off the Tasks tab's Past due and Completed chips. */
     fun clearTags() {
         selectedTagIds.value = emptySet()
         excludedTagIds.value = emptySet()
+        setTaskStatus(TaskStatusFilter())
     }
 
     fun setShowCompletedTasks(show: Boolean) {

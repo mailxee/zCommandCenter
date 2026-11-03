@@ -24,7 +24,7 @@ import com.example.xcommandcenter.ui.task.TaskDetailViewModel
 object AppViewModelProvider {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
         initializer { with(container()) { HomeViewModel(this) } }
-        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository) } }
+        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository) } }
         initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }

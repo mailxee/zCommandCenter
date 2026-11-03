@@ -492,8 +492,8 @@ tab.
 
 ### 2.24 Completed tasks and the Notes filters
 
-- **Completed tasks:** the Tasks tab has a "Completed tasks (n)" chip that shows or hides them;
-  the choice is kept in DataStore with the task sort. "Delete completed" (after a confirmation)
+- **Completed tasks:** shown or hidden with the Tasks tab's "Completed" chip (§2.56); hiding
+  them is kept in DataStore with the task sort. "Delete completed" (after a confirmation)
   deletes every completed task, including any hidden by the filters, with its links, tags and
   checklist, in one transaction (`TaskDao.deleteCompleted`). A repeating task's open next
   occurrence is not completed, so it stays.
@@ -883,6 +883,7 @@ A task's checklist and a note's list (`ListEditor`) show each item in its own so
 checkbox (or bullet), the remove button and the drag handle sit level with the first line of the
 text instead of the middle of a long item. The remove button and the grip are smaller and drawn in
 the muted colour (`DragHandle(compact = true)`), leaving more width for the text.
+Drag handles only show in move mode (§2.54).
 
 ### 2.53 People tab
 
@@ -908,6 +909,47 @@ the default tab order so an existing order gets it at the end (`TabOrder.parse`)
   (`LinkNetwork`): holding a goal shows its people, but not what those people link to.
 - **Backup:** a People sheet, plus Profiles and Person items sheets. All three are optional on
   import, so older workbooks still load.
+
+### 2.54 Moving list items
+
+`ListEditor` (checklists, note lists, a person's profiles and items) has a move button beside its
+title, like the main screen's Reorder button, once it has two items. Normally rows show no drag
+handles, so the text gets the room and nothing is dragged by accident. In move mode the title
+reads "… · moving", rows show only their text (and a person's badges) with a handle, the add field
+is hidden, and the dragged row lifts; ✓ ends it, as does leaving the page.
+
+### 2.55 Reminder carry-over
+
+When a task's or plan's reminder goes off and the item is still open, with no other reminder to
+come, the reminder is repeated a number of days later at the same time of day (Settings →
+Reminders: Off, 1, 2, 3 or 7 days; default 1; `ReminderPrefsRepository`). The rules are in
+`domain/ReminderCarry` (tested); `ReminderRepository.carryOver` applies them when an alarm fires.
+
+- An item keeps **one** carried-over reminder (`ReminderEntity.carried`, database version 9, an
+  automatic migration): it moves forward each time it goes off, and a new carry replaces an older
+  one, so an ignored task doesn't pile up reminders. Completing the task or plan removes it
+  (`dropCarriedOfCompleted`); a repeating task's next occurrence doesn't copy it.
+- It shows on the item's page under its time as "Carried over…", and can be removed like any
+  reminder; saving the form keeps the flag (`ReminderDao.replace` matches it by time).
+- A reminder that went off while the phone was off gets its carry-over on restart, if it was
+  within the last carry period (`ReminderCarry.missed`); older reminders are left alone, so turning
+  the feature on doesn't revive old ones.
+- Goals, habits, blocks and the rest are never carried: goals can't be completed, and habits and
+  blocks repeat anyway.
+
+### 2.56 Past due and Completed chips
+
+The Tasks tab's filter bar has two built-in chips after "Untagged", each with a small icon:
+"Past due" (open tasks due before today) and "Completed". They work like tags: tap to show only
+those tasks, press and hold to hide them (`domain/TaskStatusFilter`, tested). A task can't be
+both, so showing only one turns the other's "only" off; hiding combines freely. They combine with
+tags, priority, repeat and search, and "Clear" turns them off too. The chips appear on the Tasks
+tab only; the Plans tab keeps its switches, since showing only completed plans would break up the
+plan tree.
+
+- "Completed" replaces the old "Completed tasks (n)" switch: hiding completed tasks is still
+  remembered across launches. Showing only completed tasks offers "Delete completed (n)".
+- A past-due task's card reads "Past due · date" instead of "Due date".
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1015,6 +1057,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/prefs/CollapsedPlansRepository.kt` | Which plans are collapsed in the Plans tab. |
 | `data/prefs/ItemStyleRepository.kt` | Each tab's item style (§2.21). |
 | `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18) and whether it shows completed tasks (§2.24). |
+| `data/prefs/ReminderPrefsRepository.kt` | Days until a reminder is carried over (§2.55). |
 
 ### data/repository/
 | File | Purpose |
@@ -1052,7 +1095,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/RecurrenceFields.kt` | Schedule editor and its validation, shared by habits and tasks. |
 | `ui/common/DetailScaffold.kt` | Shared detail frame: back/save/delete (with confirmation), snackbar, scrolling content. |
 | `ui/common/LinkedItems.kt` | "Linked items" section: linked items as tab cards with their controls, grouped by tab; and the two-step link picker dialog with search. |
-| `ui/common/ListEditor.kt` | The bulleted list editor shared by task checklists and note lists. |
+| `ui/common/ListEditor.kt` | The list editor shared by task checklists, note lists and a person's lists, with its move mode (§2.54). |
 | `ui/common/WebLinkText.kt` | Tappable web links in card text and under description fields. |
 | `ui/common/ItemCard.kt` | The item card shared by the tabs and the linked items, the per-type card text, and habit summaries (§2.22, §2.49). |
 | `ui/common/ItemCardSource.kt` | Card data (text, control, tags, links) for every item, and the card controls' actions, for detail pages (§2.22). |
@@ -1074,6 +1117,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/person/PersonDetailViewModel.kt`, `PersonDetailScreen.kt` | A person's name, bio, profiles (platform badges) and items (kind icons); tags; links (§2.53). |
 | `data/entity/PersonEntity.kt`, `data/dao/PersonDao.kt`, `data/repository/PersonRepository.kt` | People with their profiles and items (§2.53). |
 | `domain/Profiles.kt` | Profile handles to addresses, platform from host, item kind from its link (§2.53). |
+| `domain/ReminderCarry.kt` | When a reminder is carried over, and to when (§2.55). |
+| `domain/TaskStatusFilter.kt` | The Tasks tab's Past due and Completed chips (§2.56). |
 
 ### Resources
 | File | Purpose |

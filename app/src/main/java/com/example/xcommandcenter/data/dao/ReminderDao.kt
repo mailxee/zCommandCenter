@@ -31,13 +31,33 @@ interface ReminderDao {
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun delete(id: Long)
 
-    /** Makes [times] the item's whole set of reminders; returns the new rows. */
+    @Insert
+    suspend fun insert(row: ReminderEntity): Long
+
+    @Query("UPDATE reminders SET time = :time WHERE id = :id")
+    suspend fun setTime(id: Long, time: Long)
+
+    /**
+     * Makes [times] the item's whole set of reminders; returns the new rows. A time that was a
+     * carried-over reminder stays one, since forms edit reminders as bare times.
+     */
     @Transaction
     suspend fun replace(type: ItemType, itemId: Long, times: List<Long>): List<ReminderEntity> {
+        val carried = forItem(type, itemId).filter { it.carried }.map { it.time }.toSet()
         deleteFor(type, itemId)
-        insert(times.distinct().map { ReminderEntity(itemType = type, itemId = itemId, time = it) })
+        insert(times.distinct().map { ReminderEntity(itemType = type, itemId = itemId, time = it, carried = it in carried) })
         return forItem(type, itemId)
     }
+
+    /** Carried-over reminders whose task or plan is now completed. */
+    @Query(
+        """
+        SELECT * FROM reminders r WHERE carried = 1 AND (
+            (itemType = 'TASK' AND EXISTS (SELECT 1 FROM tasks WHERE id = r.itemId AND completed = 1)) OR
+            (itemType = 'PLAN' AND EXISTS (SELECT 1 FROM plans WHERE id = r.itemId AND completed = 1)))
+        """,
+    )
+    suspend fun carriedOfCompleted(): List<ReminderEntity>
 
     /** Reminders whose item has been deleted. */
     @Query("SELECT * FROM reminders r WHERE NOT EXISTS (SELECT 1 FROM item_index i WHERE i.type = r.itemType AND i.id = r.itemId)")

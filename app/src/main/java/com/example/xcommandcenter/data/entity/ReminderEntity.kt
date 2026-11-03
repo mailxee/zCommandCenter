@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -18,6 +19,12 @@ data class ReminderEntity(
     val itemType: ItemType,
     val itemId: Long,
     val time: Long,
+    /**
+     * Added by carry-over (see `ReminderRepository.carryOver`): when a task's or plan's reminder went
+     * off and the item is still open with nothing later, this one repeats it some days on. An item
+     * has at most one; it moves forward each time it goes off, and goes once the item is completed.
+     */
+    @ColumnInfo(defaultValue = "0") val carried: Boolean = false,
 ) {
     val ref: ItemRef get() = ItemRef(itemType, itemId)
 

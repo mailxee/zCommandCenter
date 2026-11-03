@@ -6,6 +6,7 @@ import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
 import com.example.xcommandcenter.data.prefs.CollapsedPlansRepository
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
+import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
 import com.example.xcommandcenter.data.prefs.ScheduleChoiceRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.TaskSortRepository
@@ -40,7 +41,14 @@ class AppContainer(context: Context) {
     val collapsedPlansRepository = CollapsedPlansRepository(context)
     val linkRepository = LinkRepository(database.linkDao())
     val tagRepository = TagRepository(database.tagDao())
-    val reminderRepository: ReminderRepository = ReminderRepository(database.reminderDao(), database.habitDao(), reminderScheduler) { scheduleRepository.activeId() }
+    val reminderPrefsRepository = ReminderPrefsRepository(context)
+    val reminderRepository: ReminderRepository = ReminderRepository(
+        database.reminderDao(),
+        database.habitDao(),
+        reminderScheduler,
+        activeSchedule = { scheduleRepository.activeId() },
+        carryDays = { reminderPrefsRepository.carryDaysNow() },
+    )
     private val scheduleChoiceRepository = ScheduleChoiceRepository(context)
     val scheduleRepository: ScheduleRepository = ScheduleRepository(database.scheduleDao(), scheduleChoiceRepository) { reminderRepository }
     val taskRepository = TaskRepository(database.taskDao(), reminderRepository)

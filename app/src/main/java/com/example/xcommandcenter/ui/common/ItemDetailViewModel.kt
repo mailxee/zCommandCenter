@@ -116,6 +116,10 @@ abstract class ItemDetailViewModel(
     /** The reminders as last loaded or saved; null while loading. */
     private var cleanReminders by mutableStateOf<List<Long>?>(null)
 
+    /** Which of [reminders] were carried over (see `ReminderCarry`), as loaded; shown with a label. */
+    var carriedReminders by mutableStateOf<Set<Long>>(emptySet())
+        private set
+
     init {
         val id = _itemId.value
         if (id == 0L) {
@@ -123,6 +127,7 @@ abstract class ItemDetailViewModel(
         } else {
             viewModelScope.launch {
                 reminders = reminderRepository.times(ItemRef(type, id))
+                carriedReminders = reminderRepository.carriedTimes(ItemRef(type, id))
                 cleanReminders = reminders
             }
         }

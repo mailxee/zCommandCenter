@@ -61,6 +61,7 @@ class TaskRepository(
             null
         }
         nextId?.let { reminders.sync(ItemRef(ItemType.TASK, it)) }
+        if (completed) reminders.dropCarriedOfCompleted()
         return nextId
     }
 

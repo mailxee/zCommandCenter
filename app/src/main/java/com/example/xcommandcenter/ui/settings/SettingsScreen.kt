@@ -37,6 +37,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -212,6 +216,7 @@ fun SettingsScreen(
                     )
                 }) { Text("Allow exact reminders") }
             }
+            CarryOverSetting(viewModel)
 
             SectionTitle("Data")
             Text(
@@ -307,3 +312,29 @@ fun SettingsScreen(
 private fun itemCount(n: Int) = if (n == 1) "1 item" else "$n items"
 
 private const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+/**
+ * How long after a task's or plan's reminder goes off, with the item still open and no later
+ * reminder, the reminder repeats (see `ReminderCarry`).
+ */
+@Composable
+private fun CarryOverSetting(viewModel: SettingsViewModel) {
+    val days by viewModel.carryDays.collectAsStateWithLifecycle()
+    val choices = ReminderPrefsRepository.choices
+    Text("Carry over a reminder when its task or plan is still open", style = MaterialTheme.typography.bodyLarge)
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        choices.forEachIndexed { i, n ->
+            SegmentedButton(
+                selected = n == days,
+                onClick = { viewModel.setCarryDays(n) },
+                shape = SegmentedButtonDefaults.itemShape(i, choices.size),
+            ) { Text(if (n == 0) "Off" else if (n == 1) "1 day" else "$n days", maxLines = 1) }
+        }
+    }
+    Text(
+        if (days == 0) "Reminders go off once."
+        else "After this long, if the item isn't completed and has no later reminder, the reminder is repeated at the same time of day.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}

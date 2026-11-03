@@ -1,6 +1,7 @@
 package com.example.xcommandcenter.ui.common
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.DropdownMenu
@@ -32,7 +33,8 @@ import java.time.ZoneId
  * The item's reminders, any number, each with a remove button, and "Add reminder". A habit's are
  * times of day, used on each scheduled day, each shown with [nextHabitReminder], when it next goes
  * off; a schedule block's are times of day, every day, offered relative to its [blockStart] minute;
- * anything else's are a date and a time, once. Saved with the form.
+ * anything else's are a date and a time, once. Saved with the form. A carried-over reminder (see
+ * `ReminderCarry`) says so beneath its time.
  */
 @Composable
 fun RemindersSection(viewModel: ItemDetailViewModel, nextHabitReminder: (Long) -> LocalDateTime? = { null }, blockStart: Int? = null) {
@@ -45,12 +47,20 @@ fun RemindersSection(viewModel: ItemDetailViewModel, nextHabitReminder: (Long) -
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val next = if (habit) nextHabitReminder(time)?.let { " · next ${it.display()}" }.orEmpty() else ""
             val before = blockStart?.let { beforeStartText(time.toInt(), it) }?.let { " · $it" }.orEmpty()
-            Text(
-                reminderText(viewModel.type, time) + next + before + if (past) " (past)" else "",
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (past) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    reminderText(viewModel.type, time) + next + before + if (past) " (past)" else "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (past) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                )
+                if (time in viewModel.carriedReminders && !past) {
+                    Text(
+                        "Carried over: an earlier reminder went off and this is still open",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             IconButton(onClick = { viewModel.removeReminder(time) }) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove reminder")
             }

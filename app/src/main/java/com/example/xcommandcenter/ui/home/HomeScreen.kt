@@ -74,7 +74,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ChipState
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.TaskStatusFilter
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.itemSpanStyle
 import com.example.xcommandcenter.ui.common.itemTextStyle
@@ -358,6 +360,7 @@ private fun LinkModeStatus(viewModel: HomeViewModel) {
  * with it; both stay on when switching tabs. Shows "Untagged" (items without tags) and the tags
  * used on [tab]'s items, plus any tag in use by the filter, so it can always be turned off; hidden
  * when there are no tags to offer. The chips wrap onto more lines, so every tag stays on screen.
+ * The Tasks tab also has "Past due" and "Completed" (see [TaskStatusFilter]), which work the same way.
  */
 @Composable
 private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
@@ -366,14 +369,16 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
     val tabTagIds by viewModel.tabTagIds.collectAsStateWithLifecycle()
     val used = tabTagIds[tab].orEmpty()
     val tags = allTags.filter { it.id in used || it.id in filter.selected || it.id in filter.excluded }
+    val status by viewModel.taskStatus.collectAsStateWithLifecycle()
     val untagged = TagFilter.UNTAGGED
-    if (tags.isEmpty() && untagged !in filter.selected && untagged !in filter.excluded) return
+    val tasks = tab == ItemType.TASK
+    if (!tasks && tags.isEmpty() && untagged !in filter.selected && untagged !in filter.excluded) return
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        if (filter.active) {
+        if (filter.active || (tasks && status.active)) {
             AssistChip(onClick = viewModel::clearTags, label = { Text("Clear") })
         }
         TagChip(
@@ -383,6 +388,22 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
             onClick = { viewModel.toggleTag(untagged) },
             onLongClick = { viewModel.toggleExcludedTag(untagged) },
         )
+        if (tasks) {
+            listOf(
+                Triple(TaskStatusFilter.Chip.PAST_DUE, "Past due", R.drawable.ic_past_due),
+                Triple(TaskStatusFilter.Chip.COMPLETED, "Completed", R.drawable.ic_completed),
+            ).forEach { (chip, label, icon) ->
+                TagChip(
+                    label = label,
+                    icon = icon,
+                    selected = status.state(chip) == ChipState.ONLY,
+                    excluded = status.state(chip) == ChipState.HIDDEN,
+                    onClick = { viewModel.tapTaskStatus(chip) },
+                    onLongClick = { viewModel.holdTaskStatus(chip) },
+                    holdLabel = "tasks",
+                )
+            }
+        }
         tags.forEach { tag ->
             TagChip(
                 label = tag.label(),
@@ -400,7 +421,17 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
  * shows a check; excluded is greyed out and struck through.
  */
 @Composable
-private fun TagChip(label: String, selected: Boolean, excluded: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun TagChip(
+    label: String,
+    selected: Boolean,
+    excluded: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    icon: Int? = null,
+    /** What the chip picks out, for accessibility: "items with this tag", or "tasks" for a built-in chip. */
+    holdLabel: String? = null,
+) {
+    val what = holdLabel?.let { "these $it" } ?: "items with this tag"
     val colors = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
     val shape = RoundedCornerShape(8.dp)
@@ -418,11 +449,11 @@ private fun TagChip(label: String, selected: Boolean, excluded: Boolean, onClick
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         onLongClick()
                     },
-                    onLongClickLabel = if (excluded) "Show items with this tag" else "Hide items with this tag",
+                    onLongClickLabel = if (excluded) "Show $what" else "Hide $what",
                 )
                 .semantics {
-                    if (selected) stateDescription = "Showing only items with this tag"
-                    if (excluded) stateDescription = "Items with this tag are hidden"
+                    if (selected) stateDescription = "Showing only $what"
+                    if (excluded) stateDescription = "${what.replaceFirstChar { it.uppercase() }} are hidden"
                 }
                 .heightIn(min = 32.dp)
                 .padding(horizontal = 12.dp),
@@ -435,6 +466,14 @@ private fun TagChip(label: String, selected: Boolean, excluded: Boolean, onClick
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
+            } else if (icon != null) {
+                Icon(
+                    painterResource(icon),
+                    contentDescription = null,
+                    tint = if (excluded) colors.onSurface.copy(alpha = 0.38f) else colors.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
             }
             Text(
                 label,

@@ -26,9 +26,12 @@ class PlanRepository(private val dao: PlanDao, private val reminders: ReminderRe
     suspend fun reorder(ids: List<Long>) = dao.reorder(ids)
 
     /** Returns the number of open subplans; the plan is completed only when that is 0. */
-    suspend fun complete(id: Long): Int = dao.complete(id)
+    suspend fun complete(id: Long): Int = dao.complete(id).also { reminders.dropCarriedOfCompleted() }
 
-    suspend fun completeWithSubplans(id: Long) = dao.completeWithSubplans(id)
+    suspend fun completeWithSubplans(id: Long) {
+        dao.completeWithSubplans(id)
+        reminders.dropCarriedOfCompleted()
+    }
 
     /** Also reopens completed ancestors, since a completed plan can't have open subplans. */
     suspend fun reopen(id: Long) = dao.reopen(id)

@@ -7,6 +7,7 @@ import com.example.xcommandcenter.data.entity.ReminderEntity
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.ReminderCarry
 import com.example.xcommandcenter.reminder.ReminderScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,7 +26,8 @@ sealed interface ReminderNotice {
 /**
  * Owns every item's reminders and keeps one alarm per reminder in step with what is stored. A
  * habit's reminder is a time of day, repeated on each scheduled day; a schedule block's is a time
- * of day, every day, shown only while its schedule is the active one; any other item's is a date and time, once. Alarms are set even for completed tasks and plans; when one goes off for a
+ * of day, every day, shown only while its schedule is the active one; any other item's is a date and time, once, and a task's or plan's
+ * is carried over to a later day while the item stays open (see [ReminderCarry]). Alarms are set even for completed tasks and plans; when one goes off for a
  * completed item, nothing is shown (so reopening the item needs no rescheduling).
  */
 class ReminderRepository(
@@ -34,12 +36,25 @@ class ReminderRepository(
     private val scheduler: ReminderScheduler,
     /** The active schedule; only its blocks' reminders go off. */
     private val activeSchedule: suspend () -> Long?,
+    /** Days until a reminder is carried over; 0 when off (see [ReminderCarry]). */
+    private val carryDays: suspend () -> Int = { 0 },
 ) {
     /** Reminder times per item, earliest first (see [ReminderEntity.time]). */
     fun observeAll(): Flow<Map<ItemRef, List<Long>>> =
         dao.observeAll().map { rows -> rows.groupBy({ it.ref }, { it.time }) }
 
     suspend fun times(ref: ItemRef): List<Long> = dao.forItem(ref.type, ref.id).map { it.time }
+
+    /** The times among [times] that were carried over, for their label. */
+    suspend fun carriedTimes(ref: ItemRef): Set<Long> = dao.forItem(ref.type, ref.id).filter { it.carried }.map { it.time }.toSet()
+
+    /** Removes carried-over reminders whose item has been completed; called after completing things. */
+    suspend fun dropCarriedOfCompleted() {
+        dao.carriedOfCompleted().forEach {
+            scheduler.cancel(it.id)
+            dao.delete(it.id)
+        }
+    }
 
     /** Makes [times] the item's reminders, replacing its alarms. */
     suspend fun replace(ref: ItemRef, times: List<Long>) {
@@ -60,9 +75,20 @@ class ReminderRepository(
         }
     }
 
-    /** Alarms do not survive reboots or app updates; re-register every one. */
+    /**
+     * Alarms do not survive reboots or app updates; re-register every one. A reminder that went off
+     * while the phone was off gets its carry-over now (see [ReminderCarry.missed]).
+     */
     suspend fun rescheduleAll() {
-        dao.all().forEach { schedule(it) }
+        val all = dao.all()
+        all.forEach { schedule(it) }
+        val days = carryDays()
+        if (days <= 0) return
+        val now = System.currentTimeMillis()
+        all.filter { it.itemType in ReminderCarry.types }.groupBy { it.ref }.forEach { (_, rows) ->
+            val latest = rows.filter { it.time <= now }.maxByOrNull { it.time } ?: return@forEach
+            if (ReminderCarry.missed(latest.time, now, days)) carryOver(latest, now, days)
+        }
     }
 
     suspend fun cancelAll() {
@@ -91,8 +117,35 @@ class ReminderRepository(
             // Every block keeps its alarm, so switching schedules needs no rescheduling; only the active one's show.
             return if (dao.blockSchedule(reminder.itemId) == activeSchedule()) ReminderNotice.Item(reminder.ref, title) else null
         }
-        if (dao.completed(reminder.itemType, reminder.itemId) == 1) return null
+        if (dao.completed(reminder.itemType, reminder.itemId) == 1) {
+            if (reminder.carried) dao.delete(reminder.id)
+            return null
+        }
+        carryOver(reminder, System.currentTimeMillis(), carryDays())
         return ReminderNotice.Item(reminder.ref, title)
+    }
+
+    /**
+     * Repeats [reminder], which has gone off, [days] later if its item is still open and has no other
+     * reminder to come (see [ReminderCarry]). The item keeps a single carried-over reminder: a
+     * carried one moves forward, and a new carry replaces any earlier one.
+     */
+    private suspend fun carryOver(reminder: ReminderEntity, now: Long, days: Int) {
+        val others = dao.forItem(reminder.itemType, reminder.itemId).filter { it.id != reminder.id }
+        val completed = dao.completed(reminder.itemType, reminder.itemId) == 1
+        if (!ReminderCarry.applies(reminder.itemType, completed, others.map { it.time }, now, days)) return
+        val next = ReminderCarry.next(reminder.time, days, now) ?: return
+        if (reminder.carried) {
+            dao.setTime(reminder.id, next)
+            scheduler.schedule(reminder.id, next)
+        } else {
+            others.filter { it.carried }.forEach {
+                scheduler.cancel(it.id)
+                dao.delete(it.id)
+            }
+            val id = dao.insert(ReminderEntity(itemType = reminder.itemType, itemId = reminder.itemId, time = next, carried = true))
+            scheduler.schedule(id, next)
+        }
     }
 
     private suspend fun schedule(reminder: ReminderEntity) {
