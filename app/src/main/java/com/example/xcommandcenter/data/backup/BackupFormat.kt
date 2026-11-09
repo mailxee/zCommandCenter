@@ -20,6 +20,7 @@ import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
+import com.example.xcommandcenter.data.entity.IdeaListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
@@ -73,6 +74,7 @@ data class BackupData(
     val ideas: List<IdeaEntity> = emptyList(),
     val linkLabels: List<LinkLabelEntity> = emptyList(),
     val glossary: List<GlossaryEntity> = emptyList(),
+    val ideaListItems: List<IdeaListItemEntity> = emptyList(),
 ) {
     val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size + ideas.size
 }
@@ -81,7 +83,7 @@ data class BackupData(
 class ImportException(message: String) : Exception(message)
 
 /**
- * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists,
+ * The workbook layout: one sheet per tab (in the user's tab order), then Checklists, Note lists, Idea lists,
  * Profiles and Person items (a person's two lists), Chapters,
  * Habit history, Links, Tags, Reminders, Settings (the tab order and each tab's item style) and
  * Schedules (the Schedule tab's schedules, which is on show, and automatic switching), so
@@ -96,6 +98,7 @@ object BackupFormat {
     const val TAGS = "Tags"
     const val CHECKLISTS = "Checklists"
     const val NOTE_LISTS = "Note lists"
+    const val IDEA_LISTS = "Idea lists"
     const val PROFILES = "Profiles"
     const val PERSON_ITEMS = "Person items"
     const val REMINDERS = "Reminders"
@@ -244,6 +247,13 @@ object BackupFormat {
                     listOf(it.noteId.toString(), title(ItemRef(ItemType.NOTE, it.noteId)), (it.position + 1).toString(), it.text)
                 },
         )
+        val ideaLists = Sheet(
+            IDEA_LISTS,
+            listOf(listOf("Idea ID", "Idea", "Position", "Item")) +
+                data.ideaListItems.sortedWith(compareBy({ it.ideaId }, { it.position })).map {
+                    listOf(it.ideaId.toString(), title(ItemRef(ItemType.IDEA, it.ideaId)), (it.position + 1).toString(), it.text)
+                },
+        )
         val profiles = Sheet(
             PROFILES,
             listOf(listOf("Person ID", "Person", "Position", "Profile")) +
@@ -325,7 +335,7 @@ object BackupFormat {
                     )
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, profiles, personItems, chapters, history, links, linkLabels, tags, reminders, settings, schedules, glossary)
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, ideaLists, profiles, personItems, chapters, history, links, linkLabels, tags, reminders, settings, schedules, glossary)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -512,6 +522,16 @@ object BackupFormat {
             parentsFirst(all, { it.id }, { it.parentId }) { it.copy(parentId = null) }
         }
 
+        val ideaIds = ideas.map { it.id }.toSet()
+        // Positions are renumbered 0..n-1 per idea, in the order given.
+        val ideaListItems = sheet(IDEA_LISTS, false)?.rows("Item").orEmpty().mapNotNull { r ->
+            val ideaId = r.long("Idea ID") ?: r.fail("Idea ID is required")
+            if (ideaId !in ideaIds) return@mapNotNull null.also { skipped++ }
+            IdeaListItemEntity(ideaId = ideaId, position = r.int("Position", 1, 1..100_000) - 1, text = r.required("Item"))
+        }.groupBy { it.ideaId }.values.flatMap { group ->
+            group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
+        }
+
         val habitIds = habits.map { it.id }.toSet()
         val marks = sheet(HABIT_HISTORY, false)?.rows("Date").orEmpty().mapNotNull { r ->
             val habitId = r.long("Habit ID") ?: r.fail("Habit ID is required")
@@ -624,7 +644,7 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas, linkLabels, glossary,
+                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas, linkLabels, glossary, ideaListItems,
             ),
             skipped,
             settings,

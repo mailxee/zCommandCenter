@@ -216,12 +216,13 @@ fun personCardText(person: PersonEntity, lists: PersonLists?) = CardText(
  * An idea: its kind's icon before the title, and its explanation. [parent] names the idea it sits
  * under, for cards shown away from the Ideas outline; [hidden] says what a collapsed idea hides.
  */
-fun ideaCardText(idea: IdeaEntity, parent: IdeaEntity? = null, hidden: String? = null) = CardText(
+/** [listCount] is the number of items in the idea's list. */
+fun ideaCardText(idea: IdeaEntity, parent: IdeaEntity? = null, hidden: String? = null, listCount: Int = 0) = CardText(
     title = idea.title,
     lines = listOfNotNull(idea.body.ifBlank { null }),
     emphasis = critical(idea.priority),
     priority = idea.priority,
-    meta = listOfNotNull(idea.kind.label, parent?.let { "under ${it.title}" }, hidden),
+    meta = listOfNotNull(idea.kind.label, parent?.let { "under ${it.title}" }, if (listCount > 0) "List of ${listCount.items()}" else null, hidden),
     kind = idea.kind,
 )
 

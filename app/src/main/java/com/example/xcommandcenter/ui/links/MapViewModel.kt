@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.LinkEntity
+import com.example.xcommandcenter.data.prefs.MapPrefsRepository
+import com.example.xcommandcenter.data.repository.ItemDetail
 import com.example.xcommandcenter.data.repository.LinkGraph
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.domain.GraphLayout
@@ -14,6 +16,9 @@ import com.example.xcommandcenter.domain.LinkRoute
 import com.example.xcommandcenter.domain.AppMode
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.LineStyle
+import com.example.xcommandcenter.domain.LinkLabels
+import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.ui.navigation.Routes
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +26,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,7 +55,13 @@ data class MapEdge(
     val label: String? = null,
     val subject: ItemRef? = null,
     val directed: Boolean = false,
+    /** The kind of link, as [MapFilter] names it, and how that kind is drawn. */
+    val kind: String = MapFilter.PLAIN,
+    val lineStyle: LineStyle = LineStyle.SOLID,
 )
+
+/** A kind of link in the Show panel: [count] lines of it in the network, whether hidden or not. */
+data class LinkKindInfo(val key: String, val name: String, val style: LineStyle, val shown: Boolean, val count: Int, val contradicts: Boolean = false)
 
 /** What the map draws: items in grid units (see [GraphLayout]) and the lines between them. */
 data class MapState(
@@ -60,6 +74,12 @@ data class MapState(
     /** Open Tidy links findings within what is shown. */
     val findings: List<LinkAnalysis.Finding>,
     val stored: Map<Long, LinkEntity>,
+    val filter: MapFilter = MapFilter(),
+    /** The tabs with items in the network, hidden or not, for the Show panel. */
+    val typesPresent: List<ItemType> = emptyList(),
+    val linkKinds: List<LinkKindInfo> = emptyList(),
+    /** How many items the Show panel's choices leave out. */
+    val hiddenCount: Int = 0,
 ) {
     val byRef: Map<ItemRef, MapNode> = nodes.associateBy { it.ref }
 
@@ -82,7 +102,7 @@ data class MapUndo(val message: String, val undo: suspend () -> Unit)
  * The map of links: one item's network, or every linked item, laid out by route (rows from the
  * suggested route) or freely. Selecting an item or a line shows what can be done with it.
  */
-class MapViewModel(savedState: SavedStateHandle, private val links: LinkRepository) : ViewModel() {
+class MapViewModel(savedState: SavedStateHandle, private val links: LinkRepository, private val prefs: MapPrefsRepository) : ViewModel() {
     /** [MIND_MAP] is Think mode's own: rings round the item in the middle. */
     enum class Layout(val label: String) {
         MIND_MAP("Mind map"),
@@ -117,11 +137,16 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     private var focused = false
 
     val state: StateFlow<MapState?> = combine(
-        links.observeGraph(), root, pickedLayout, links.mode, links.tabModes,
-    ) { graph, root, picked, mode, tabModes ->
+        links.observeGraph(), root, pickedLayout, combine(links.mode, links.tabModes, ::Pair), prefs.filter,
+    ) { graph, root, picked, (mode, tabModes), filter ->
         val layout = picked?.takeIf { it in Layout.of(mode) } ?: Layout.of(mode).first()
-        build(graph, root, layout, mode, tabModes)
+        build(graph, root, layout, mode, tabModes, filter)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The selected item's explanation and list, for its panel. */
+    val detail: StateFlow<Pair<ItemRef, ItemDetail>?> = selection.flatMapLatest { sel ->
+        if (sel is MapSelection.Node) links.observeDetail(sel.ref).map { sel.ref to it } else flowOf(null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         // Opened from "Show on map": select the finding's link, or its end point.
@@ -137,7 +162,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         }
     }
 
-    private fun build(graph: LinkGraph, root: ItemRef?, layout: Layout, mode: AppMode, tabModes: TabModes): MapState {
+    private fun build(graph: LinkGraph, root: ItemRef?, layout: Layout, mode: AppMode, tabModes: TabModes, filter: MapFilter): MapState {
         val think = mode == AppMode.THINK
         val shown = graph.nodes(root, mode)
         // By route: Do's layers, or in Think the kinds' layers, then sources, then Do's items.
@@ -146,7 +171,6 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             tabModes.isOtherMode(ref.type, mode) -> graph.thinkRoute.depth + 1
             else -> graph.thinkRoute.depth
         }
-        val nodes = shown.mapNotNull { graph.entries[it] }.sortedWith(compareBy({ layer(it.ref) }, { it.title.lowercase() }))
         // In Think mode only links that touch an idea are drawn: two end points (a goal and its habit)
         // aren't part of the thinking, and following them would put the habit a ring out from the goal.
         val inside = graph.links.filter { it.a in shown && it.b in shown && (!think || it.a.type == ItemType.IDEA || it.b.type == ItemType.IDEA) }
@@ -156,8 +180,10 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         val shared = findings.filter { it.kind == LinkAnalysis.Kind.SHARED_END_POINT }
             .flatMap { f -> f.sharedBy.map { setOf(it, f.endPoint!!) } }.toSet()
         // In Think mode each idea also hangs from the one it is under: the mind map's tree.
-        val under = if (think) graph.under.filter { (child, parent) -> child in shown && parent in shown } else emptyList()
-        val underEdges = under.map { (child, parent) -> MapEdge(LinkAnalysis.Link(-child.id, child, parent), EdgeStyle.UNDER, null) }
+        val allUnder = if (think) graph.under.filter { (child, parent) -> child in shown && parent in shown } else emptyList()
+        val underEdges = allUnder.map { (child, parent) ->
+            MapEdge(LinkAnalysis.Link(-child.id, child, parent), EdgeStyle.UNDER, null, kind = MapFilter.UNDER, lineStyle = filter.styleOf(MapFilter.UNDER))
+        }
         val linkEdges = inside.groupBy { setOf(it.a, it.b) }
             .map { (pair, group) ->
                 val link = group.firstOrNull { it.id in byLink } ?: group.first()
@@ -172,14 +198,32 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
                     pair in shared -> EdgeStyle.SHARED
                     else -> EdgeStyle.ROUTE
                 }
+                val kind = label?.let { MapFilter.label(it.id) } ?: MapFilter.PLAIN
                 MapEdge(
                     link, style, finding,
                     label = label?.forward,
                     subject = if (stored?.labelFromA != false) link.a else link.b,
                     directed = label != null && !label.symmetric,
+                    kind = kind,
+                    lineStyle = filter.styleOf(kind, label?.key),
                 )
             }
-        val edges = underEdges + linkEdges
+        val allEdges = underEdges + linkEdges
+        // The Show panel's choices: what's left of the network once hidden tabs and kinds of link go.
+        val (visible, edges) = filter.apply(shown, allEdges, root, { it.link.a to it.link.b }, { it.kind })
+        val nodes = visible.mapNotNull { graph.entries[it] }.sortedWith(compareBy({ layer(it.ref) }, { it.title.lowercase() }))
+        val counts = allEdges.groupingBy { it.kind }.eachCount()
+        val linkKinds = buildList {
+            counts[MapFilter.UNDER]?.let { add(LinkKindInfo(MapFilter.UNDER, "Under", filter.styleOf(MapFilter.UNDER), filter.shows(MapFilter.UNDER), it)) }
+            counts[MapFilter.PLAIN]?.let { add(LinkKindInfo(MapFilter.PLAIN, "No label", filter.styleOf(MapFilter.PLAIN), filter.shows(MapFilter.PLAIN), it)) }
+            graph.labels.values.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { label ->
+                val key = MapFilter.label(label.id)
+                counts[key]?.let {
+                    val name = label.forward + (label.backward?.let { b -> " / $b" } ?: "")
+                    add(LinkKindInfo(key, name, filter.styleOf(key, label.key), filter.shows(key), it, contradicts = label.key == LinkLabels.CONTRADICTS))
+                }
+            }
+        }
         val refs = nodes.map { it.ref }
         // The tree's own lines first, so they decide the mind map's rings.
         val pairs = edges.map { it.link.a to it.link.b }
@@ -188,7 +232,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             Layout.FREE -> GraphLayout.free(refs, pairs, layered)
             Layout.BY_ROUTE -> layered
             Layout.MIND_MAP -> {
-                val parents = under.toMap()
+                val parents = edges.filter { it.style == EdgeStyle.UNDER }.associate { it.link.a to it.link.b }
                 // With no item in the middle, the top-level ideas share the first ring.
                 val roots = if (root != null) listOf(root) else refs.filter { it.type == ItemType.IDEA && it !in parents }
                 GraphLayout.radial(roots, refs, pairs, aspect = MIND_MAP_ASPECT)
@@ -205,9 +249,38 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             },
             edges = edges,
             route = graph.route,
-            findings = findings,
+            findings = findings.filter { f -> f.items.any { it in visible } },
             stored = graph.stored,
+            filter = filter,
+            typesPresent = shown.map { it.type }.distinct().sortedBy { ItemType.tabs.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } },
+            linkKinds = linkKinds,
+            hiddenCount = (shown - visible).size,
         )
+    }
+
+    /** Every link label, for labelling a line from its panel. */
+    val labels: StateFlow<List<com.example.xcommandcenter.data.entity.LinkLabelEntity>> =
+        links.labels.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Labels the line between [a] and [b]: [labelId] reading from [a] when [fromA], or plain when null. */
+    fun setLabel(a: ItemRef, b: ItemRef, labelId: Long?, fromA: Boolean) {
+        viewModelScope.launch { if (fromA) links.setLabel(a, b, labelId) else links.setLabel(b, a, labelId) }
+    }
+
+    fun setTypeShown(type: ItemType, shown: Boolean) {
+        viewModelScope.launch { prefs.setTypeShown(type, shown) }
+    }
+
+    fun setLinkShown(kind: String, shown: Boolean) {
+        viewModelScope.launch { prefs.setLinkShown(kind, shown) }
+    }
+
+    fun setLineStyle(kind: String, style: LineStyle) {
+        viewModelScope.launch { prefs.setStyle(kind, style) }
+    }
+
+    fun showAll() {
+        viewModelScope.launch { prefs.showAll() }
     }
 
     fun setLayout(value: Layout) {

@@ -23,6 +23,7 @@ import com.example.xcommandcenter.data.entity.ItemTagEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
+import com.example.xcommandcenter.data.entity.IdeaListItemEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.db.AppDatabase
@@ -55,6 +56,9 @@ interface BackupDao {
     @Query("SELECT * FROM person_profiles ORDER BY personId, position") suspend fun personProfiles(): List<PersonProfileEntity>
     @Query("SELECT * FROM person_items ORDER BY personId, position") suspend fun personItems(): List<PersonItemEntity>
     @Query("SELECT * FROM ideas ORDER BY id") suspend fun ideas(): List<IdeaEntity>
+    @Query("SELECT * FROM idea_list_items ORDER BY ideaId, position") suspend fun ideaListItems(): List<IdeaListItemEntity>
+    @Insert suspend fun insertIdeaListItems(rows: List<IdeaListItemEntity>)
+    @Query("DELETE FROM idea_list_items") suspend fun deleteIdeaListItems()
     @Query("SELECT * FROM link_labels ORDER BY sortOrder, id") suspend fun linkLabels(): List<LinkLabelEntity>
     @Query("SELECT * FROM glossary ORDER BY `key`") suspend fun glossary(): List<GlossaryEntity>
     @Insert suspend fun insertGlossary(rows: List<GlossaryEntity>)
@@ -64,7 +68,7 @@ interface BackupDao {
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(), linkLabels(), glossary(),
+        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(), linkLabels(), glossary(), ideaListItems(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -137,6 +141,7 @@ interface BackupDao {
         deletePersonProfiles()
         deletePersonItems()
         deletePeople()
+        deleteIdeaListItems()
         deleteIdeas()
         // Kept findings name links by id, which new data reuses for other links.
         deleteKeptFindings()
@@ -178,6 +183,7 @@ interface BackupDao {
         insertPersonProfiles(data.personProfiles)
         insertPersonItems(data.personItems)
         insertIdeas(data.ideas)
+        insertIdeaListItems(data.ideaListItems)
         // Labels are kept like settings unless the data brings its own (an older workbook has none).
         if (data.linkLabels.isNotEmpty()) {
             deleteLinkLabels()

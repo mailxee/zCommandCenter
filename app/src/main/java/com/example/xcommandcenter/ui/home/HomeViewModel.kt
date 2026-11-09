@@ -234,15 +234,16 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val search: Flow<SearchScope> = combine(
         searchQuery,
         tasksRepo.observeChecklistTexts(),
-        combine(notesRepo.observeListTexts(), peopleRepo.observeLists(), ::Pair),
+        combine(notesRepo.observeListTexts(), peopleRepo.observeLists(), ideasRepo.observeListTexts(), ::Triple),
         booksRepo.observeChapterTitles(),
         tagsRepo.observeTagsByItem(),
-    ) { query, checklists, (lists, personLists), chapters, tags ->
+    ) { query, checklists, (lists, personLists, ideaLists), chapters, tags ->
         if (query.isBlank()) return@combine SearchScope(query)
         val extra = HashMap<ItemRef, MutableList<String>>()
         fun add(ref: ItemRef, texts: List<String>) = extra.getOrPut(ref) { mutableListOf() }.addAll(texts)
         checklists.forEach { (id, texts) -> add(ItemRef(ItemType.TASK, id), texts) }
         lists.forEach { (id, texts) -> add(ItemRef(ItemType.NOTE, id), texts) }
+        ideaLists.forEach { (id, texts) -> add(ItemRef(ItemType.IDEA, id), texts) }
         chapters.forEach { (id, texts) -> add(ItemRef(ItemType.BOOK, id), texts) }
         personLists.forEach { (id, person) -> add(ItemRef(ItemType.PERSON, id), person.profiles + person.items) }
         tags.forEach { (ref, itemTags) -> add(ref, itemTags.map { it.name }) }
@@ -425,6 +426,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     /** List items per note id, for the "list of 3 items" line. */
     val noteListCounts: StateFlow<Map<Long, Int>> = notesRepo.observeListCounts().stateIn(emptyMap())
+
+    /** List items per idea id, for the "List of 3 items" line. */
+    val ideaListCounts: StateFlow<Map<Long, Int>> = ideasRepo.observeListCounts().stateIn(emptyMap())
 
     val books: StateFlow<List<BookWithProgress>> =
         booksRepo.observeAllWithProgress().sortedAndFiltered(ItemType.BOOK, { it.book.id }, { it.book.priority }) {

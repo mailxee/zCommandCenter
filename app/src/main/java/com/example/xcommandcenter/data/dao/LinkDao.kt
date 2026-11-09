@@ -136,4 +136,41 @@ interface LinkDao {
         """,
     )
     fun search(typeNames: List<String>, query: String): Flow<List<ItemIndexEntry>>
+
+    /**
+     * An item's explanation for the map's panel: a task's or plan's description, a goal's
+     * strategy, a habit's or block's notes, a note's text, a book's description, a quote's author
+     * and source, a person's bio, an idea's explanation. Null or blank when there is none.
+     */
+    @Query(
+        """
+        SELECT text FROM (
+            SELECT description AS text FROM tasks WHERE :typeName = 'TASK' AND id = :id
+            UNION ALL SELECT strategy FROM goals WHERE :typeName = 'GOAL' AND id = :id
+            UNION ALL SELECT notes FROM habits WHERE :typeName = 'HABIT' AND id = :id
+            UNION ALL SELECT description FROM plans WHERE :typeName = 'PLAN' AND id = :id
+            UNION ALL SELECT body FROM notes WHERE :typeName = 'NOTE' AND id = :id
+            UNION ALL SELECT description FROM books WHERE :typeName = 'BOOK' AND id = :id
+            UNION ALL SELECT TRIM(author || CASE WHEN TRIM(author) <> '' AND TRIM(source) <> '' THEN ', ' ELSE '' END || source)
+                FROM quotes WHERE :typeName = 'QUOTE' AND id = :id
+            UNION ALL SELECT notes FROM blocks WHERE :typeName = 'BLOCK' AND id = :id
+            UNION ALL SELECT bio FROM people WHERE :typeName = 'PERSON' AND id = :id
+            UNION ALL SELECT body FROM ideas WHERE :typeName = 'IDEA' AND id = :id
+        ) LIMIT 1
+        """,
+    )
+    fun observeExplanation(typeName: String, id: Long): Flow<String?>
+
+    /** An item's list in order: a task's checklist, a note's or an idea's list, a person's items. */
+    @Query(
+        """
+        SELECT text FROM (
+            SELECT text, position FROM checklist_items WHERE :typeName = 'TASK' AND taskId = :id
+            UNION ALL SELECT text, position FROM note_list_items WHERE :typeName = 'NOTE' AND noteId = :id
+            UNION ALL SELECT text, position FROM idea_list_items WHERE :typeName = 'IDEA' AND ideaId = :id
+            UNION ALL SELECT text, position FROM person_items WHERE :typeName = 'PERSON' AND personId = :id
+        ) ORDER BY position
+        """,
+    )
+    fun observeList(typeName: String, id: Long): Flow<List<String>>
 }

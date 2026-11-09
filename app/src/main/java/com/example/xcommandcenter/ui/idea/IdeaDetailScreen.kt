@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +54,7 @@ import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.KindIcon
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.LinksInText
+import com.example.xcommandcenter.ui.common.ListEditor
 import com.example.xcommandcenter.ui.common.PriorityField
 import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.SectionTitle
@@ -71,6 +74,7 @@ fun IdeaDetailScreen(
     val idea = viewModel.idea
     val terms by viewModel.terms.collectAsStateWithLifecycle()
     var choosingParent by rememberSaveable { mutableStateOf(false) }
+    var addingExisting by rememberSaveable { mutableStateOf(false) }
     val parent = all.firstOrNull { it.id == idea.parentId }
     val children = if (id == 0L) emptyList() else all.filter { it.parentId == id }
 
@@ -108,6 +112,15 @@ fun IdeaDetailScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         LinksInText(idea.body)
+        ListEditor(
+            title = "List",
+            lines = viewModel.list,
+            checkable = false,
+            onAdd = viewModel::addListItem,
+            onUpdate = viewModel::updateListItem,
+            onRemove = viewModel::removeListItem,
+            onMove = viewModel::moveListItem,
+        )
 
         SectionTitle("Under")
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -142,8 +155,9 @@ fun IdeaDetailScreen(
                         modifier = Modifier.clickable { onOpen(ItemRef(ItemType.IDEA, child.id)) },
                     )
                 }
-                TextButton(onClick = { onCreateChild(id) }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Text("Add an idea under this")
+                FlowRow(modifier = Modifier.padding(horizontal = 8.dp)) {
+                    TextButton(onClick = { onCreateChild(id) }) { Text("New idea under this") }
+                    TextButton(onClick = { addingExisting = true }) { Text("Add existing ideas") }
                 }
             }
         }
@@ -152,6 +166,22 @@ fun IdeaDetailScreen(
         RemindersSection(viewModel)
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
+    }
+
+    if (addingExisting) {
+        // Not this idea or anything above it (that would make a loop), nor what is already under it.
+        val above = generateSequence(idea.parentId) { pid -> all.firstOrNull { it.id == pid }?.parentId }.toSet()
+        val stored = all.firstOrNull { it.id == id }?.parentId
+        val aboveStored = generateSequence(stored) { pid -> all.firstOrNull { it.id == pid }?.parentId }.toSet()
+        ExistingIdeasPicker(
+            all = all,
+            excluded = above + aboveStored + id + children.map { it.id },
+            onAdd = { ids ->
+                viewModel.addUnder(ids)
+                addingExisting = false
+            },
+            onDismiss = { addingExisting = false },
+        )
     }
 
     if (choosingParent) {
@@ -212,6 +242,47 @@ private fun ParentPicker(all: List<IdeaEntity>, excluded: Set<Long>, onPick: (Lo
             }
         },
         confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Picks ideas that already exist to put under this one. Each shows where it is now; the ideas
+ * under a picked one come along with it.
+ */
+@Composable
+private fun ExistingIdeasPicker(all: List<IdeaEntity>, excluded: Set<Long>, onAdd: (List<Long>) -> Unit, onDismiss: () -> Unit) {
+    val byId = all.associateBy { it.id }
+    val options = PlanTree.flatten(all, { it.id }, { it.parentId }).map { it.node }.filter { it.id !in excluded }
+    var picked by remember { mutableStateOf(listOf<Long>()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add existing ideas") },
+        text = {
+            if (options.isEmpty()) {
+                Text("Every other idea is already under this one or above it.")
+            } else {
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    items(options, key = { it.id }) { option ->
+                        val checked = option.id in picked
+                        val toggle = { picked = if (checked) picked - option.id else picked + option.id }
+                        ListItem(
+                            colors = clearListItemColors(),
+                            leadingContent = { KindIcon(option.kind) },
+                            headlineContent = { Text(option.title) },
+                            supportingContent = { Text(option.parentId?.let { byId[it] }?.let { "Now under ${it.title}" } ?: "Now top level") },
+                            trailingContent = { Checkbox(checked = checked, onCheckedChange = { toggle() }) },
+                            modifier = Modifier.clickable { toggle() },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onAdd(picked) }, enabled = picked.isNotEmpty()) {
+                Text(if (picked.size > 1) "Add ${picked.size}" else "Add")
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

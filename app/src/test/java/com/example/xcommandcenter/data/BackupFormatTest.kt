@@ -290,7 +290,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Link labels", "Tags", "Reminders", "Settings", "Schedules", "Glossary"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Idea lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Link labels", "Tags", "Reminders", "Settings", "Schedules", "Glossary"), names)
     }
 
     @Test

@@ -108,9 +108,9 @@ class ItemCardSource(
     }
 
     private val texts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> =
-        combine(baseTexts, ideas.observeAll()) { base, ideaList ->
+        combine(baseTexts, ideas.observeAll(), ideas.observeListCounts()) { base, ideaList, ideaLists ->
             val byId = ideaList.associateBy { it.id }
-            base + ideaList.associate { ItemRef(ItemType.IDEA, it.id) to (ideaCardText(it, byId[it.parentId]) to null) }
+            base + ideaList.associate { ItemRef(ItemType.IDEA, it.id) to (ideaCardText(it, byId[it.parentId], listCount = ideaLists[it.id] ?: 0) to null) }
         }
 
     private data class NoteBookQuote(

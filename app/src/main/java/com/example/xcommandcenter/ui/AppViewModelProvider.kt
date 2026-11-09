@@ -30,7 +30,7 @@ object AppViewModelProvider {
         initializer { with(container()) { HomeViewModel(this) } }
         initializer { with(container()) { GlossaryViewModel(glossaryRepository, linkRepository) } }
         initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository, modeRepository, autoBackupRepository) } }
-        initializer { with(container()) { MapViewModel(createSavedStateHandle(), linkRepository) } }
+        initializer { with(container()) { MapViewModel(createSavedStateHandle(), linkRepository, mapPrefsRepository) } }
         initializer { with(container()) { TidyViewModel(createSavedStateHandle(), linkRepository) } }
         initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }

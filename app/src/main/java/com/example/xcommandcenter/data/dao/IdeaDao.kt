@@ -7,6 +7,8 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.IdeaListCount
+import com.example.xcommandcenter.data.entity.IdeaListItemEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -65,7 +67,33 @@ interface IdeaDao {
         }
     }
 
-    /** Children move up to the deleted idea's parent instead of being deleted with it. */
+    @Query("UPDATE ideas SET parentId = :parentId WHERE id = :id")
+    suspend fun setParent(id: Long, parentId: Long?)
+
+    @Query("SELECT * FROM idea_list_items WHERE ideaId = :ideaId ORDER BY position")
+    suspend fun listItems(ideaId: Long): List<IdeaListItemEntity>
+
+    /** Every idea's list items, for the search. */
+    @Query("SELECT * FROM idea_list_items ORDER BY ideaId, position")
+    fun observeAllListItems(): Flow<List<IdeaListItemEntity>>
+
+    @Query("SELECT ideaId, COUNT(*) AS total FROM idea_list_items GROUP BY ideaId")
+    fun observeListCounts(): Flow<List<IdeaListCount>>
+
+    @Insert
+    suspend fun insertListItems(items: List<IdeaListItemEntity>)
+
+    @Query("DELETE FROM idea_list_items WHERE ideaId = :ideaId")
+    suspend fun deleteListItems(ideaId: Long)
+
+    /** Makes [items] the idea's whole list, numbered 0..n-1 in the given order. */
+    @Transaction
+    suspend fun replaceListItems(ideaId: Long, items: List<IdeaListItemEntity>) {
+        deleteListItems(ideaId)
+        insertListItems(items.mapIndexed { index, item -> item.copy(id = 0, ideaId = ideaId, position = index) })
+    }
+
+    /** Children move up to the deleted idea's parent instead of being deleted with it; its list goes with it (ON DELETE CASCADE). */
     @Transaction
     suspend fun delete(id: Long) {
         val idea = get(id) ?: return

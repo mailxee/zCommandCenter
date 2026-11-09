@@ -42,6 +42,7 @@ import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
+import com.example.xcommandcenter.data.entity.IdeaListItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
@@ -78,6 +79,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         IdeaEntity::class,
         LinkLabelEntity::class,
         GlossaryEntity::class,
+        IdeaListItemEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -93,7 +95,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 11: the Ideas tab.
     // 12: link labels, with the starting set.
     // 13: definitions rewritten in the glossary.
-    version = 13,
+    // 14: ideas have lists, like notes.
+    version = 14,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -107,6 +110,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12, spec = AppDatabase.AddLinkLabels::class),
         AutoMigration(from = 12, to = 13),
+        AutoMigration(from = 13, to = 14),
     ],
 )
 @TypeConverters(Converters::class)

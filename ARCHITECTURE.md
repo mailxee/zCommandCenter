@@ -1150,6 +1150,28 @@ and so on; Google Drive's app offers none to other apps, so it can't be used thi
   Other files in the folder are never touched.
 - "Delete everything" clears settings, the backup folder included, so daily backups stop.
 
+### 2.65 Idea lists and adding existing ideas under one
+
+An idea has a list like a note's (`idea_list_items`, database version 14, an AutoMigration that only adds the table).
+It is edited with the same `ListEditor`, saved with the idea, searched, counted on the card ("List of 3 items"), and
+exported to the "Idea lists" sheet. Turning a note into an idea now carries its list across as the idea's list instead
+of folding it into the explanation. On an idea's page, "Under this" offers **New idea under this** and **Add existing
+ideas**: a multi-select picker of every idea except this one, the ones above it and those already under it. Picked
+ideas move straight away (`IdeaRepository.moveUnder`, which refuses a loop), bringing the ideas under them along.
+
+### 2.66 Map: item details, Show panel and line styles
+
+Tapping an item on the map shows its whole title and, in a box that scrolls, its explanation (task/plan/book
+description, goal strategy, habit/block notes, note text, quote author and source, person bio, idea explanation) and
+its list. `LinkDao.observeExplanation` / `observeList` read these with one union query each, keyed by type.
+
+The filter button opens the **Show** panel (`MapFilter`, stored by `MapPrefsRepository` in DataStore): a chip per tab
+in the network to show or hide its items, and a row per kind of link (Under, No label, each label) to show or hide its
+lines and to pick its line style (solid, dashed, dotted). Contradicts defaults to dotted, the rest to solid. While
+anything is hidden, items left with no line go too, except the item whose network is shown. Choices apply to every
+map until changed; "Show all" clears what is hidden and keeps the styles. A line Tidy links suggests removing is always
+dashed red. A line's panel also has **Label…**, which opens the usual label dialog.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1323,7 +1345,9 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/GraphLayout.kt` | The map's layered and free layouts (§2.57). |
 | `data/prefs/RoutePrefsRepository.kt` | Stores the suggested route (§2.57). |
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
-| `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57). |
+| `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
+| `domain/MapFilter.kt`, `data/prefs/MapPrefsRepository.kt` | What the map hides and each kind of link's line style (§2.66). |
+| `data/entity/IdeaListItemEntity.kt` | An idea's list (§2.65). |
 | `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
 | `domain/IdeaKind.kt`, `domain/IdeaOutline.kt`, `domain/Glossary.kt` | Idea kinds, the Ideas outline and kind chips (§2.58); the glossary's terms and starting definitions (§2.60). |
 | `data/entity/IdeaEntity.kt`, `data/dao/IdeaDao.kt`, `data/repository/IdeaRepository.kt` | Ideas as a tree; turning a note into an idea (§2.58). |
@@ -1362,6 +1386,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 | `domain/ReminderTodayTest.kt`, `domain/BackupNamesTest.kt` | Reminders today; backup names and which old ones go. |
+| `domain/MapFilterTest.kt` | Hiding tabs and kinds of link on the map; line styles. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |

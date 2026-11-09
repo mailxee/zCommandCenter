@@ -603,6 +603,7 @@ fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val kinds by viewModel.ideaKinds.collectAsStateWithLifecycle()
     val tabModes by viewModel.tabModes.collectAsStateWithLifecycle()
+    val ideaListCounts by viewModel.ideaListCounts.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val view = viewModel.priorityView(ItemType.IDEA)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
@@ -640,7 +641,7 @@ fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
                     ItemCard(
                         ItemType.IDEA,
                         // The kind's icon leads the row, where the outline's lines meet it, rather than in the title.
-                        text = ideaCardText(idea, hidden = hidden).let { t ->
+                        text = ideaCardText(idea, hidden = hidden, listCount = ideaListCounts[idea.id] ?: 0).let { t ->
                             t.copy(kind = null, meta = t.meta + listOfNotNull(inDo.takeIf { it > 0 }?.let { "⇄ $it in Do" }))
                         },
                         leading = { Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { KindIcon(idea.kind, size = 22.dp) } },

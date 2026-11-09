@@ -100,7 +100,7 @@ fun NoteDetailScreen(
             text = {
                 Column {
                     Text(
-                        "The note becomes an idea on the Ideas tab, taking its links, tags and reminders with it. Its text and list become the explanation.",
+                        "The note becomes an idea on the Ideas tab, taking its links, tags and reminders with it. Its text becomes the explanation and its list the idea's list.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(8.dp))

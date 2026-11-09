@@ -3,6 +3,7 @@ package com.example.xcommandcenter
 import com.example.xcommandcenter.data.repository.PersonRepository
 import com.example.xcommandcenter.data.repository.IdeaRepository
 import com.example.xcommandcenter.data.prefs.ModeRepository
+import com.example.xcommandcenter.data.prefs.MapPrefsRepository
 import com.example.xcommandcenter.data.repository.GlossaryRepository
 import android.content.Context
 import com.example.xcommandcenter.data.backup.BackupRepository
@@ -47,6 +48,7 @@ class AppContainer(context: Context) {
     val collapsedIdeasRepository = CollapsedPlansRepository(context, CollapsedPlansRepository.IDEAS_KEY)
     val routePrefsRepository = RoutePrefsRepository(context)
     val modeRepository = ModeRepository(context)
+    val mapPrefsRepository = MapPrefsRepository(context)
     val linkRepository = LinkRepository(
         database.linkDao(), routePrefsRepository.route, modeRepository.mode, modeRepository.tabModes,
         routePrefsRepository.thinkRoute, routePrefsRepository.checkWhy,

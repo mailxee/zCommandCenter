@@ -77,6 +77,11 @@ data class LinkGraph(
     }
 }
 
+/** What the map's panel shows of an item besides its title: its explanation and its list. */
+data class ItemDetail(val explanation: String, val list: List<String>) {
+    val isEmpty: Boolean get() = explanation.isBlank() && list.isEmpty()
+}
+
 /** A link's label as read from one end: [subject] when the label points away from that end. */
 data class LabelReading(val label: LinkLabelEntity, val subject: Boolean) {
     val wording: String get() = label.wording(subject)
@@ -177,6 +182,11 @@ class LinkRepository(
     }
 
     val labels: Flow<List<LinkLabelEntity>> = dao.observeLabels()
+
+    fun observeDetail(ref: ItemRef): Flow<ItemDetail> =
+        combine(dao.observeExplanation(ref.type.name, ref.id), dao.observeList(ref.type.name, ref.id)) { text, list ->
+            ItemDetail(text.orEmpty().trim(), list.filter { it.isNotBlank() })
+        }
 
     /** How many links carry each label, by label id. */
     val labelUses: Flow<Map<Long, Int>> = dao.observeLabelUses().map { uses -> uses.associate { it.id to it.uses } }
