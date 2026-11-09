@@ -19,6 +19,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.MapFilter
+import com.example.xcommandcenter.domain.MapPositions
 import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.ui.navigation.Routes
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +81,9 @@ data class MapState(
     val linkKinds: List<LinkKindInfo> = emptyList(),
     /** How many items the Show panel's choices leave out. */
     val hiddenCount: Int = 0,
+    /** Names this view's dragged positions (see [MapPositions]); [moved] when any item was dragged. */
+    val viewKey: String = "",
+    val moved: Boolean = false,
 ) {
     val byRef: Map<ItemRef, MapNode> = nodes.associateBy { it.ref }
 
@@ -137,10 +141,11 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     private var focused = false
 
     val state: StateFlow<MapState?> = combine(
-        links.observeGraph(), root, pickedLayout, combine(links.mode, links.tabModes, ::Pair), prefs.filter,
-    ) { graph, root, picked, (mode, tabModes), filter ->
+        links.observeGraph(), root, pickedLayout, combine(links.mode, links.tabModes, ::Pair), combine(prefs.filter, prefs.positions, ::Pair),
+    ) { graph, root, picked, (mode, tabModes), (filter, positions) ->
         val layout = picked?.takeIf { it in Layout.of(mode) } ?: Layout.of(mode).first()
-        build(graph, root, layout, mode, tabModes, filter)
+        val view = MapPositions.viewKey(mode, layout.name, root)
+        build(graph, root, layout, mode, tabModes, filter, view, positions[view].orEmpty())
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** The selected item's explanation and list, for its panel. */
@@ -162,7 +167,10 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         }
     }
 
-    private fun build(graph: LinkGraph, root: ItemRef?, layout: Layout, mode: AppMode, tabModes: TabModes, filter: MapFilter): MapState {
+    private fun build(
+        graph: LinkGraph, root: ItemRef?, layout: Layout, mode: AppMode, tabModes: TabModes, filter: MapFilter,
+        view: String, dragged: Map<ItemRef, GraphLayout.Point>,
+    ): MapState {
         val think = mode == AppMode.THINK
         val shown = graph.nodes(root, mode)
         // By route: Do's layers, or in Think the kinds' layers, then sources, then Do's items.
@@ -228,7 +236,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         // The tree's own lines first, so they decide the mind map's rings.
         val pairs = edges.map { it.link.a to it.link.b }
         val layered = GraphLayout.layered(refs, pairs, maxPerRow = if (root == null) 8 else 6, layerOf = ::layer)
-        val places = when (layout) {
+        val laidOut = when (layout) {
             Layout.FREE -> GraphLayout.free(refs, pairs, layered)
             Layout.BY_ROUTE -> layered
             Layout.MIND_MAP -> {
@@ -238,6 +246,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
                 GraphLayout.radial(roots, refs, pairs, aspect = MIND_MAP_ASPECT)
             }
         }
+        // Items dragged in this view stay where they were put; the rest keep the layout's places.
+        val places = laidOut + dragged.filterKeys { it in laidOut }
         return MapState(
             mode = mode,
             layout = layout,
@@ -255,6 +265,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             typesPresent = shown.map { it.type }.distinct().sortedBy { ItemType.tabs.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } },
             linkKinds = linkKinds,
             hiddenCount = (shown - visible).size,
+            viewKey = view,
+            moved = dragged.keys.any { it in laidOut },
         )
     }
 
@@ -277,6 +289,18 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
 
     fun setLineStyle(kind: String, style: LineStyle) {
         viewModelScope.launch { prefs.setStyle(kind, style) }
+    }
+
+    /** Puts [ref] at [point] (grid units) in the view shown; for viewing only. */
+    fun moveNode(ref: ItemRef, point: GraphLayout.Point) {
+        val view = state.value?.viewKey ?: return
+        viewModelScope.launch { prefs.move(view, ref, point) }
+    }
+
+    /** Back to the layout's own places in the view shown. */
+    fun resetPositions() {
+        val view = state.value?.viewKey ?: return
+        viewModelScope.launch { prefs.resetPositions(view) }
     }
 
     fun showAll() {

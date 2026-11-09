@@ -102,7 +102,7 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
                         group.forEach { card -> LinkedCard(card, viewModel, onOpen, onHold = hold) }
                     }
                 }
-                if (labelled.isEmpty()) HintText("Press and hold a linked item to label its link.")
+                if (labelled.isEmpty()) HintText("Tap the label button on a linked item to label its link.")
             }
         }
     }
@@ -196,6 +196,11 @@ private fun LinkedCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (control is CardControl.Habit) {
                     HabitTodayButton(control.positive, control.markedToday) { viewModel.toggleLinkedHabitToday(card.ref.id) }
+                }
+                if (onHold != null) {
+                    IconButton(onClick = { onHold(card) }) {
+                        Icon(painterResource(R.drawable.ic_label), contentDescription = "Label this link", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 if (removable) {
                     IconButton(onClick = { viewModel.unlink(card.ref) }) {

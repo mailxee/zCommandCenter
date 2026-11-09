@@ -1172,6 +1172,18 @@ anything is hidden, items left with no line go too, except the item whose networ
 map until changed; "Show all" clears what is hidden and keeps the styles. A line Tidy links suggests removing is always
 dashed red. A line's panel also has **Label…**, which opens the usual label dialog.
 
+### 2.67 Moving items on the map, and labels from either end
+
+Dragging an item's pill on the map moves it, for viewing only: no item or link changes. The place is
+kept per view (`MapPositions.viewKey`: mode, layout and the network's item), in DataStore through
+`MapPrefsRepository`, so each map keeps its own arrangement, and an item not dragged keeps the layout's
+place. While dragging, the item and its lines follow the finger; dragging doesn't refit the picture, and
+if the picture grows to the left or top the view shifts back so nothing else seems to move. **Reset
+positions** shows once anything in the view was moved and puts the layout's places back.
+
+Each linked item on a page now has a label button beside its remove button (holding the card still
+works too), so a link's label can be changed from either of its two items.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1347,6 +1359,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
 | `domain/MapFilter.kt`, `data/prefs/MapPrefsRepository.kt` | What the map hides and each kind of link's line style (§2.66). |
+| `domain/MapPositions.kt` | Where items were dragged to on the map, per view (§2.67). |
 | `data/entity/IdeaListItemEntity.kt` | An idea's list (§2.65). |
 | `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
 | `domain/IdeaKind.kt`, `domain/IdeaOutline.kt`, `domain/Glossary.kt` | Idea kinds, the Ideas outline and kind chips (§2.58); the glossary's terms and starting definitions (§2.60). |
@@ -1387,6 +1400,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 | `domain/ReminderTodayTest.kt`, `domain/BackupNamesTest.kt` | Reminders today; backup names and which old ones go. |
 | `domain/MapFilterTest.kt` | Hiding tabs and kinds of link on the map; line styles. |
+| `domain/MapPositionsTest.kt` | Dragged positions kept per view, replaced and reset. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |

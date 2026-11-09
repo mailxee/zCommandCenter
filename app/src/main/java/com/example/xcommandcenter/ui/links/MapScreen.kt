@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -78,6 +79,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.domain.MapFilter
+import com.example.xcommandcenter.domain.GraphLayout
 import com.example.xcommandcenter.data.repository.ItemDetail
 import com.example.xcommandcenter.ui.common.LabelChoice
 import com.example.xcommandcenter.ui.common.LinkLabelDialog
@@ -200,6 +202,9 @@ fun MapScreen(
                         )
                     }
                     FilterChip(selected = root == null, onClick = viewModel::showEverything, label = { Text("Everything") })
+                    if (s?.moved == true) {
+                        androidx.compose.material3.AssistChip(onClick = viewModel::resetPositions, label = { Text("Reset positions") })
+                    }
                     val outline = MaterialTheme.colorScheme.outline
                     if (s?.mode == AppMode.THINK) {
                         if (s.edges.any { it.style == EdgeStyle.UNDER }) Legend(outline, s.filter.styleOf(MapFilter.UNDER), "Under", thick = true)
@@ -276,11 +281,11 @@ private fun dashEffect(style: LineStyle, px: Float): PathEffect? = when (style) 
 
 /** Where an item's pill is centred, in the content's own pixels. */
 private class Geometry(state: MapState, private val density: Float, private val curved: Boolean) {
-    private val col = ColumnWidth.value * density
-    private val row = RowHeight.value * density
+    val col = ColumnWidth.value * density
+    val row = RowHeight.value * density
     private val margin = (Margin.value + NodeWidth.value / 2) * density
-    private val minX = state.nodes.minOf { it.x }
-    private val minY = state.nodes.minOf { it.y }
+    val minX = state.nodes.minOf { it.x }
+    val minY = state.nodes.minOf { it.y }
     val width = (state.nodes.maxOf { it.x } - minX) * col + margin * 2
     val height = (state.nodes.maxOf { it.y } - minY) * row + (Margin.value * 2 + NodeHeight.value) * density
 
@@ -311,15 +316,38 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    // Fit the picture to the screen whenever what is shown changes shape.
-    LaunchedEffect(viewport, state.root, layout, geometry.width, geometry.height) {
+    // An item being dragged, and how far in content pixels; once let go it stays put (pending) until
+    // the map comes back with its new place, so it doesn't jump back for a moment.
+    var drag by remember { mutableStateOf<Pair<ItemRef, Offset>?>(null) }
+    var pending by remember { mutableStateOf<Pair<ItemRef, Offset>?>(null) }
+    LaunchedEffect(state) { pending = null }
+    fun at(node: MapNode): Offset {
+        val moved = (drag ?: pending)?.takeIf { it.first == node.ref }?.second ?: Offset.Zero
+        return geometry.center(node) + moved
+    }
+    // Fit the picture to the screen when what is shown changes: another network, layout or set of
+    // items. Dragging an item doesn't refit; if it widens the picture to the left or top, the view
+    // shifts back so nothing else seems to move.
+    val fitKey = listOf(viewport, state.root?.ref, layout, state.viewKey, state.nodes.map { it.ref }.toSet(), state.moved)
+    var fitted by remember { mutableStateOf<List<Any?>?>(null) }
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(fitKey, geometry) {
         if (viewport == IntSize.Zero) return@LaunchedEffect
-        val fit = min(viewport.width / geometry.width, viewport.height / geometry.height)
-        scale = fit.coerceIn(0.2f, 1.2f)
-        offset = Offset(
-            max(0f, (viewport.width - geometry.width * scale) / 2),
-            max(0f, (viewport.height - geometry.height * scale) / 2).coerceAtMost(24f * density),
-        )
+        // Same view, unless positions were just reset: then the picture fits again.
+        val wasReset = fitted?.last() == true && !state.moved
+        val sameView = fitted?.let { it.dropLast(1) == fitKey.dropLast(1) } == true && !wasReset
+        if (!sameView) {
+            val fit = min(viewport.width / geometry.width, viewport.height / geometry.height)
+            scale = fit.coerceIn(0.2f, 1.2f)
+            offset = Offset(
+                max(0f, (viewport.width - geometry.width * scale) / 2),
+                max(0f, (viewport.height - geometry.height * scale) / 2).coerceAtMost(24f * density),
+            )
+        } else {
+            offset -= Offset((origin.x - geometry.minX) * geometry.col * scale, (origin.y - geometry.minY) * geometry.row * scale)
+        }
+        fitted = fitKey
+        origin = Offset(geometry.minX, geometry.minY)
     }
     val highlighted: Set<ItemRef>? = when (selection) {
         is MapSelection.Node -> state.edges.filter { it.link.a == selection.ref || it.link.b == selection.ref }
@@ -347,8 +375,8 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                 detectTapGestures { tap ->
                     val at = (tap - offset) / scale
                     val near = 16 * density / scale
-                    val hit = state.edges.minByOrNull { edge -> distance(at, geometry, state, edge) }
-                        ?.takeIf { distance(at, geometry, state, it) < near }
+                    val hit = state.edges.minByOrNull { edge -> distance(at, geometry, state, edge, ::at) }
+                        ?.takeIf { distance(at, geometry, state, it, ::at) < near }
                     viewModel.select(hit?.let { MapSelection.Edge(it.link.id) })
                 }
             },
@@ -366,8 +394,8 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 state.edges.forEach { edge ->
-                    val a = state.byRef[edge.link.a]?.let(geometry::center) ?: return@forEach
-                    val b = state.byRef[edge.link.b]?.let(geometry::center) ?: return@forEach
+                    val a = state.byRef[edge.link.a]?.let(::at) ?: return@forEach
+                    val b = state.byRef[edge.link.b]?.let(::at) ?: return@forEach
                     val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
                     val selected = selection == MapSelection.Edge(edge.link.id)
                     val color = when (edge.style) {
@@ -414,8 +442,8 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
             }
             // Labels sit on the middle of their lines.
             state.edges.filter { it.label != null }.forEach { edge ->
-                val a = state.byRef[edge.link.a]?.let(geometry::center) ?: return@forEach
-                val b = state.byRef[edge.link.b]?.let(geometry::center) ?: return@forEach
+                val a = state.byRef[edge.link.a]?.let(::at) ?: return@forEach
+                val b = state.byRef[edge.link.b]?.let(::at) ?: return@forEach
                 val mid = curvePoint(a, geometry.control(a, b), b, 0.5f)
                 val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
                 Box(
@@ -437,7 +465,7 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                 }
             }
             state.nodes.forEach { node ->
-                val c = geometry.center(node)
+                val c = at(node)
                 val dim = highlighted != null && node.ref !in highlighted
                 val isSelected = selection == MapSelection.Node(node.ref) || node.ref == linkingFrom ||
                     (selection is MapSelection.Edge && highlighted?.contains(node.ref) == true)
@@ -447,7 +475,24 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                     root = node.ref == state.root?.ref,
                     modifier = Modifier
                         .offset((c.x / density).dp - NodeWidth / 2, (c.y / density).dp - NodeHeight / 2)
-                        .alpha(if (dim) 0.35f else 1f),
+                        .alpha(if (dim) 0.35f else 1f)
+                        // Drag an item to move it, for viewing only; the place is kept for this view.
+                        .pointerInput(node.ref, geometry) {
+                            detectDragGestures(
+                                onDragStart = { drag = node.ref to Offset.Zero },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    drag = node.ref to ((drag?.second ?: Offset.Zero) + amount)
+                                },
+                                onDragEnd = {
+                                    val moved = drag?.second ?: Offset.Zero
+                                    pending = drag
+                                    drag = null
+                                    viewModel.moveNode(node.ref, GraphLayout.Point(node.x + moved.x / geometry.col, node.y + moved.y / geometry.row))
+                                },
+                                onDragCancel = { drag = null },
+                            )
+                        },
                     onClick = { viewModel.tapNode(node.ref) },
                 )
             }
@@ -465,9 +510,9 @@ private fun curvePoint(a: Offset, c: Offset?, b: Offset, t: Float): Offset {
 }
 
 /** How far [at] is from an edge's line (or curve), in content pixels. */
-private fun distance(at: Offset, geometry: Geometry, state: MapState, edge: MapEdge): Float {
-    val a = state.byRef[edge.link.a]?.let(geometry::center) ?: return Float.MAX_VALUE
-    val b = state.byRef[edge.link.b]?.let(geometry::center) ?: return Float.MAX_VALUE
+private fun distance(at: Offset, geometry: Geometry, state: MapState, edge: MapEdge, center: (MapNode) -> Offset): Float {
+    val a = state.byRef[edge.link.a]?.let(center) ?: return Float.MAX_VALUE
+    val b = state.byRef[edge.link.b]?.let(center) ?: return Float.MAX_VALUE
     val c = geometry.control(a, b)
     val points = if (c == null) listOf(a, b) else (0..12).map { i ->
         val t = i / 12f
