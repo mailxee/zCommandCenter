@@ -13,7 +13,7 @@ class TabOrderTest {
     fun `default order starts with Schedule`() {
         assertEquals(
             listOf(ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE,
-                ItemType.PERSON),
+                ItemType.PERSON, ItemType.IDEA),
             TabOrder.default,
         )
     }
@@ -30,13 +30,13 @@ class TabOrderTest {
         assertEquals(ItemType.QUOTE, parsed[0])
         assertEquals(ItemType.TASK, parsed[1])
         assertEquals(ItemType.tabs.toSet(), parsed.toSet())
-        assertEquals(9, parsed.size)
+        assertEquals(10, parsed.size)
     }
 
     @Test
     fun `an order stored before the People tab gets it at the end`() {
         val parsed = TabOrder.parse("QUOTE,BOOK,NOTE,HABIT,TASK,PLAN,GOAL,BLOCK")
-        assertEquals(ItemType.PERSON, parsed.last())
+        assertEquals(listOf(ItemType.PERSON, ItemType.IDEA), parsed.takeLast(2))
         assertEquals(ItemType.QUOTE, parsed.first())
     }
 

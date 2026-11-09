@@ -3,6 +3,7 @@ package com.example.xcommandcenter.data.dao
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.entity.IdeaEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -50,12 +51,13 @@ interface BackupDao {
     @Query("SELECT * FROM people ORDER BY id") suspend fun people(): List<PersonEntity>
     @Query("SELECT * FROM person_profiles ORDER BY personId, position") suspend fun personProfiles(): List<PersonProfileEntity>
     @Query("SELECT * FROM person_items ORDER BY personId, position") suspend fun personItems(): List<PersonItemEntity>
+    @Query("SELECT * FROM ideas ORDER BY id") suspend fun ideas(): List<IdeaEntity>
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(),
+        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -78,6 +80,7 @@ interface BackupDao {
     @Insert suspend fun insertPeople(rows: List<PersonEntity>)
     @Insert suspend fun insertPersonProfiles(rows: List<PersonProfileEntity>)
     @Insert suspend fun insertPersonItems(rows: List<PersonItemEntity>)
+    @Insert suspend fun insertIdeas(rows: List<IdeaEntity>)
 
     // Children before parents, so foreign keys never point at a deleted row mid-way.
     @Query("DELETE FROM item_tags") suspend fun deleteItemTags()
@@ -100,6 +103,7 @@ interface BackupDao {
     @Query("DELETE FROM person_profiles") suspend fun deletePersonProfiles()
     @Query("DELETE FROM person_items") suspend fun deletePersonItems()
     @Query("DELETE FROM people") suspend fun deletePeople()
+    @Query("DELETE FROM ideas") suspend fun deleteIdeas()
     @Query("DELETE FROM kept_findings") suspend fun deleteKeptFindings()
 
     @Transaction
@@ -124,6 +128,7 @@ interface BackupDao {
         deletePersonProfiles()
         deletePersonItems()
         deletePeople()
+        deleteIdeas()
         // Kept findings name links by id, which new data reuses for other links.
         deleteKeptFindings()
     }
@@ -159,6 +164,7 @@ interface BackupDao {
         insertPeople(data.people)
         insertPersonProfiles(data.personProfiles)
         insertPersonItems(data.personItems)
+        insertIdeas(data.ideas)
         insertLinks(data.links)
         insertTags(data.tags)
         insertItemTags(data.itemTags)

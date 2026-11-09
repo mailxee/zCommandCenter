@@ -17,6 +17,7 @@ enum class ItemType(val tabLabel: String, val singular: String, val isTab: Boole
     QUOTE("Quotes", "Quote"),
     BLOCK("Schedule", "Block"),
     PERSON("People", "Person"),
+    IDEA("Ideas", "Idea"),
     CHAPTER("Chapters", "Chapter", isTab = false);
 
     /**

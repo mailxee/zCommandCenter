@@ -29,7 +29,7 @@ object Routes {
 
     const val ARG_TYPE = "type"
     const val ARG_ID = "id"
-    /** Optional parent for a new plan, or the book of a chapter; 0 means none. */
+    /** Optional parent for a new plan or idea, or the book of a chapter; 0 means none. */
     const val ARG_PARENT = "parent"
     /** Optional start, in minutes of the day, for a new schedule block; -1 means none. */
     const val ARG_START = "start"

@@ -2,6 +2,10 @@ package com.example.xcommandcenter.ui.home
 
 import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.IdeaKindFilter
+import com.example.xcommandcenter.domain.IdeaOutline
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.AppContainer
@@ -50,7 +54,7 @@ enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priorit
 enum class PrioritySort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
 
 /** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts but the same priority filter. */
-val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.PERSON)
+val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.PERSON, ItemType.IDEA)
 
 enum class RepeatFilter(val label: String) {
     ALL("All"),
@@ -122,7 +126,7 @@ sealed interface PlanTreeItem {
     }
 }
 
-class HomeViewModel(container: AppContainer) : ViewModel() {
+class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val tasksRepo = container.taskRepository
     private val habitsRepo = container.habitRepository
     private val plansRepo = container.planRepository
@@ -133,6 +137,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
     private val peopleRepo = container.personRepository
+    private val ideasRepo = container.ideaRepository
     private val blocksRepo = container.blockRepository
     private val schedulesRepo = container.scheduleRepository
     private val taskSortRepo = container.taskSortRepository
@@ -373,6 +378,47 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     val people: StateFlow<List<PersonEntity>> =
         peopleRepo.observeAll().sortedAndFiltered(ItemType.PERSON, { it.id }, { it.priority }) { listOf(it.name, it.bio) }
 
+    /** The Ideas tab's kind chips. Like tag choices, they last while the app runs. */
+    val ideaKinds = MutableStateFlow(IdeaKindFilter())
+
+    fun tapIdeaKind(kind: IdeaKind) {
+        ideaKinds.value = ideaKinds.value.tap(kind)
+    }
+
+    fun holdIdeaKind(kind: IdeaKind) {
+        ideaKinds.value = ideaKinds.value.hold(kind)
+    }
+
+    /**
+     * The Ideas tab: the idea tree, with collapsed ideas hiding what is under them. With a filter
+     * on (kind, tag, priority, search or link mode), only matching ideas show, plus the ideas above
+     * them so the tree still reads. Also the number of ideas the tab shows, for its counter.
+     */
+    private val ideaView: StateFlow<Pair<List<IdeaOutline.Row<IdeaEntity>>, Int>> = combine(
+        ideasRepo.observeAll(),
+        container.collapsedIdeasRepository.collapsed,
+        ideaKinds,
+        combine(tagFilter, search, network, ::Triple),
+        combine(prioritySorts, priorityFilters, ::Pair),
+    ) { all, collapsed, kinds, (tags, search, network), (sorts, filters) ->
+        val sorted = if (sorts[ItemType.IDEA] == PrioritySort.PRIORITY) all.sortedByDescending { it.priority.ordinal } else all
+        val priorities = filters[ItemType.IDEA].orEmpty()
+        val narrowed = kinds.active || tags.active || search.active || network != null || priorities.isNotEmpty()
+        fun hit(idea: IdeaEntity): Boolean {
+            val ref = ItemRef(ItemType.IDEA, idea.id)
+            return kinds.matches(idea.kind) && network.has(ref) && tags.matches(ref) &&
+                (priorities.isEmpty() || idea.priority in priorities) && search.matches(ref, idea.title, idea.body)
+        }
+        val rows = IdeaOutline.rows(sorted, { it.id }, { it.parentId }, collapsed, narrowed, ::hit)
+        rows to (if (narrowed) sorted.count(::hit) else sorted.size)
+    }.stateIn(emptyList<IdeaOutline.Row<IdeaEntity>>() to 0)
+
+    val ideaTree: StateFlow<List<IdeaOutline.Row<IdeaEntity>>> = ideaView.map { it.first }.stateIn(emptyList())
+
+    fun setIdeaCollapsed(id: Long, collapsed: Boolean) {
+        viewModelScope.launch { container.collapsedIdeasRepository.setCollapsed(id, collapsed) }
+    }
+
     /** Each person's profiles and items by id, for their cards. */
     val personLists: StateFlow<Map<Long, PersonLists>> = peopleRepo.observeLists().stateIn(emptyMap())
 
@@ -469,6 +515,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 count(ItemType.QUOTE, quotes, quotesRepo.observeAll().map { all -> all.map { it.id } }),
                 count(ItemType.BLOCK, blocks, activeBlocks.map { all -> all.map { it.id } }),
                 count(ItemType.PERSON, people, peopleRepo.observeAll().map { all -> all.map { it.id } }),
+                combine(ideaView, ideasRepo.observeAll(), network) { (_, shown), all, network ->
+                    ItemType.IDEA to TabCount(shown, all.count { network.has(ItemRef(ItemType.IDEA, it.id)) })
+                },
             ),
         ) { it.toMap() }.stateIn(emptyMap())
     }
@@ -492,10 +541,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         searchQuery.value = query
     }
 
-    /** Also turns off the Tasks tab's Past due and Completed chips. */
+    /** Also turns off the Tasks tab's Past due and Completed chips and the Ideas tab's kind chips. */
     fun clearTags() {
         selectedTagIds.value = emptySet()
         excludedTagIds.value = emptySet()
+        ideaKinds.value = IdeaKindFilter()
         setTaskStatus(TaskStatusFilter())
     }
 
@@ -563,6 +613,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 ItemType.BOOK -> books.value.map { it.book.id }
                 ItemType.QUOTE -> quotes.value.map { it.id }
                 ItemType.PERSON -> people.value.map { it.id }
+                ItemType.IDEA -> {
+                    val shownIdeas = ideaTree.value.map { it.node }
+                    val parentId = shownIdeas.firstOrNull { it.id == id }?.parentId
+                    shownIdeas.filter { it.parentId == parentId }.map { it.id }
+                }
                 ItemType.BLOCK -> return@launch // Blocks are ordered by time.
                 ItemType.CHAPTER -> return@launch // Chapters are ordered on their book's page.
             }
@@ -586,6 +641,11 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.BOOK -> booksRepo.observeAllWithProgress().first().map { it.book.id }
         ItemType.QUOTE -> quotesRepo.observeAll().first().map { it.id }
         ItemType.PERSON -> peopleRepo.observeAll().first().map { it.id }
+        ItemType.IDEA -> {
+            val all = ideasRepo.observeAll().first()
+            val parentId = all.firstOrNull { it.id == anyId }?.parentId
+            all.filter { it.parentId == parentId }.map { it.id }
+        }
         ItemType.BLOCK -> emptyList()
         ItemType.CHAPTER -> emptyList()
     }
@@ -599,6 +659,7 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         ItemType.BOOK -> booksRepo.reorder(ids)
         ItemType.QUOTE -> quotesRepo.reorder(ids)
         ItemType.PERSON -> peopleRepo.reorder(ids)
+        ItemType.IDEA -> ideasRepo.reorder(ids)
         ItemType.BLOCK -> Unit
         ItemType.CHAPTER -> Unit
     }

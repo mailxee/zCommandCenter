@@ -1,6 +1,9 @@
 package com.example.xcommandcenter.ui.home
 
 import com.example.xcommandcenter.ui.common.personCardText
+import com.example.xcommandcenter.ui.common.ideaCardText
+import com.example.xcommandcenter.ui.common.KindIcon
+import com.example.xcommandcenter.data.entity.IdeaEntity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -369,11 +372,14 @@ fun PlansTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
  * Each row's place in the outline: for every level above it, whether a later row at the level
  * below still hangs from that line, so the line runs on past this row.
  */
-private fun outlineGuides(rows: List<PlanTreeItem>): List<OutlineGuides> = rows.mapIndexed { i, row ->
-    val continues = (0 until row.depth).map { level ->
-        rows.drop(i + 1).takeWhile { it.depth > level }.any { it.depth == level + 1 }
+private fun outlineGuides(rows: List<PlanTreeItem>): List<OutlineGuides> = outlineGuidesOf(rows.map { it.depth })
+
+/** [outlineGuides] from the rows' depths alone. */
+private fun outlineGuidesOf(depths: List<Int>): List<OutlineGuides> = depths.mapIndexed { i, depth ->
+    val continues = (0 until depth).map { level ->
+        depths.drop(i + 1).takeWhile { it > level }.any { it == level + 1 }
     }
-    OutlineGuides(row.depth, continues, hasChildrenBelow = (rows.getOrNull(i + 1)?.depth ?: 0) > row.depth)
+    OutlineGuides(depth, continues, hasChildrenBelow = (depths.getOrNull(i + 1) ?: 0) > depth)
 }
 
 /** @param dragHandle shown instead of the collapse button while reordering. */
@@ -583,6 +589,89 @@ fun PeopleTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
     }
 }
 
+/**
+ * The Ideas tab: the ideas as an outline, like the Plans tab's, each with its kind's icon. A
+ * chevron collapses what is under an idea; while reordering, an idea moves among its siblings
+ * and takes everything under it along.
+ */
+@Composable
+fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
+    val rows by viewModel.ideaTree.collectAsStateWithLifecycle()
+    val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
+    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
+    val kinds by viewModel.ideaKinds.collectAsStateWithLifecycle()
+    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
+    val view = viewModel.priorityView(ItemType.IDEA)
+    val movable = reorder && view.sort == PrioritySort.CUSTOM
+    val drag = rememberDragOrder(rows, key = { it.node.id }) { list, from, to -> ManualOrder.moveBlock(list, { it.depth }, from, to) }
+    var dragging by remember { mutableStateOf<IdeaEntity?>(null) }
+    val shownRows = dragging?.let { idea -> withoutRowsBelow(drag.rows, { it.node.id == idea.id }, { it.depth }) } ?: drag.rows
+    val siblings = shownRows.groupBy({ it.node.parentId }, { it.node.id })
+    val guides = outlineGuidesOf(shownRows.map { it.depth })
+    ItemList(
+        ItemType.IDEA,
+        empty = rows.isEmpty(),
+        emptyText = "No ideas yet. Visions, beliefs, principles, ideas and questions go here, nested under each other.",
+        filtered = viewModel.filtering(tagFilter) || view.filtered || kinds.active,
+        controls = controls, state = drag.listState,
+        spacing = 0.dp,
+    ) {
+        if (controls) priorityControls(ItemType.IDEA, view, viewModel)
+        itemsIndexed(shownRows, key = { _, row -> row.node.id }) { i, row ->
+            val idea = row.node
+            val ref = ItemRef(ItemType.IDEA, idea.id)
+            val last = shownRows.getOrNull(i + 1)?.depth?.let { it == 0 } ?: true
+            val round = 12.dp
+            val shape = RoundedCornerShape(
+                topStart = if (row.depth == 0) round else 0.dp, topEnd = if (row.depth == 0) round else 0.dp,
+                bottomStart = if (last) round else 0.dp, bottomEnd = if (last) round else 0.dp,
+            )
+            val group = siblings[idea.parentId].orEmpty()
+            val index = group.indexOf(idea.id)
+            val enabled = movable && dragging.let { it == null || it.parentId == idea.parentId }
+            ReorderableItem(drag.state, key = idea.id, enabled = enabled) {
+                Box(Modifier.padding(top = if (row.depth == 0) 6.dp else 0.dp)) {
+                    val hidden = row.childCount.takeIf { row.collapsed && it > 0 }?.let { if (it == 1) "1 idea hidden" else "$it ideas hidden" }
+                    ItemCard(
+                        ItemType.IDEA,
+                        // The kind's icon leads the row, where the outline's lines meet it, rather than in the title.
+                        text = ideaCardText(idea, hidden = hidden).copy(kind = null),
+                        leading = { Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { KindIcon(idea.kind, size = 22.dp) } },
+                        links = links[ref].orEmpty(),
+                        tags = tagFilter.tagsOf(ref),
+                        onLongClick = { viewModel.showNetwork(ref) },
+                        reminder = viewModel.reminderOf(ref),
+                        onClick = { onOpen(ref) },
+                        shape = shape,
+                        outline = guides[i],
+                        trailing = dragHandleIf(
+                            reorder = movable,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < group.lastIndex,
+                            onMove = { viewModel.move(ItemType.IDEA, idea.id, it) },
+                            onDragStarted = { dragging = idea },
+                            onDrop = {
+                                val parentId = idea.parentId
+                                dragging = null
+                                viewModel.reorder(ItemType.IDEA, drag.rows.filter { it.node.parentId == parentId }.map { it.node.id })
+                            },
+                        ) ?: {
+                            if (row.childCount > 0) {
+                                IconButton(onClick = { viewModel.setIdeaCollapsed(idea.id, !row.collapsed) }) {
+                                    Icon(
+                                        painterResource(if (row.collapsed) R.drawable.ic_expand_more else R.drawable.ic_expand_less),
+                                        contentDescription = if (row.collapsed) "Expand" else "Collapse",
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** Whether a filter or the search is hiding items, so an empty list says "no matches". */
 @Composable
 private fun HomeViewModel.filtering(tagFilter: TagFilter): Boolean {
@@ -764,10 +853,14 @@ private fun ReorderableCollectionItemScope.dragHandleIf(
 ): (@Composable () -> Unit)? = dragHandleIf(reorder, index > 0, index < count - 1, onMove, onDrop = onDrop)
 
 /** [rows] without the rows under plan [planId] (its tasks and subplans, at any depth). */
-private fun withoutRowsUnder(rows: List<PlanTreeItem>, planId: Long): List<PlanTreeItem> {
-    val start = rows.indexOfFirst { it is PlanTreeItem.Plan && it.plan.id == planId }
+private fun withoutRowsUnder(rows: List<PlanTreeItem>, planId: Long): List<PlanTreeItem> =
+    withoutRowsBelow(rows, { it is PlanTreeItem.Plan && it.plan.id == planId }, { it.depth })
+
+/** [rows] without the rows deeper than the first [isTop] row that follow it. */
+private fun <T> withoutRowsBelow(rows: List<T>, isTop: (T) -> Boolean, depth: (T) -> Int): List<T> {
+    val start = rows.indexOfFirst(isTop)
     if (start < 0) return rows
     var end = start + 1
-    while (end < rows.size && rows[end].depth > rows[start].depth) end++
+    while (end < rows.size && depth(rows[end]) > depth(rows[start])) end++
     return rows.subList(0, start + 1) + rows.subList(end, rows.size)
 }

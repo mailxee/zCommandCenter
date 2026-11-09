@@ -16,6 +16,8 @@ import com.example.xcommandcenter.domain.ItemType.HABIT
 import com.example.xcommandcenter.domain.ItemType.NOTE
 import com.example.xcommandcenter.domain.ItemType.PLAN
 import com.example.xcommandcenter.domain.ItemType.PERSON
+import com.example.xcommandcenter.domain.ItemType.IDEA
+import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.domain.ItemType.QUOTE
 import com.example.xcommandcenter.domain.ItemType.TASK
 import com.example.xcommandcenter.domain.Priority
@@ -29,7 +31,7 @@ import java.time.temporal.TemporalAdjusters
 
 /**
  * First-launch content for someone whose goals are to live as a Stoic, to learn the piano and to
- * run a half marathon: about five items per tab, cross-linked so every tab shows links, and two
+ * run a half marathon: about five items per tab (nine ideas in two trees), cross-linked so every tab shows links, and two
  * schedules (Weekday and Weekend).
  *
  * Written as raw inserts because it runs inside Room's onCreate, before the DAOs can be used.
@@ -218,6 +220,19 @@ internal object SeedData {
             "Some things are up to us and some are not.",
             "It is not things that disturb us, but our judgments about them.")
 
+        // Ideas: two visions with what grows from them.
+        fun idea(id: Long, order: Int, kind: IdeaKind, title: String, parent: Long? = null, body: String = "", priority: Priority = Priority.MEDIUM) =
+            row("ideas", "id" to id, "sortOrder" to order, "kind" to kind, "title" to title, "parentId" to parent, "body" to body, "priority" to priority)
+        idea(1, 0, IdeaKind.VISION, "Live deliberately", body = "Choose what gets my attention, instead of letting it be taken.", priority = Priority.HIGH)
+        idea(2, 0, IdeaKind.BELIEF, "Only my judgments and actions are up to me", 1)
+        idea(3, 0, IdeaKind.PRINCIPLE, "Respond, don't react", 2, "Pause before answering; ask what is in my control.")
+        idea(4, 1, IdeaKind.BELIEF, "Attention is the scarcest resource", 1)
+        idea(5, 0, IdeaKind.PRINCIPLE, "Fewer commitments, done fully", 4, "Say no by default. What I take on gets my full attention until it's done.")
+        idea(6, 1, IdeaKind.IDEA, "Phone-free mornings", 4)
+        idea(7, 2, IdeaKind.QUESTION, "How much planning is too much?", 4)
+        idea(8, 1, IdeaKind.VISION, "Make music part of every day")
+        idea(9, 0, IdeaKind.PRINCIPLE, "Practise a little, every day", 8, "Thirty minutes daily beats three hours on Sunday.")
+
         // Schedules: the first (created with the database) becomes "Weekday"; "Weekend" is added. Automatic switching stays off.
         db.execSQL("UPDATE schedules SET name = 'Weekday', days = ${Recurrence.maskFromDays(DayOfWeek.entries.take(5).toSet())} WHERE id = 1")
         db.insert("schedules", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
@@ -293,6 +308,17 @@ internal object SeedData {
             PERSON to 2L to (QUOTE to 3L),
             PERSON to 3L to (QUOTE to 4L),
             PERSON to 3L to (NOTE to 1L),
+            IDEA to 1L to (GOAL to 1L),
+            IDEA to 2L to (QUOTE to 4L),
+            IDEA to 2L to (PERSON to 3L),
+            IDEA to 2L to (NOTE to 1L),
+            IDEA to 3L to (HABIT to 5L),
+            IDEA to 4L to (BOOK to 2L),
+            IDEA to 5L to (PLAN to 1L),
+            IDEA to 6L to (HABIT to 1L),
+            IDEA to 6L to (BLOCK to 3L),
+            IDEA to 9L to (HABIT to 3L),
+            IDEA to 9L to (BOOK to 4L),
         ).forEach { (from, to) -> link(db, from, to, created()) }
 
         // Tags (no createdAt column, so not through row()).
@@ -305,6 +331,7 @@ internal object SeedData {
             GOAL to 3L to 3L, HABIT to 4L to 3L, PLAN to 1L to 3L, TASK to 1L to 3L, TASK to 2L to 3L, NOTE to 2L to 3L, BLOCK to 10L to 3L,
             BOOK to 1L to 4L, BOOK to 2L to 4L, BOOK to 3L to 4L, BLOCK to 8L to 4L,
             PERSON to 1L to 1L, PERSON to 2L to 1L, PERSON to 3L to 1L,
+            IDEA to 1L to 1L, IDEA to 8L to 2L,
         ).forEach { (item, tagId) ->
             db.insert("item_tags", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
                 put("type", item.first.name)

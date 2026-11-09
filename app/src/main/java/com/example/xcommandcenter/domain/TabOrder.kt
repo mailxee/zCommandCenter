@@ -5,7 +5,7 @@ object TabOrder {
     /** Until the user reorders: the day's plan first, then what it serves and what fills it. */
     val default: List<ItemType> = listOf(
         ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE,
-        ItemType.PERSON,
+        ItemType.PERSON, ItemType.IDEA,
     )
 
     /** Unknown names are dropped and tabs missing from [stored] are appended in default order. */

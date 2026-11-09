@@ -13,7 +13,10 @@ suspend fun clearSettings(context: Context) {
     context.settingsStore.edit { it.clear() }
 }
 
-/** Forgets which plans are collapsed; ids from before an import may now name other plans. */
+/** Forgets which plans and ideas are collapsed; ids from before an import may now name other items. */
 suspend fun clearCollapsedPlans(context: Context) {
-    context.settingsStore.edit { it.remove(stringSetPreferencesKey(CollapsedPlansRepository.KEY)) }
+    context.settingsStore.edit {
+        it.remove(stringSetPreferencesKey(CollapsedPlansRepository.KEY))
+        it.remove(stringSetPreferencesKey(CollapsedPlansRepository.IDEAS_KEY))
+    }
 }

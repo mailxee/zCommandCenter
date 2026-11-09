@@ -12,6 +12,9 @@ import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.data.repository.IdeaRepository
 import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
 import com.example.xcommandcenter.ui.common.ListLine
@@ -21,11 +24,12 @@ import kotlinx.coroutines.launch
 class NoteDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: NoteRepository,
+    private val ideas: IdeaRepository,
     links: LinkRepository,
     tags: TagRepository,
     cards: ItemCardSource,
-    reminders: ReminderRepository,
-) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags, cards, reminders) {
+    private val reminderRepository: ReminderRepository,
+) : ItemDetailViewModel(savedStateHandle, ItemType.NOTE, links, tags, cards, reminderRepository) {
 
     var note by mutableStateOf(NoteEntity())
         private set
@@ -81,4 +85,28 @@ class NoteDetailViewModel(
     }
 
     fun delete() = deleteThen { repository.delete(it) }
+
+    /** Set once the note has become an idea; the screen then opens the idea in its place. */
+    var turnedInto by mutableStateOf<ItemRef?>(null)
+        private set
+
+    /**
+     * Saves the note as it stands, then turns it into an idea of [kind] (see [IdeaRepository.fromNote]):
+     * its links, tags and reminders go with it, and the note is deleted.
+     */
+    fun turnIntoIdea(kind: IdeaKind) {
+        val items = list.filter { it.text.isNotBlank() }
+        if (note.title.isBlank() && note.body.isBlank() && items.isEmpty()) {
+            message = "Write something first"
+            return
+        }
+        val toSave = note.copy(id = itemId.value, title = note.title.trim())
+        val listItems = items.map { NoteListItemEntity(noteId = itemId.value, position = 0, text = it.text.trim()) }
+        viewModelScope.launch {
+            val noteId = repository.save(toSave, listItems)
+            reminderRepository.replace(ItemRef(ItemType.NOTE, noteId), reminders)
+            markClean()
+            ideas.fromNote(noteId, kind)?.let { turnedInto = ItemRef(ItemType.IDEA, it) }
+        }
+    }
 }

@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.entity.ScheduleEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.repository.PersonRepository
+import com.example.xcommandcenter.data.repository.IdeaRepository
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
@@ -66,12 +67,13 @@ class ItemCardSource(
     private val quotes: QuoteRepository,
     private val blocks: BlockRepository,
     private val people: PersonRepository,
+    private val ideas: IdeaRepository,
     private val schedules: ScheduleRepository,
     private val links: LinkRepository,
     private val tags: TagRepository,
     private val reminders: ReminderRepository,
 ) {
-    private val texts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
+    private val baseTexts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
         combine(tasks.observeAll(), tasks.observeChecklistCounts(), goals.observeAll(), ::Triple),
         combine(habits.observeAll(), habits.observeAllMarks(), plans.observeAll(), ::Triple),
         combine(
@@ -98,6 +100,12 @@ class ItemCardSource(
             personList.forEach { put(ItemRef(ItemType.PERSON, it.id), personCardText(it, personLists[it.id]) to null) }
         }
     }
+
+    private val texts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> =
+        combine(baseTexts, ideas.observeAll()) { base, ideaList ->
+            val byId = ideaList.associateBy { it.id }
+            base + ideaList.associate { ItemRef(ItemType.IDEA, it.id) to (ideaCardText(it, byId[it.parentId]) to null) }
+        }
 
     private data class NoteBookQuote(
         val notes: List<NoteEntity>,

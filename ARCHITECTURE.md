@@ -988,6 +988,41 @@ Three parts, all pure logic in `domain/` (tested) with thin screens in `ui/links
 - `LinkRepository.observeGraph` gathers labels, links and the analysis off the main thread for both
   screens.
 
+### 2.58 Ideas tab
+
+A tab for the thinking side of the app (`ItemType.IDEA`, amber, a lightbulb), added last in the
+default tab order, so an existing order gets it at the end.
+
+- **Data** (database version 11, an automatic migration): `ideas` with a title (the thought in one
+  line), an optional explanation, a **kind** (`domain/IdeaKind`: Vision, Belief, Principle, Idea,
+  Question, broadest first), priority, order and a `parentId`. Ideas form a tree like plans: a
+  missing or deleted parent makes an idea top level, deleting an idea moves the ones under it up a
+  level, and an idea can't be put under itself or anything below it. Ideas are in `item_index`
+  (with the kind as subtitle), so links, the picker, tags, reminders and search work as for any item.
+- **One tab, not one per kind:** thoughts change kind as they mature, and kinds keep the tab bar
+  short. Each kind has an icon and colour (`ui/common/IdeaKinds`); cards elsewhere show the kind's
+  icon before the title (`CardText.kind`).
+- **Ideas tab:** an outline like the Plans tab (`domain/IdeaOutline`), the kind's icon leading each
+  row where the outline's lines meet. A chevron collapses what is under an idea (kept in DataStore,
+  `CollapsedPlansRepository(IDEAS_KEY)`). Reordering moves an idea among its siblings with
+  everything under it. The filter panel has a chip per kind (`IdeaKindFilter`): tap to show only
+  that kind (several can be on), hold to hide it; with any filter on, the ideas above a match stay so
+  the tree reads.
+- **Idea page:** the kind as chips with its definition below (from `domain/Glossary` until the
+  editable glossary), the idea, the explanation, **Under** (a picker showing the tree) and the ideas
+  under this one with "Add an idea under this" (one kind narrower than the parent by default).
+- **Turn into idea** (a note's page): saves the note, then makes it an idea of the chosen kind and
+  deletes the note (`IdeaRepository.fromNote`). The title (or the note's first line) becomes the
+  idea; the rest of the text and the list become the explanation. Links are made again from the
+  idea (pairs are stored in order, `LinkEntity.between`), tags and reminders move, priority stays.
+  A dialog confirms first, as there is no undo.
+- **Links:** for now an idea is an end point of link mode's network, like a note (`LinkNetwork`);
+  the Do/Think modes (§2.61) change what that means.
+- **Backup:** an optional Ideas sheet (Idea, Kind, Explanation, Parent ID, …); parents are
+  inserted first, and a missing parent or a loop makes an idea top level.
+- **Demo data:** two visions with beliefs, principles, an idea and a question, linked to the
+  goals, habits, books and people.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1163,6 +1198,10 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57). |
 | `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
+| `domain/IdeaKind.kt`, `domain/IdeaOutline.kt`, `domain/Glossary.kt` | Idea kinds, the Ideas outline and kind chips, default definitions (§2.58). |
+| `data/entity/IdeaEntity.kt`, `data/dao/IdeaDao.kt`, `data/repository/IdeaRepository.kt` | Ideas as a tree; turning a note into an idea (§2.58). |
+| `ui/idea/IdeaDetailViewModel.kt`, `IdeaDetailScreen.kt` | An idea's kind, text, Under and the ideas under it; tags; links (§2.58). |
+| `ui/common/IdeaKinds.kt` | Each kind's icon and colour (§2.58). |
 
 ### Resources
 | File | Purpose |
@@ -1187,6 +1226,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
 | `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
+| `domain/IdeaOutlineTest.kt` | The Ideas outline (depths, collapsing, filtering keeps ancestors) and the kind chips. |
 
 Run them with `./gradlew testDebugUnitTest`.
 

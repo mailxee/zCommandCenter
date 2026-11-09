@@ -17,6 +17,8 @@ import com.example.xcommandcenter.data.dao.HabitDao
 import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.dao.NoteDao
 import com.example.xcommandcenter.data.dao.PersonDao
+import com.example.xcommandcenter.data.dao.IdeaDao
+import com.example.xcommandcenter.data.entity.IdeaEntity
 import com.example.xcommandcenter.data.dao.PlanDao
 import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.dao.ReminderDao
@@ -69,6 +71,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         PersonProfileEntity::class,
         PersonItemEntity::class,
         KeptFindingEntity::class,
+        IdeaEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -81,7 +84,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 8: the People tab: people with their profiles and items.
     // 9: reminders can be carried over (a flag on each).
     // 10: Tidy links findings kept as they are.
-    version = 10,
+    // 11: the Ideas tab.
+    version = 11,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -92,6 +96,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
+        AutoMigration(from = 10, to = 11),
     ],
 )
 @TypeConverters(Converters::class)
@@ -110,6 +115,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun blockDao(): BlockDao
     abstract fun scheduleDao(): ScheduleDao
     abstract fun personDao(): PersonDao
+    abstract fun ideaDao(): IdeaDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {

@@ -7,11 +7,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Persists which plans are collapsed in the Plans tab. Ids of deleted plans may linger;
- * they match nothing, so they are harmless.
+ * Persists which plans are collapsed in the Plans tab (or, under [IDEAS_KEY], which ideas in the
+ * Ideas tab). Ids of deleted items may linger; they match nothing, so they are harmless.
  */
-class CollapsedPlansRepository(private val context: Context) {
-    private val key = stringSetPreferencesKey(KEY)
+class CollapsedPlansRepository(private val context: Context, name: String = KEY) {
+    private val key = stringSetPreferencesKey(name)
 
     val collapsed: Flow<Set<Long>> = context.settingsStore.data.map { prefs ->
         prefs[key].orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
@@ -26,5 +26,6 @@ class CollapsedPlansRepository(private val context: Context) {
 
     companion object {
         const val KEY = "collapsed_plans"
+        const val IDEAS_KEY = "collapsed_ideas"
     }
 }

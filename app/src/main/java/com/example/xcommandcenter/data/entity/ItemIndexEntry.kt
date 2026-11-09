@@ -26,13 +26,17 @@ import com.example.xcommandcenter.domain.ItemType
         UNION ALL SELECT 'QUOTE', id, text, NULLIF(author, '') FROM quotes
         UNION ALL SELECT 'BLOCK', b.id, b.title, s.name FROM blocks b LEFT JOIN schedules s ON s.id = b.scheduleId
         UNION ALL SELECT 'PERSON', id, name, NULL FROM people
+        UNION ALL SELECT 'IDEA', id, title,
+            CASE kind WHEN 'VISION' THEN 'Vision' WHEN 'BELIEF' THEN 'Belief' WHEN 'PRINCIPLE' THEN 'Principle'
+                WHEN 'QUESTION' THEN 'Question' ELSE 'Idea' END
+            FROM ideas
     """,
 )
 data class ItemIndexEntry(
     val type: ItemType,
     val id: Long,
     val title: String,
-    /** Author for books and quotes, parent book title for chapters, schedule name for blocks. */
+    /** Author for books and quotes, parent book title for chapters, schedule name for blocks, kind for ideas. */
     val subtitle: String?,
 ) {
     val ref: ItemRef get() = ItemRef(type, id)

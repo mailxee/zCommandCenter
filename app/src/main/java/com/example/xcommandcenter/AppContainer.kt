@@ -1,6 +1,7 @@
 package com.example.xcommandcenter
 
 import com.example.xcommandcenter.data.repository.PersonRepository
+import com.example.xcommandcenter.data.repository.IdeaRepository
 import android.content.Context
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
@@ -40,6 +41,7 @@ class AppContainer(context: Context) {
     val taskSortRepository = TaskSortRepository(context)
     val itemStyleRepository = ItemStyleRepository(context)
     val collapsedPlansRepository = CollapsedPlansRepository(context)
+    val collapsedIdeasRepository = CollapsedPlansRepository(context, CollapsedPlansRepository.IDEAS_KEY)
     val routePrefsRepository = RoutePrefsRepository(context)
     val linkRepository = LinkRepository(database.linkDao(), routePrefsRepository.route)
     val tagRepository = TagRepository(database.tagDao())
@@ -62,9 +64,10 @@ class AppContainer(context: Context) {
     val quoteRepository = QuoteRepository(database.quoteDao(), reminderRepository)
     val blockRepository = BlockRepository(database.blockDao(), reminderRepository)
     val personRepository = PersonRepository(database.personDao(), reminderRepository)
+    val ideaRepository = IdeaRepository(database.ideaDao(), noteRepository, reminderRepository)
     val itemCardSource = ItemCardSource(
         taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
-        blockRepository, personRepository, scheduleRepository, linkRepository, tagRepository, reminderRepository,
+        blockRepository, personRepository, ideaRepository, scheduleRepository, linkRepository, tagRepository, reminderRepository,
     )
     val backupRepository = BackupRepository(
         context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository, scheduleChoiceRepository,

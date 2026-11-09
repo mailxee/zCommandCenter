@@ -17,6 +17,8 @@ import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
@@ -105,6 +107,10 @@ class BackupFormatTest {
             PersonProfileEntity(personId = 3, position = 1, url = "en.wikipedia.org/wiki/Seneca_the_Younger"),
         ),
         personItems = listOf(PersonItemEntity(personId = 3, position = 0, text = "Time is the one thing truly ours.")),
+        ideas = listOf(
+            IdeaEntity(6, "Fewer commitments", "Say no by default.", IdeaKind.PRINCIPLE, parentId = 5, createdAt = created, sortOrder = 1),
+            IdeaEntity(5, "Attention is scarce", kind = IdeaKind.BELIEF, createdAt = created, priority = Priority.HIGH),
+        ),
     )
 
     @Test
@@ -132,6 +138,21 @@ class BackupFormatTest {
         assertEquals(data.people, back.people)
         assertEquals(data.personProfiles, back.personProfiles)
         assertEquals(data.personItems, back.personItems)
+        // Parents first, as with plans.
+        assertEquals(data.ideas.reversed(), back.ideas)
+    }
+
+    @Test
+    fun `an idea whose parent is missing becomes top level`() {
+        val sheets = BackupFormat.toSheets(data.copy(ideas = data.ideas.take(1)), TabOrder.default, zone)
+        val back = BackupFormat.fromSheets(sheets, zone).data
+        assertEquals(listOf<Long?>(null), back.ideas.map { it.parentId })
+    }
+
+    @Test
+    fun `a workbook without the Ideas sheet imports with no ideas`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name == "Ideas" }
+        assertTrue(BackupFormat.fromSheets(sheets, zone).data.ideas.isEmpty())
     }
 
     @Test

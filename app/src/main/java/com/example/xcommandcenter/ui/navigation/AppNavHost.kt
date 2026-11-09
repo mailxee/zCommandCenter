@@ -1,6 +1,7 @@
 package com.example.xcommandcenter.ui.navigation
 
 import com.example.xcommandcenter.ui.person.PersonDetailScreen
+import com.example.xcommandcenter.ui.idea.IdeaDetailScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
@@ -91,12 +92,25 @@ fun AppNavHost(
                     onOpen = open,
                     onCreateChild = { parentId -> navController.navigate(Routes.newItem(ItemType.PLAN, parentId)) },
                 )
-                ItemType.NOTE -> NoteDetailScreen(onBack = back, onOpen = open)
+                ItemType.NOTE -> NoteDetailScreen(
+                    onBack = back,
+                    onOpen = open,
+                    onTurnedIntoIdea = { ref ->
+                        // The note is gone: its page gives way to the idea's.
+                        navController.popBackStack()
+                        open(ref)
+                    },
+                )
                 ItemType.BOOK -> BookDetailScreen(onBack = back, onOpen = open)
                 ItemType.CHAPTER -> ChapterDetailScreen(onBack = back, onOpen = open)
                 ItemType.QUOTE -> QuoteDetailScreen(onBack = back, onOpen = open)
                 ItemType.BLOCK -> BlockDetailScreen(onBack = back, onOpen = open)
                 ItemType.PERSON -> PersonDetailScreen(onBack = back, onOpen = open)
+                ItemType.IDEA -> IdeaDetailScreen(
+                    onBack = back,
+                    onOpen = open,
+                    onCreateChild = { parentId -> navController.navigate(Routes.newItem(ItemType.IDEA, parentId)) },
+                )
             }
         }
     }

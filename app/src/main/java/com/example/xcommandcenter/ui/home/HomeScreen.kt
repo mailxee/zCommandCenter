@@ -85,6 +85,10 @@ import com.example.xcommandcenter.ui.common.label
 import com.example.xcommandcenter.ui.common.onTabAccent
 import com.example.xcommandcenter.ui.common.tabAccent
 import com.example.xcommandcenter.ui.common.tabIcon
+import com.example.xcommandcenter.ui.common.kindIcon
+import com.example.xcommandcenter.ui.common.kindColor
+import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.IdeaKindFilter
 
 @Composable
 fun HomeScreen(
@@ -214,6 +218,7 @@ fun HomeScreen(
                         ItemType.BOOK -> BooksTab(viewModel, open, showFilters)
                         ItemType.QUOTE -> QuotesTab(viewModel, open, showFilters)
                         ItemType.PERSON -> PeopleTab(viewModel, open, showFilters)
+                        ItemType.IDEA -> IdeasTab(viewModel, open, showFilters)
                         ItemType.BLOCK -> ScheduleTab(viewModel, open, onCreateBlock)
                         ItemType.CHAPTER -> Unit // Not a tab.
                     }
@@ -262,8 +267,9 @@ private fun FilterButton(viewModel: HomeViewModel, tab: ItemType, shown: Boolean
     val priorityFilters by viewModel.priorityFilters.collectAsStateWithLifecycle()
     val repeat by viewModel.repeatFilter.collectAsStateWithLifecycle()
     val status by viewModel.taskStatus.collectAsStateWithLifecycle()
+    val kinds by viewModel.ideaKinds.collectAsStateWithLifecycle()
     val filtering = tagFilter.active || priorityFilters[tab].orEmpty().isNotEmpty() ||
-        (tab == ItemType.TASK && (repeat != RepeatFilter.ALL || status.active))
+        (tab == ItemType.TASK && (repeat != RepeatFilter.ALL || status.active)) || (tab == ItemType.IDEA && kinds.active)
     FilledTonalIconToggleButton(
         checked = shown,
         onCheckedChange = { onToggle() },
@@ -373,7 +379,8 @@ private fun LinkModeStatus(viewModel: HomeViewModel, onMap: (ItemRef?) -> Unit) 
  * with it; both stay on when switching tabs. Shows "Untagged" (items without tags) and the tags
  * used on [tab]'s items, plus any tag in use by the filter, so it can always be turned off; hidden
  * when there are no tags to offer. The chips wrap onto more lines, so every tag stays on screen.
- * The Tasks tab also has "Past due" and "Completed" (see [TaskStatusFilter]), which work the same way.
+ * The Tasks tab also has "Past due" and "Completed" (see [TaskStatusFilter]), and the Ideas tab a
+ * chip per kind (see [IdeaKindFilter]), which work the same way.
  */
 @Composable
 private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
@@ -384,14 +391,30 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
     val tags = allTags.filter { it.id in used || it.id in filter.selected || it.id in filter.excluded }
     val status by viewModel.taskStatus.collectAsStateWithLifecycle()
     val untagged = TagFilter.UNTAGGED
+    val kinds by viewModel.ideaKinds.collectAsStateWithLifecycle()
     val tasks = tab == ItemType.TASK
-    if (!tasks && tags.isEmpty() && untagged !in filter.selected && untagged !in filter.excluded) return
+    val ideas = tab == ItemType.IDEA
+    if (!tasks && !ideas && tags.isEmpty() && untagged !in filter.selected && untagged !in filter.excluded) return
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        if (filter.active || (tasks && status.active)) {
+        if (ideas) {
+            IdeaKind.entries.forEach { kind ->
+                TagChip(
+                    label = kind.label,
+                    icon = kindIcon(kind),
+                    iconTint = kindColor(kind),
+                    selected = kinds.state(kind) == ChipState.ONLY,
+                    excluded = kinds.state(kind) == ChipState.HIDDEN,
+                    onClick = { viewModel.tapIdeaKind(kind) },
+                    onLongClick = { viewModel.holdIdeaKind(kind) },
+                    holdLabel = kind.plural.lowercase(),
+                )
+            }
+        }
+        if (filter.active || (tasks && status.active) || (ideas && kinds.active)) {
             AssistChip(onClick = viewModel::clearTags, label = { Text("Clear") })
         }
         TagChip(
@@ -441,6 +464,7 @@ private fun TagChip(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     icon: Int? = null,
+    iconTint: Color? = null,
     /** What the chip picks out, for accessibility: "items with this tag", or "tasks" for a built-in chip. */
     holdLabel: String? = null,
 ) {
@@ -483,7 +507,7 @@ private fun TagChip(
                 Icon(
                     painterResource(icon),
                     contentDescription = null,
-                    tint = if (excluded) colors.onSurface.copy(alpha = 0.38f) else colors.onSurfaceVariant,
+                    tint = if (excluded) colors.onSurface.copy(alpha = 0.38f) else iconTint ?: colors.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(6.dp))

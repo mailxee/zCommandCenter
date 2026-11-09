@@ -3,6 +3,8 @@ package com.example.xcommandcenter.data.backup
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
+import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
@@ -64,8 +66,9 @@ data class BackupData(
     val people: List<PersonEntity> = emptyList(),
     val personProfiles: List<PersonProfileEntity> = emptyList(),
     val personItems: List<PersonItemEntity> = emptyList(),
+    val ideas: List<IdeaEntity> = emptyList(),
 ) {
-    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size
+    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size + ideas.size
 }
 
 /** A problem that stops an import; [message] says where, in words the user can act on. */
@@ -187,6 +190,16 @@ object BackupFormat {
                 listOf(listOf("ID", "Name", "Bio", "Created", "Order", "Priority")) +
                     data.people.map { listOf(it.id.toString(), it.name, it.bio, time(it.createdAt), it.sortOrder.toString(), it.priority.label) },
             ),
+            ItemType.IDEA to Sheet(
+                ItemType.IDEA.tabLabel,
+                listOf(listOf("ID", "Idea", "Kind", "Explanation", "Parent ID", "Created", "Order", "Priority")) +
+                    data.ideas.map {
+                        listOf(
+                            it.id.toString(), it.title, it.kind.label, it.body, it.parentId?.toString().orEmpty(), time(it.createdAt),
+                            it.sortOrder.toString(), it.priority.label,
+                        )
+                    },
+            ),
             ItemType.BLOCK to Sheet(
                 ItemType.BLOCK.tabLabel,
                 listOf(listOf("ID", "Title", "Start", "End", "Notes", "Created", "Schedule ID", "Schedule")) +
@@ -305,6 +318,7 @@ object BackupFormat {
         data.quotes.forEach { put(ItemRef(ItemType.QUOTE, it.id), it.text.take(40)) }
         data.blocks.forEach { put(ItemRef(ItemType.BLOCK, it.id), it.title) }
         data.people.forEach { put(ItemRef(ItemType.PERSON, it.id), it.name) }
+        data.ideas.forEach { put(ItemRef(ItemType.IDEA, it.id), it.title) }
     }
 
     /** A minute of the day as "HH:mm"; the end of the day, 1440, as "24:00". */
@@ -466,6 +480,17 @@ object BackupFormat {
             group.sortedBy { it.position }.mapIndexed { i, item -> item.copy(position = i) }
         }
 
+        // Ideas came later still; parents go first, and a missing parent or a loop makes an idea top level.
+        val ideas = sheet(ItemType.IDEA.tabLabel, false)?.items("Idea") { r ->
+            IdeaEntity(
+                id = r.id(), title = r.required("Idea"), body = r.text("Explanation"),
+                kind = r.enum("Kind", IdeaKind.entries) { it.label } ?: IdeaKind.IDEA, parentId = r.long("Parent ID"),
+                createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(), priority = r.priority(),
+            )
+        }.orEmpty().withIds(ItemType.IDEA.tabLabel) { i, id -> i.copy(id = id) }.let { all ->
+            parentsFirst(all, { it.id }, { it.parentId }) { it.copy(parentId = null) }
+        }
+
         val habitIds = habits.map { it.id }.toSet()
         val marks = sheet(HABIT_HISTORY, false)?.rows("Date").orEmpty().mapNotNull { r ->
             val habitId = r.long("Habit ID") ?: r.fail("Habit ID is required")
@@ -484,6 +509,7 @@ object BackupFormat {
             quotes.forEach { add(ItemRef(ItemType.QUOTE, it.id)) }
             blocks.forEach { add(ItemRef(ItemType.BLOCK, it.id)) }
             people.forEach { add(ItemRef(ItemType.PERSON, it.id)) }
+            ideas.forEach { add(ItemRef(ItemType.IDEA, it.id)) }
         }
 
         val links = sheet(LINKS, false)?.rows("ID A", "ID B").orEmpty().mapNotNull { r ->
@@ -554,7 +580,7 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems,
+                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas,
             ),
             skipped,
             settings,
@@ -577,6 +603,15 @@ object BackupFormat {
         return all.map { p ->
             if (p.completed && (PlanTree.subtreeIds(p.id, all, { it.id }, { it.parentId }) - p.id).any { it in open }) p.copy(completed = false) else p
         }
+    }
+
+    /** Parents before children; nodes whose parent is missing or in a loop become roots through [detach]. */
+    private fun <T> parentsFirst(nodes: List<T>, id: (T) -> Long, parentId: (T) -> Long?, detach: (T) -> T): List<T> {
+        val ids = nodes.map(id).toSet()
+        val withParents = nodes.map { n -> if (parentId(n)?.let { it in ids } == false) detach(n) else n }
+        val ordered = PlanTree.flatten(withParents, id, parentId).map { it.node }
+        val reached = ordered.map(id).toSet()
+        return ordered + withParents.filter { id(it) !in reached }.map(detach)
     }
 
     /** Keeps given ids (rejecting duplicates) and gives rows with a blank id new ones above the largest. */

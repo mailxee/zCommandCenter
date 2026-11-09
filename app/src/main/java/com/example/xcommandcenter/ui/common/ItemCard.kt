@@ -77,6 +77,8 @@ import com.example.xcommandcenter.domain.HabitCategory
 import com.example.xcommandcenter.domain.HabitStats
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Priority
+import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.data.entity.IdeaEntity
 import com.example.xcommandcenter.domain.TaskStatusFilter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -95,6 +97,8 @@ data class CardText(
     val emphasis: Boolean = false,
     val priority: Priority? = null,
     val meta: List<String> = emptyList(),
+    /** For an idea: its kind, shown as an icon before the title. */
+    val kind: IdeaKind? = null,
 )
 
 /** A habit with what its card shows: streak, mark count, and whether today needs a mark. */
@@ -206,6 +210,19 @@ fun personCardText(person: PersonEntity, lists: PersonLists?) = CardText(
         lists?.profiles?.map { Profiles.platformOf(it).label }?.distinct()?.joinToString(" · ")?.ifBlank { null },
         lists?.items?.size?.takeIf { it > 0 }?.items(),
     ),
+)
+
+/**
+ * An idea: its kind's icon before the title, and its explanation. [parent] names the idea it sits
+ * under, for cards shown away from the Ideas outline; [hidden] says what a collapsed idea hides.
+ */
+fun ideaCardText(idea: IdeaEntity, parent: IdeaEntity? = null, hidden: String? = null) = CardText(
+    title = idea.title,
+    lines = listOfNotNull(idea.body.ifBlank { null }),
+    emphasis = critical(idea.priority),
+    priority = idea.priority,
+    meta = listOfNotNull(idea.kind.label, parent?.let { "under ${it.title}" }, hidden),
+    kind = idea.kind,
 )
 
 /** "7:00 – 7:45 AM": a block's time of day. */
@@ -402,6 +419,10 @@ private fun CardTitle(type: ItemType, text: CardText, tags: List<TagEntity>, sma
     val priority = text.priority
     Text(
         buildAnnotatedString {
+            if (text.kind != null) {
+                appendInlineContent(KindKey, text.kind.label)
+                append(" ")
+            }
             if (priority != null) {
                 appendInlineContent(PriorityKey, priority.label)
                 append(" ")
@@ -417,15 +438,19 @@ private fun CardTitle(type: ItemType, text: CardText, tags: List<TagEntity>, sma
         color = if (text.emphasis) MaterialTheme.colorScheme.error else titleStyle.color.takeOrElse { MaterialTheme.colorScheme.onSurface },
         maxLines = 3,
         overflow = TextOverflow.Ellipsis,
-        inlineContent = if (priority == null) emptyMap() else mapOf(
-            PriorityKey to InlineTextContent(Placeholder(20.sp, 18.sp, PlaceholderVerticalAlign.TextCenter)) {
-                PriorityLetter(priority, text.done)
-            },
-        ),
+        inlineContent = buildMap {
+            if (priority != null) {
+                put(PriorityKey, InlineTextContent(Placeholder(20.sp, 18.sp, PlaceholderVerticalAlign.TextCenter)) { PriorityLetter(priority, text.done) })
+            }
+            text.kind?.let { kind ->
+                put(KindKey, InlineTextContent(Placeholder(18.sp, 18.sp, PlaceholderVerticalAlign.TextCenter)) { KindIcon(kind, size = 18.dp) })
+            }
+        },
     )
 }
 
 private const val PriorityKey = "priority"
+private const val KindKey = "kind"
 
 /** The priority's first letter on a tint of its color. */
 @Composable
