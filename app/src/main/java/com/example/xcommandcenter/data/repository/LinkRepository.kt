@@ -6,6 +6,8 @@ import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.LinkLabels
+import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.TabModes
 import kotlinx.coroutines.flow.map
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -54,7 +56,14 @@ data class LabelReading(val label: LinkLabelEntity, val subject: Boolean) {
     val wording: String get() = label.wording(subject)
 }
 
-class LinkRepository(private val dao: LinkDao, private val route: Flow<LinkRoute> = flowOf(LinkRoute())) {
+class LinkRepository(
+    private val dao: LinkDao,
+    private val route: Flow<LinkRoute> = flowOf(LinkRoute()),
+    /** The app's mode, which decides what link mode's network runs through. */
+    val mode: Flow<AppMode> = flowOf(AppMode.DO),
+    /** Which mode shows each tab, to mark items from the other mode. */
+    val tabModes: Flow<TabModes> = flowOf(TabModes()),
+) {
 
     /**
      * Link mode, kept in memory for as long as the app runs: once a card is pressed and held, it is
@@ -71,11 +80,12 @@ class LinkRepository(private val dao: LinkDao, private val route: Flow<LinkRoute
         if (root == null) {
             flowOf(null)
         } else {
-            combine(dao.observeAll(), dao.observeChapterBooks()) { links, chapterBooks ->
+            combine(dao.observeAll(), dao.observeChapterBooks(), mode) { links, chapterBooks, mode ->
                 LinkNetwork.of(
                     root.ref,
                     links.map { ItemRef(it.aType, it.aId) to ItemRef(it.bType, it.bId) },
                     chapterBooks.associate { it.chapterId to it.id },
+                    mode,
                 )
             }
         }

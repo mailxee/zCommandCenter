@@ -1,5 +1,9 @@
 package com.example.xcommandcenter.ui.home
 
+import com.example.xcommandcenter.domain.AppMode
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -100,11 +104,15 @@ fun HomeScreen(
     onMap: (ItemRef?) -> Unit = {},
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
-    val order by viewModel.tabOrder.collectAsStateWithLifecycle()
-    // Remember the tab itself, not its index, so reordering in Settings keeps the selection.
+    val order by viewModel.shownTabs.collectAsStateWithLifecycle()
+    val mode by viewModel.mode.collectAsStateWithLifecycle()
+    // Remember the tab itself, not its index, so reordering in Settings keeps the selection; one
+    // per mode, so switching back returns to the tab left there.
     // Null until the user picks one: the first tab of the stored order is then shown, even though
     // that order loads a moment after the first frame.
-    var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedDo by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedThink by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedName = if (mode == AppMode.DO) selectedDo else selectedThink
     val selected = order.firstOrNull { it.name == selectedName } ?: order.first()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val counts by viewModel.tabCounts.collectAsStateWithLifecycle()
@@ -121,7 +129,8 @@ fun HomeScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text(if (reorder) "Reorder" else stringResource(R.string.app_name)) },
+                // The mode switch stands where the app's name was; the name stays for screen readers.
+                title = { if (reorder) Text("Reorder") else ModeSwitch(mode, viewModel::setMode) },
                 scrollBehavior = scrollBehavior,
                 actions = {
                     if (reorder) {
@@ -183,7 +192,7 @@ fun HomeScreen(
                     Tab(
                         selected = tab == selected,
                         onClick = {
-                            selectedName = tab.name
+                            if (mode == AppMode.DO) selectedDo = tab.name else selectedThink = tab.name
                             if (reorder && tab == ItemType.TASK) viewModel.setTaskSort(TaskSort.CUSTOM)
                             if (reorder && tab in priorityTabs) viewModel.setPrioritySort(tab, PrioritySort.CUSTOM)
                         },
@@ -225,6 +234,21 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Do or Think: which side of the app the tabs, link mode and the map show. */
+@Composable
+private fun ModeSwitch(mode: AppMode, onChange: (AppMode) -> Unit) {
+    val name = stringResource(R.string.app_name)
+    SingleChoiceSegmentedButtonRow(Modifier.width(184.dp).semantics { contentDescription = "$name: ${mode.label} mode" }) {
+        AppMode.entries.forEachIndexed { i, option ->
+            SegmentedButton(
+                selected = mode == option,
+                onClick = { onChange(option) },
+                shape = SegmentedButtonDefaults.itemShape(i, AppMode.entries.size),
+            ) { Text(option.label, maxLines = 1) }
         }
     }
 }

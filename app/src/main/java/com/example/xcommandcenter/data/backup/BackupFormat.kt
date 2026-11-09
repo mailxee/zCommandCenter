@@ -1,5 +1,7 @@
 package com.example.xcommandcenter.data.backup
 
+import com.example.xcommandcenter.domain.TabMode
+import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
@@ -113,6 +115,7 @@ object BackupFormat {
         tabOrder: List<ItemType>,
         zone: ZoneId = ZoneId.systemDefault(),
         styles: ItemStyles = ItemStyles(),
+        tabModes: TabModes = TabModes(),
         scheduleChoice: BackupScheduleChoice = BackupScheduleChoice(),
     ): List<Sheet> {
         fun time(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTime) }.orEmpty()
@@ -303,12 +306,12 @@ object BackupFormat {
         )
         val settings = Sheet(
             SETTINGS,
-            listOf(listOf("Tab", "Position", "Color", "Bold", "Italic", "Underline", "Font")) +
+            listOf(listOf("Tab", "Position", "Color", "Bold", "Italic", "Underline", "Font", "Mode")) +
                 tabOrder.mapIndexed { index, tab ->
                     val style = styles[tab]
                     listOf(
                         tab.tabLabel, (index + 1).toString(), style.color.label, bool(style.bold), bool(style.italic), bool(style.underline),
-                        style.font.label,
+                        style.font.label, tabModes.of(tab).label,
                     )
                 },
         )
@@ -589,6 +592,7 @@ object BackupFormat {
             taskReminders + habitReminders
         }
 
+        var modesRead: Map<ItemType, TabMode> = emptyMap()
         val settings = sheet(SETTINGS, false)?.let { table ->
             val rows = table.rows("Tab").map { r ->
                 val tab = r.itemType("Tab").takeIf { it.isTab } ?: r.fail("Tab \"${r.text("Tab")}\" isn't one of the tabs")
@@ -600,7 +604,10 @@ object BackupFormat {
                     underline = if (r.text("Underline").isEmpty()) default.underline else r.bool("Underline"),
                     font = r.enum("Font", StyleFont.entries) { it.label } ?: default.font,
                 )
-                Triple(tab, r.int("Position", Int.MAX_VALUE, 1..Int.MAX_VALUE), style)
+                Triple(tab, r.int("Position", Int.MAX_VALUE, 1..Int.MAX_VALUE), style) to r.enum("Mode", TabMode.entries) { it.label }
+            }.let { pairs ->
+                modesRead = pairs.mapNotNull { (row, mode) -> mode?.let { row.first to it } }.toMap()
+                pairs.map { it.first }
             }
             rows.groupingBy { it.first }.eachCount().filterValues { it > 1 }.keys.firstOrNull()?.let {
                 throw ImportException("The \"$SETTINGS\" sheet lists ${it.tabLabel} more than once. Nothing was imported.")
@@ -610,6 +617,7 @@ object BackupFormat {
             BackupSettings(
                 tabOrder = TabOrder.parse(TabOrder.serialize(listed)),
                 styles = ItemType.tabs.associateWith { tab -> rows.firstOrNull { it.first == tab }?.third ?: ItemStyle.default(tab) },
+                tabModes = modesRead.takeIf { it.isNotEmpty() }?.let(::TabModes),
             )
         }
 
@@ -798,7 +806,8 @@ data class ImportResult(
 data class BackupScheduleChoice(val selectedId: Long? = null, val automatic: Boolean = false)
 
 /** The Settings sheet: the tab order and every tab's item style. */
-data class BackupSettings(val tabOrder: List<ItemType>, val styles: Map<ItemType, ItemStyle>)
+/** [tabModes] is null for a workbook from before the Do/Think modes. */
+data class BackupSettings(val tabOrder: List<ItemType>, val styles: Map<ItemType, ItemStyle>, val tabModes: TabModes? = null)
 
 private fun RecurrenceType?.usesDayOfMonth() = this == RecurrenceType.MONTHLY || this == RecurrenceType.EVERY_N_MONTHS
 

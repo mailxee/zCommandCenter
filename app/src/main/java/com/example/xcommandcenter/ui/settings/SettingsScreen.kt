@@ -1,5 +1,7 @@
 package com.example.xcommandcenter.ui.settings
 
+import androidx.compose.foundation.layout.height
+import com.example.xcommandcenter.domain.TabMode
 import androidx.compose.material3.OutlinedTextField
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
@@ -85,6 +87,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val order by viewModel.order.collectAsStateWithLifecycle()
+    val tabModes by viewModel.tabModes.collectAsStateWithLifecycle()
     val tagUsage by viewModel.tagUsage.collectAsStateWithLifecycle()
     var deletingTag by remember { mutableStateOf<TagUsage?>(null) }
     val context = LocalContext.current
@@ -138,7 +141,8 @@ fun SettingsScreen(
             SectionTitle("Tabs")
             Text(
                 "Drag tabs by their handle to change their order on the main screen. Tap a tab to give its items their own look; " +
-                    "it is used wherever an item is shown, including where other tabs list it as linked.",
+                    "it is used wherever an item is shown, including where other tabs list it as linked. " +
+                    "Do, Both or Think chooses which side of the app shows the tab.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             val styles = LocalItemStyles.current
@@ -157,7 +161,23 @@ fun SettingsScreen(
                             ListItem(
                                 colors = clearListItemColors(),
                                 headlineContent = { Text(tab.tabLabel, style = itemTextStyle(tab, LocalTextStyle.current)) },
-                                supportingContent = { Text(styles[tab].summary) },
+                                supportingContent = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(styles[tab].summary)
+                                        val current = tabModes.of(tab)
+                                        SingleChoiceSegmentedButtonRow(Modifier.width(186.dp).height(32.dp)) {
+                                            TabMode.entries.forEachIndexed { i, option ->
+                                                SegmentedButton(
+                                                    selected = current == option,
+                                                    onClick = { viewModel.setTabMode(tab, option) },
+                                                    shape = SegmentedButtonDefaults.itemShape(i, TabMode.entries.size),
+                                                    icon = {},
+                                                    modifier = Modifier.semantics { contentDescription = "${tab.tabLabel}: ${option.label}" },
+                                                ) { Text(option.label, style = MaterialTheme.typography.labelMedium, maxLines = 1) }
+                                            }
+                                        }
+                                    }
+                                },
                                 leadingContent = { Text("${index + 1}") },
                                 trailingContent = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {

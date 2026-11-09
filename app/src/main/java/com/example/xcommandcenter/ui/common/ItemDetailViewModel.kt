@@ -17,6 +17,9 @@ import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.Glossary
+import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.TabModes
+import kotlinx.coroutines.flow.combine
 import com.example.xcommandcenter.ui.navigation.Routes
 import com.example.xcommandcenter.ui.plan.BlockedCompletion
 import kotlinx.coroutines.flow.Flow
@@ -176,6 +179,10 @@ abstract class ItemDetailViewModel(
     /** The glossary's definitions, for the idea kinds and the label picker. */
     val terms: StateFlow<Glossary.Terms> = cards.terms
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Glossary.Terms())
+
+    /** The app's mode and each tab's, to mark linked items from the other mode with ⇄. */
+    val modes: StateFlow<Pair<AppMode, TabModes>> = combine(links.mode, links.tabModes, ::Pair)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppMode.DO to TabModes())
 
     /** Every link label, for the label picker. */
     val labels: StateFlow<List<LinkLabelEntity>> = links.labels

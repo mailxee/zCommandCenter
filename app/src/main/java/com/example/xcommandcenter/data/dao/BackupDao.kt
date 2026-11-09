@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.dao
 
+import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
@@ -141,10 +142,14 @@ interface BackupDao {
         deleteKeptFindings()
     }
 
-    /** [deleteAll], leaving the one schedule there always is. */
+    /** [deleteAll], leaving the one schedule there always is and the starting labels. */
     @Transaction
     suspend fun deleteEverything() {
         deleteAll()
+        // The glossary and the labels are settings, which "Delete everything" resets too.
+        deleteGlossary()
+        deleteLinkLabels()
+        insertLinkLabels(LinkLabels.defaults.mapIndexed { i, l -> LinkLabelEntity(key = l.key, forward = l.forward, backward = l.backward, sortOrder = i) })
         insertSchedules(listOf(ScheduleEntity(id = 1, name = AppDatabase.FIRST_SCHEDULE)))
     }
 

@@ -1015,8 +1015,8 @@ default tab order, so an existing order gets it at the end.
   idea; the rest of the text and the list become the explanation. Links are made again from the
   idea (pairs are stored in order, `LinkEntity.between`), tags and reminders move, priority stays.
   A dialog confirms first, as there is no undo.
-- **Links:** for now an idea is an end point of link mode's network, like a note (`LinkNetwork`);
-  the Do/Think modes (§2.61) change what that means.
+- **Links:** in Do mode an idea is an end point of link mode's network, like a note; in Think mode
+  networks run through ideas (§2.61).
 - **Backup:** an optional Ideas sheet (Idea, Kind, Explanation, Parent ID, …); parents are
   inserted first, and a missing parent or a loop makes an idea top level.
 - **Demo data:** two visions with beliefs, principles, an idea and a question, linked to the
@@ -1051,7 +1051,7 @@ A link can carry a label, so the networks say how things relate, not only that t
   A contradiction never takes part in a route, so it is never suggested for removal.
 - **Backup:** the Links sheet gains Label ID and "Label reads from" (A or B as written on the row),
   and a Link labels sheet holds the labels. Without that sheet, links come in plain and the app
-  keeps its labels; "Delete everything" keeps the labels too, like settings.
+  keeps its labels; "Delete everything" puts back the starting labels, as it resets settings.
 
 ### 2.60 Glossary
 
@@ -1067,8 +1067,33 @@ quote, person) and every link label.
   chosen label; and on an empty tab, under "No … yet" (through `LocalTerms`). Holding a tab name was
   in the plan, but Material's tabs take no long press, so it was left out.
 - `ItemCardSource.terms` hands the definitions to every detail page, as they all have one.
-- **Backup:** a Glossary sheet (Term, Definition) with the rewritten definitions only. Like the
-  labels, definitions are kept on "Delete everything" and on importing a workbook without the sheet.
+- **Backup:** a Glossary sheet (Term, Definition) with the rewritten definitions only. Definitions are kept on
+  importing a workbook without the sheet; "Delete everything" resets them, as it resets settings.
+
+### 2.61 Do and Think modes
+
+The app has two views of the same items (`domain/AppMode`): **Do** manages goals, plans, tasks and
+habits; **Think** ponders visions, beliefs and ideas with their sources.
+
+- **Switch:** a Do/Think control stands in the main screen's top bar where the app's name was
+  (the name stays in its description for screen readers). The mode is kept across launches
+  (`ModeRepository`, DataStore), and each mode remembers the tab last open in it. Switching leaves
+  link mode, as its network ran through the other mode's items.
+- **Tabs per mode** (`TabModes`): Settings › Tabs gives each tab Do, Both or Think. By default Schedule,
+  Goals, Plans, Tasks and Habits are Do; Ideas, Books and Quotes are Think; Notes and People are
+  both. The default tab order now puts Ideas after Habits, so Think mode opens on them; an order the
+  user already set keeps its place and gets Ideas at the end. If a mode would have no tabs, it shows
+  them all. The Settings sheet of the backup gains a Mode column (optional on import).
+- **Networks per mode:** each mode's networks run through its own types (`AppMode.through`): Do
+  through goals, plans, tasks and habits; Think through ideas. Everything else is an end point of
+  that mode, so **any** item of the other mode ends a route: a principle linked to a plan under an
+  unrelated goal shows the plan as an end point in Think mode, and the plan shows the principle as
+  an end point in Do mode. Neither network gets a loop from it. Link mode follows the current mode
+  (`LinkNetwork.of(…, mode)`).
+- **⇄ marks the other mode:** on a detail page, a group of linked items that all belong only to
+  the other mode says so ("Leads to ⇄ Do", "Ideas ⇄ Think"); on the Ideas tab, each idea counts
+  its links into Do ("⇄ 2 in Do").
+- The map and Tidy links follow the mode in §2.62.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1253,6 +1278,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/LinkLabelDialog.kt` | Picking a link's label and direction (§2.59). |
 | `data/entity/GlossaryEntity.kt`, `data/dao/GlossaryDao.kt`, `data/repository/GlossaryRepository.kt` | Rewritten definitions (§2.60). |
 | `ui/settings/GlossaryScreen.kt` | Settings › Glossary and its view model (§2.60). |
+| `domain/AppMode.kt`, `data/prefs/ModeRepository.kt` | Do and Think: the mode, each tab's mode, what each mode's networks run through (§2.61). |
 
 ### Resources
 | File | Purpose |
@@ -1277,6 +1303,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
 | `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
+| `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |
 | `domain/IdeaOutlineTest.kt` | The Ideas outline (depths, collapsing, filtering keeps ancestors) and the kind chips. |
 

@@ -1,5 +1,7 @@
 package com.example.xcommandcenter.data
 
+import com.example.xcommandcenter.domain.TabMode
+import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.data.backup.BackupData
 import com.example.xcommandcenter.data.backup.BackupFormat
 import com.example.xcommandcenter.data.backup.BackupScheduleChoice
@@ -230,6 +232,13 @@ class BackupFormatTest {
         assertEquals(ItemStyle(color = StyleColor.BLUE, bold = true, font = StyleFont.SERIF), settings.styles[ItemType.NOTE])
         // Quotes keep their default italics.
         assertEquals(ItemStyle.default(ItemType.QUOTE), settings.styles[ItemType.QUOTE])
+    }
+
+    @Test
+    fun `each tab's mode comes back with the settings`() {
+        val modes = TabModes().with(ItemType.NOTE, TabMode.THINK)
+        val settings = BackupFormat.fromSheets(BackupFormat.toSheets(data, TabOrder.default, zone, tabModes = modes), zone).settings!!
+        assertEquals(modes.encode(), settings.tabModes!!.encode())
     }
 
     @Test

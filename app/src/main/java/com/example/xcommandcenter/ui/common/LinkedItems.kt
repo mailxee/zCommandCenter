@@ -40,6 +40,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LinkLabels
+import com.example.xcommandcenter.domain.AppMode
 import androidx.compose.foundation.layout.size
 import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import kotlinx.coroutines.flow.Flow
@@ -62,6 +63,9 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
     val readings by viewModel.linkLabels.collectAsStateWithLifecycle()
     val labels by viewModel.labels.collectAsStateWithLifecycle()
     val terms by viewModel.terms.collectAsStateWithLifecycle()
+    val (mode, tabModes) = viewModel.modes.collectAsStateWithLifecycle().value
+    // Items from the other mode end this item's network there; their groups say so with ⇄.
+    fun crossing(group: List<ItemCardData>) = group.all { tabModes.isOtherMode(it.ref.type, mode) }
     var picking by rememberSaveable { mutableStateOf(false) }
     // The item whose link is being labelled: just picked (new) or held (existing).
     var labelling by remember { mutableStateOf<ItemIndexEntry?>(null) }
@@ -86,14 +90,15 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
                     .sortedWith(compareBy({ (key, _) -> labels.indexOfFirst { it.id == key.first } }, { (key, _) -> !key.second }))
                     .forEach { (_, group) ->
                         val reading = readings.getValue(group.first().ref)
-                        LabelHeading(reading.wording, contradiction = reading.label.key == LinkLabels.CONTRADICTS)
+                        LabelHeading(reading.wording, contradiction = reading.label.key == LinkLabels.CONTRADICTS, other = mode.other.takeIf { crossing(group) })
                         group.forEach { card -> LinkedCard(card, viewModel, onOpen, onHold = hold) }
                     }
                 ItemType.tabs.forEach { tab ->
                     val group = cards.filter { it.ref.type.tab == tab && it.ref !in readings }
                     if (group.isNotEmpty()) {
                         val labelStyle = itemTextStyle(tab, MaterialTheme.typography.labelLarge)
-                        Text(tab.tabLabel, style = labelStyle, color = labelStyle.color.takeOrElse { MaterialTheme.colorScheme.primary })
+                        val other = if (crossing(group)) "  ⇄ ${mode.other.label}" else ""
+                        Text(tab.tabLabel + other, style = labelStyle, color = labelStyle.color.takeOrElse { MaterialTheme.colorScheme.primary })
                         group.forEach { card -> LinkedCard(card, viewModel, onOpen, onHold = hold) }
                     }
                 }
@@ -147,11 +152,15 @@ fun LinkedCardsGroup(title: String, cards: List<ItemCardData>, viewModel: ItemDe
 
 /** A label's wording heading the links that carry it; a contradiction in the error colour. */
 @Composable
-private fun LabelHeading(wording: String, contradiction: Boolean) {
+private fun LabelHeading(wording: String, contradiction: Boolean, other: AppMode? = null) {
     val color = if (contradiction) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Icon(painterResource(R.drawable.ic_label), contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
-        Text(wording.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelLarge, color = color)
+        Text(
+            wording.replaceFirstChar { it.uppercase() } + (other?.let { "  ⇄ ${it.label}" } ?: ""),
+            style = MaterialTheme.typography.labelLarge,
+            color = color,
+        )
     }
 }
 

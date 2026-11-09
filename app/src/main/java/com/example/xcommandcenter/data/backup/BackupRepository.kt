@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.backup
 
+import com.example.xcommandcenter.data.prefs.ModeRepository
 import android.content.Context
 import android.net.Uri
 import com.example.xcommandcenter.data.dao.BackupDao
@@ -24,13 +25,14 @@ class BackupRepository(
     private val tabOrder: TabOrderRepository,
     private val itemStyles: ItemStyleRepository,
     private val scheduleChoice: ScheduleChoiceRepository,
+    private val modes: ModeRepository,
 ) {
     /** Writes the whole database to [uri]; returns how many items (across the seven tabs) went in. */
     suspend fun export(uri: Uri): Int = withContext(Dispatchers.IO) {
         val data = dao.snapshot()
         val choice = scheduleChoice.choice.first()
         val sheets = BackupFormat.toSheets(
-            data, tabOrder.order.first(), styles = itemStyles.styles.first(),
+            data, tabOrder.order.first(), styles = itemStyles.styles.first(), tabModes = modes.tabModes.first(),
             scheduleChoice = BackupScheduleChoice(choice.selectedId, choice.automatic),
         )
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Can't write to the chosen file")
@@ -59,12 +61,16 @@ class BackupRepository(
         result.settings?.let { settings ->
             tabOrder.setOrder(settings.tabOrder)
             settings.styles.forEach { (tab, style) -> itemStyles.setStyle(tab, style) }
+            settings.tabModes?.let { modes.setTabModes(it) }
         }
         result.scheduleChoice?.let { scheduleChoice.restore(it.selectedId, it.automatic) }
         result
     }
 
-    /** Deletes every item, link, tag and habit mark, every saved setting and every pending reminder. */
+    /**
+     * Deletes every item, link, tag and habit mark, every saved setting (the glossary's definitions
+     * and the link labels go back to the starting ones) and every pending reminder.
+     */
     suspend fun deleteEverything() = withContext(Dispatchers.IO) {
         reminders.cancelAll()
         dao.deleteEverything()

@@ -18,6 +18,16 @@ class LinkNetworkTest {
     }
 
     @Test
+    fun `in Think mode the walk goes through ideas and stops at goals and quotes`() {
+        val vision = ItemRef(ItemType.IDEA, 1)
+        val belief = ItemRef(ItemType.IDEA, 2)
+        val links = listOf(vision to belief, belief to quote(3), belief to goal(4), goal(4) to task(5), goal(4) to goal(6))
+        assertEquals(setOf(vision, belief, quote(3), goal(4)), LinkNetwork.of(vision, links, emptyMap(), AppMode.THINK))
+        // The same links in Do mode: the goal's network ends at the idea.
+        assertEquals(setOf(goal(4), task(5), goal(6), belief), LinkNetwork.of(goal(4), links, emptyMap()))
+    }
+
+    @Test
     fun `an item without links is a network of one`() {
         assertEquals(setOf(task(9)), LinkNetwork.of(task(9), listOf(task(1) to task(2)), emptyMap()))
     }

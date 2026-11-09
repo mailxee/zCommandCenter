@@ -2,23 +2,31 @@ package com.example.xcommandcenter.domain
 
 /**
  * Link mode's network: every item reachable from a root by following links, however many steps
- * away. Links are undirected. Notes, quotes, books, people and schedule blocks are end points, never
- * followed: the walk goes only through tasks, goals, habits and plans, and an end point shows (a
- * book with all its chapters) when it is linked to one of them. A chapter's links count as its book's.
+ * away. Links are undirected. In Do mode, notes, quotes, books, people, ideas and schedule blocks
+ * are end points, never followed: the walk goes only through tasks, goals, habits and plans, and an
+ * end point shows (a book with all its chapters) when it is linked to one of them. In Think mode the
+ * walk goes through ideas, and everything else (goals and plans included) ends it. A chapter's
+ * links count as its book's.
  */
 object LinkNetwork {
-    /** The tabs whose items end the walk instead of extending it. */
-    val endPoints = setOf(ItemType.NOTE, ItemType.QUOTE, ItemType.BOOK, ItemType.CHAPTER, ItemType.BLOCK, ItemType.PERSON, ItemType.IDEA)
+    /** The types whose items end a Do-mode walk instead of extending it. */
+    val endPoints: Set<ItemType> = ItemType.entries.filter { it !in AppMode.DO.through }.toSet()
 
     /**
-     * The items reachable from [root] over [links] (pairs of linked items), [root] included.
+     * The items reachable from [root] over [links] (pairs of linked items), [root] included. In
+     * [mode] Think the walk goes through ideas instead, and everything else ends it (see [AppMode.through]).
      * [bookOfChapter] maps each chapter id to its book id. An end point as the root starts the
      * walk from the items linked to it, and also shows the end points linked to it directly.
      */
-    fun of(root: ItemRef, links: List<Pair<ItemRef, ItemRef>>, bookOfChapter: Map<Long, Long>): Set<ItemRef> {
+    fun of(
+        root: ItemRef,
+        links: List<Pair<ItemRef, ItemRef>>,
+        bookOfChapter: Map<Long, Long>,
+        mode: AppMode = AppMode.DO,
+    ): Set<ItemRef> {
         fun node(ref: ItemRef): ItemRef =
             if (ref.type == ItemType.CHAPTER) bookOfChapter[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
-        fun isEndPoint(ref: ItemRef) = ref.type in endPoints
+        fun isEndPoint(ref: ItemRef) = ref.type !in mode.through
 
         val neighbors = HashMap<ItemRef, MutableSet<ItemRef>>()
         links.forEach { (a, b) ->

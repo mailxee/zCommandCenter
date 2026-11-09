@@ -2,6 +2,7 @@ package com.example.xcommandcenter
 
 import com.example.xcommandcenter.data.repository.PersonRepository
 import com.example.xcommandcenter.data.repository.IdeaRepository
+import com.example.xcommandcenter.data.prefs.ModeRepository
 import com.example.xcommandcenter.data.repository.GlossaryRepository
 import android.content.Context
 import com.example.xcommandcenter.data.backup.BackupRepository
@@ -44,7 +45,8 @@ class AppContainer(context: Context) {
     val collapsedPlansRepository = CollapsedPlansRepository(context)
     val collapsedIdeasRepository = CollapsedPlansRepository(context, CollapsedPlansRepository.IDEAS_KEY)
     val routePrefsRepository = RoutePrefsRepository(context)
-    val linkRepository = LinkRepository(database.linkDao(), routePrefsRepository.route)
+    val modeRepository = ModeRepository(context)
+    val linkRepository = LinkRepository(database.linkDao(), routePrefsRepository.route, modeRepository.mode, modeRepository.tabModes)
     val tagRepository = TagRepository(database.tagDao())
     val reminderPrefsRepository = ReminderPrefsRepository(context)
     val reminderRepository: ReminderRepository = ReminderRepository(
@@ -72,6 +74,6 @@ class AppContainer(context: Context) {
         blockRepository, personRepository, ideaRepository, glossaryRepository, scheduleRepository, linkRepository, tagRepository, reminderRepository,
     )
     val backupRepository = BackupRepository(
-        context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository, scheduleChoiceRepository,
+        context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository, scheduleChoiceRepository, modeRepository,
     )
 }

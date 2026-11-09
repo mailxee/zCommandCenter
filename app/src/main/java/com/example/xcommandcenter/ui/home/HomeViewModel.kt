@@ -4,6 +4,8 @@ import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
 import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.domain.IdeaKindFilter
 import com.example.xcommandcenter.domain.IdeaOutline
@@ -148,6 +150,24 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val terms: StateFlow<Glossary.Terms> = container.glossaryRepository.terms.stateIn(Glossary.Terms())
 
     val tabOrder: StateFlow<List<ItemType>> = container.tabOrderRepository.order.stateIn(TabOrder.default)
+
+    /** Do or Think, kept across launches. */
+    val mode: StateFlow<AppMode> = container.modeRepository.mode.stateIn(AppMode.DO)
+
+    /** Which mode shows each tab. */
+    val tabModes: StateFlow<TabModes> = container.modeRepository.tabModes.stateIn(TabModes())
+
+    /** The tabs the current mode shows, in the user's order (never none: then every tab). */
+    val shownTabs: StateFlow<List<ItemType>> = combine(tabOrder, tabModes, mode) { order, modes, mode ->
+        modes.tabs(order, mode).ifEmpty { order }
+    }.stateIn(TabOrder.default)
+
+    /** Switching mode leaves link mode, as its network ran through the other mode's items. */
+    fun setMode(mode: AppMode) {
+        if (mode == this.mode.value) return
+        linksRepo.exitLinkMode()
+        viewModelScope.launch { container.modeRepository.setMode(mode) }
+    }
 
     val linksByOwner: StateFlow<Map<ItemRef, List<ItemIndexEntry>>> =
         container.linkRepository.observeLinksByOwner().stateIn(emptyMap())

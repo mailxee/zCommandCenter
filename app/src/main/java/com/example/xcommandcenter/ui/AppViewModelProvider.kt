@@ -29,7 +29,7 @@ object AppViewModelProvider {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
         initializer { with(container()) { HomeViewModel(this) } }
         initializer { with(container()) { GlossaryViewModel(glossaryRepository, linkRepository) } }
-        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository) } }
+        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository, modeRepository) } }
         initializer { with(container()) { MapViewModel(createSavedStateHandle(), linkRepository) } }
         initializer { with(container()) { TidyViewModel(createSavedStateHandle(), linkRepository) } }
         initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }

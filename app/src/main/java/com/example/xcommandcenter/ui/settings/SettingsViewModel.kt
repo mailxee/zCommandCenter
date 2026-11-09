@@ -9,6 +9,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.entity.TagUsage
+import com.example.xcommandcenter.data.prefs.ModeRepository
+import com.example.xcommandcenter.domain.TabMode
+import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
@@ -37,7 +40,16 @@ class SettingsViewModel(
     private val reminderPrefs: ReminderPrefsRepository,
     private val routePrefs: RoutePrefsRepository,
     private val links: LinkRepository,
+    private val modes: ModeRepository,
 ) : ViewModel() {
+
+    /** Which mode, Do or Think, shows each tab. */
+    val tabModes: StateFlow<TabModes> = modes.tabModes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabModes())
+
+    fun setTabMode(tab: ItemType, mode: TabMode) {
+        viewModelScope.launch { modes.setTabMode(tabModes.value, tab, mode) }
+    }
 
     /** Every link label, with how many links carry it. */
     val labels: StateFlow<List<LinkLabelEntity>> = links.labels

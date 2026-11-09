@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.home
 
+import com.example.xcommandcenter.domain.AppMode
 import com.example.xcommandcenter.ui.common.personCardText
 import com.example.xcommandcenter.ui.common.ideaCardText
 import com.example.xcommandcenter.domain.Glossary
@@ -601,6 +602,7 @@ fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
     val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
     val kinds by viewModel.ideaKinds.collectAsStateWithLifecycle()
+    val tabModes by viewModel.tabModes.collectAsStateWithLifecycle()
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val view = viewModel.priorityView(ItemType.IDEA)
     val movable = reorder && view.sort == PrioritySort.CUSTOM
@@ -633,10 +635,14 @@ fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
             ReorderableItem(drag.state, key = idea.id, enabled = enabled) {
                 Box(Modifier.padding(top = if (row.depth == 0) 6.dp else 0.dp)) {
                     val hidden = row.childCount.takeIf { row.collapsed && it > 0 }?.let { if (it == 1) "1 idea hidden" else "$it ideas hidden" }
+                    // How many goals, plans, tasks and habits (Do mode's items) this idea links to.
+                    val inDo = links[ref].orEmpty().count { tabModes.isOtherMode(it.type, AppMode.THINK) }
                     ItemCard(
                         ItemType.IDEA,
                         // The kind's icon leads the row, where the outline's lines meet it, rather than in the title.
-                        text = ideaCardText(idea, hidden = hidden).copy(kind = null),
+                        text = ideaCardText(idea, hidden = hidden).let { t ->
+                            t.copy(kind = null, meta = t.meta + listOfNotNull(inDo.takeIf { it > 0 }?.let { "⇄ $it in Do" }))
+                        },
                         leading = { Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { KindIcon(idea.kind, size = 22.dp) } },
                         links = links[ref].orEmpty(),
                         tags = tagFilter.tagsOf(ref),
