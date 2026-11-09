@@ -46,7 +46,10 @@ class AppContainer(context: Context) {
     val collapsedIdeasRepository = CollapsedPlansRepository(context, CollapsedPlansRepository.IDEAS_KEY)
     val routePrefsRepository = RoutePrefsRepository(context)
     val modeRepository = ModeRepository(context)
-    val linkRepository = LinkRepository(database.linkDao(), routePrefsRepository.route, modeRepository.mode, modeRepository.tabModes)
+    val linkRepository = LinkRepository(
+        database.linkDao(), routePrefsRepository.route, modeRepository.mode, modeRepository.tabModes,
+        routePrefsRepository.thinkRoute, routePrefsRepository.checkWhy,
+    )
     val tagRepository = TagRepository(database.tagDao())
     val reminderPrefsRepository = ReminderPrefsRepository(context)
     val reminderRepository: ReminderRepository = ReminderRepository(

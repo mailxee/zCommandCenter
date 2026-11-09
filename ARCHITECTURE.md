@@ -1093,7 +1093,37 @@ habits; **Think** ponders visions, beliefs and ideas with their sources.
 - **⇄ marks the other mode:** on a detail page, a group of linked items that all belong only to
   the other mode says so ("Leads to ⇄ Do", "Ideas ⇄ Think"); on the Ideas tab, each idea counts
   its links into Do ("⇄ 2 in Do").
-- The map and Tidy links follow the mode in §2.62.
+- The map and Tidy links follow the mode (§2.62).
+
+### 2.62 Mind map, Think route and Think checks
+
+The map and Tidy links follow the mode (§2.61).
+
+- **Think route** (`domain/ThinkRoute`, Settings › Links): a layer, 1 to 4, for each idea kind
+  (visions 1, beliefs and principles 2, ideas and questions 3). On Think mode's "By route" map,
+  sources (notes, quotes, books, people) come after the ideas and Do mode's items last.
+- **Map in Think mode:** a network runs through ideas, along links and from each idea to the one it
+  is under (`LinkGraph.nodes(root, mode)`, `LinkGraph.under`); "Everything" is every idea and what
+  they link to. Only links touching an idea are drawn. **Under** lines (the tree) are thick and grey;
+  links are thin, with their labels; Do mode's items are green pills marked ⇄, ideas are in their
+  kind's colour and icon. The same marking shows Think's items on Do mode's map.
+- **Mind map** (`GraphLayout.radial`), Think mode's default layout beside By route and Free: the item
+  in the middle (or, for Everything, the top-level ideas on the first ring), then rings by how many
+  steps away each item is, following the tree before other links. Each branch gets a share of the
+  circle by how many items end it, so branches don't overlap, and a ring moves out when it has more
+  items than fit round it. Rings are kept round on screen (`MIND_MAP_ASPECT`).
+- **Tidy links in Think mode** (`domain/ThinkAnalysis`): loops between ideas are normal, so none are
+  reported. Instead: **Author is in People** (a quote's author matches a person it isn't linked to;
+  "Link" links the person as its source), **Unplaced quote** (no idea linked), **Ungrounded idea**
+  (a belief, principle or idea with no quote, book, person or note linked), **Not acted on** (a belief
+  or principle with nothing in Do mode linked, not even through the ideas under it) and
+  **Contradiction** (each "contradicts" link, as a note; Hide keeps it out of the list). Cards
+  without a fix have Open. A Do/Think switch at the top shows each mode's findings and counts; it
+  starts on the app's mode.
+- **Goals without a why** (Do mode): a goal no idea links to, with Open and Keep as is. On by default;
+  Settings › Links has a switch for it.
+- The Tidy links buttons count findings that ask for something (`Finding.suggests`), so notes such
+  as a contradiction or a shared end point don't add to them.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1278,6 +1308,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/LinkLabelDialog.kt` | Picking a link's label and direction (§2.59). |
 | `data/entity/GlossaryEntity.kt`, `data/dao/GlossaryDao.kt`, `data/repository/GlossaryRepository.kt` | Rewritten definitions (§2.60). |
 | `ui/settings/GlossaryScreen.kt` | Settings › Glossary and its view model (§2.60). |
+| `domain/ThinkRoute.kt`, `domain/ThinkAnalysis.kt` | Think mode's route and checks; goals without a why (§2.62). |
 | `domain/AppMode.kt`, `data/prefs/ModeRepository.kt` | Do and Think: the mode, each tab's mode, what each mode's networks run through (§2.61). |
 
 ### Resources
@@ -1303,6 +1334,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
 | `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
+| `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |
 | `domain/IdeaOutlineTest.kt` | The Ideas outline (depths, collapsing, filtering keeps ancestors) and the kind chips. |

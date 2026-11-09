@@ -7,6 +7,9 @@ import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.ThinkAnalysis
+import com.example.xcommandcenter.domain.ThinkRoute
 import com.example.xcommandcenter.domain.TabModes
 import kotlinx.coroutines.flow.map
 import com.example.xcommandcenter.domain.ItemRef
@@ -37,14 +40,37 @@ data class LinkGraph(
     val links: List<LinkAnalysis.Link>,
     val bookOfChapter: Map<Long, Long>,
     val route: LinkRoute,
+    /** Do mode's findings (goals without a why included, when that check is on). */
     val analysis: LinkAnalysis.Result,
+    /** Every idea's parent and kind. */
+    val ideas: List<ThinkAnalysis.Idea> = emptyList(),
+    val thinkRoute: ThinkRoute = ThinkRoute(),
+    /** Think mode's findings (see [ThinkAnalysis]). */
+    val thinkAnalysis: LinkAnalysis.Result = LinkAnalysis.Result(emptyList(), emptyList()),
 ) {
-    /** The items in [root]'s network as the map shows them (chapters within their books), or every linked item. */
-    fun nodes(root: ItemRef?): Set<ItemRef> {
-        val all = if (root == null) {
-            links.flatMap { listOf(it.a, it.b) }.toSet()
-        } else {
-            LinkNetwork.of(root, links.map { it.a to it.b }, bookOfChapter)
+    /** Each idea under its parent, as pairs (child, parent): the mind map's tree. */
+    val under: List<Pair<ItemRef, ItemRef>> =
+        ideas.mapNotNull { idea -> idea.parentId?.let { ItemRef(ItemType.IDEA, idea.id) to ItemRef(ItemType.IDEA, it) } }
+
+    val kindOf: Map<Long, IdeaKind> = ideas.associate { it.id to it.kind }
+
+    /** Findings for [mode]. */
+    fun analysis(mode: AppMode): LinkAnalysis.Result = if (mode == AppMode.THINK) thinkAnalysis else analysis
+
+    /**
+     * The items in [root]'s network as the map shows them (chapters within their books), or every
+     * linked item. In Think mode a network runs through ideas, along links and from each idea to the
+     * one it is under; with no root, it is every idea and what they link to.
+     */
+    fun nodes(root: ItemRef?, mode: AppMode = AppMode.DO): Set<ItemRef> {
+        val all = when {
+            mode == AppMode.THINK && root == null -> {
+                val ideaRefs = ideas.map { ItemRef(ItemType.IDEA, it.id) }.toSet()
+                ideaRefs + links.filter { it.a in ideaRefs || it.b in ideaRefs }.flatMap { listOf(it.a, it.b) }
+            }
+            mode == AppMode.THINK -> LinkNetwork.of(root!!, links.map { it.a to it.b } + under, bookOfChapter, mode)
+            root == null -> links.flatMap { listOf(it.a, it.b) }.toSet()
+            else -> LinkNetwork.of(root, links.map { it.a to it.b }, bookOfChapter)
         }
         return all.map { if (it.type == ItemType.CHAPTER) bookOfChapter[it.id]?.let { b -> ItemRef(ItemType.BOOK, b) } ?: it else it }
             .filter { it in entries }.toSet()
@@ -63,6 +89,8 @@ class LinkRepository(
     val mode: Flow<AppMode> = flowOf(AppMode.DO),
     /** Which mode shows each tab, to mark items from the other mode. */
     val tabModes: Flow<TabModes> = flowOf(TabModes()),
+    private val thinkRoute: Flow<ThinkRoute> = flowOf(ThinkRoute()),
+    private val checkWhy: Flow<Boolean> = flowOf(true),
 ) {
 
     /**
@@ -80,10 +108,16 @@ class LinkRepository(
         if (root == null) {
             flowOf(null)
         } else {
-            combine(dao.observeAll(), dao.observeChapterBooks(), mode) { links, chapterBooks, mode ->
+            combine(dao.observeAll(), dao.observeChapterBooks(), mode, dao.observeIdeas()) { links, chapterBooks, mode, ideas ->
+                // In Think mode an idea's network also runs to the idea it is under and the ones under it.
+                val under = if (mode == AppMode.THINK) {
+                    ideas.mapNotNull { i -> i.parentId?.let { ItemRef(ItemType.IDEA, i.id) to ItemRef(ItemType.IDEA, it) } }
+                } else {
+                    emptyList()
+                }
                 LinkNetwork.of(
                     root.ref,
-                    links.map { ItemRef(it.aType, it.aId) to ItemRef(it.bType, it.bId) },
+                    links.map { ItemRef(it.aType, it.aId) to ItemRef(it.bType, it.bId) } + under,
                     chapterBooks.associate { it.chapterId to it.id },
                     mode,
                 )
@@ -173,8 +207,12 @@ class LinkRepository(
     /** See [LinkGraph]; worked out off the main thread. */
     fun observeGraph(): Flow<LinkGraph> =
         combine(
-            combine(dao.observeIndex(), dao.observeAll(), ::Pair), dao.observeChapterBooks(), route, dao.observeKept(), labels,
-        ) { (index, stored), chapterBooks, route, kept, labels ->
+            combine(dao.observeIndex(), dao.observeAll(), dao.observeIdeas(), ::Triple),
+            dao.observeChapterBooks(),
+            combine(route, thinkRoute, checkWhy, ::Triple),
+            dao.observeKept(),
+            labels,
+        ) { (index, stored, ideas), chapterBooks, (route, thinkRoute, checkWhy), kept, labels ->
             val bookOf = chapterBooks.associate { it.chapterId to it.id }
             fun node(ref: ItemRef) = if (ref.type == ItemType.CHAPTER) bookOf[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
             val labelById = labels.associateBy { it.id }
@@ -185,14 +223,30 @@ class LinkRepository(
                     labelled = label != null, contradiction = label?.key == LinkLabels.CONTRADICTS,
                 )
             }
+            val folded = links.map { it.copy(a = node(it.a), b = node(it.b)) }.filter { it.a != it.b }
+            val doAnalysis = LinkAnalysis.analyze(links, bookOf, route, kept.toSet()).let { result ->
+                if (!checkWhy) return@let result
+                val goals = index.filter { it.type == ItemType.GOAL }.map { it.id }.toSet()
+                val (open, keptWhy) = ThinkAnalysis.goalsWithoutWhy(folded, goals).partition { it.key !in kept }
+                LinkAnalysis.Result(result.findings + open, result.kept + keptWhy)
+            }
             LinkGraph(
+                ideas = ideas,
+                thinkRoute = thinkRoute,
+                thinkAnalysis = ThinkAnalysis.analyze(
+                    folded, ideas,
+                    quotes = index.filter { it.type == ItemType.QUOTE }.map { it.id }.toSet(),
+                    authors = index.filter { it.type == ItemType.QUOTE && !it.subtitle.isNullOrBlank() }.associate { it.id to it.subtitle!! },
+                    people = index.filter { it.type == ItemType.PERSON }.associate { it.id to it.title },
+                    kept = kept.toSet(),
+                ),
                 labels = labelById,
                 entries = index.associateBy { it.ref },
                 stored = stored.associateBy { it.id },
-                links = links.map { it.copy(a = node(it.a), b = node(it.b)) }.filter { it.a != it.b },
+                links = folded,
                 bookOfChapter = bookOf,
                 route = route,
-                analysis = LinkAnalysis.analyze(links, bookOf, route, kept.toSet()),
+                analysis = doAnalysis,
             )
         }.flowOn(Dispatchers.Default)
 

@@ -77,7 +77,7 @@ fun AppNavHost(
             Routes.TIDY,
             arguments = listOf(navArgument(Routes.ARG_ROOT) { type = NavType.StringType; defaultValue = "" }),
         ) {
-            TidyScreen(onBack = back, onShowOnMap = { root, focus -> navController.navigate(Routes.map(root, focus)) })
+            TidyScreen(onBack = back, onShowOnMap = { root, focus -> navController.navigate(Routes.map(root, focus)) }, onOpen = open)
         }
         composable(
             Routes.ITEM,

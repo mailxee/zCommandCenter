@@ -11,6 +11,10 @@ import com.example.xcommandcenter.domain.GraphLayout
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.LinkAnalysis
 import com.example.xcommandcenter.domain.LinkRoute
+import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.ui.navigation.Routes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,10 +25,14 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** How a line on the map is drawn. */
-enum class EdgeStyle { ROUTE, OFF_ROUTE, SUGGEST_REMOVE, SHARED, CONTRADICTS }
+/** A column's width over a row's height on the map, so the mind map's rings come out round. */
+const val MIND_MAP_ASPECT = 150f / 96f
 
-data class MapNode(val entry: ItemIndexEntry, val x: Float, val y: Float) {
+/** How a line on the map is drawn. */
+enum class EdgeStyle { ROUTE, OFF_ROUTE, SUGGEST_REMOVE, SHARED, CONTRADICTS, UNDER }
+
+/** An item on the map; [otherMode] when it belongs only to the mode not shown (an end point there), [kind] for an idea. */
+data class MapNode(val entry: ItemIndexEntry, val x: Float, val y: Float, val otherMode: Boolean = false, val kind: IdeaKind? = null) {
     val ref: ItemRef get() = entry.ref
 }
 
@@ -43,6 +51,8 @@ data class MapEdge(
 
 /** What the map draws: items in grid units (see [GraphLayout]) and the lines between them. */
 data class MapState(
+    val mode: AppMode,
+    val layout: MapViewModel.Layout,
     val root: ItemIndexEntry?,
     val nodes: List<MapNode>,
     val edges: List<MapEdge>,
@@ -54,7 +64,7 @@ data class MapState(
     val byRef: Map<ItemRef, MapNode> = nodes.associateBy { it.ref }
 
     /** How many findings suggest a change, for the Tidy links button. */
-    val suggestions: Int get() = findings.count { it.actionable }
+    val suggestions: Int get() = findings.count { it.suggests }
 
     fun title(ref: ItemRef): String = byRef[ref]?.entry?.title ?: "an item"
 }
@@ -73,7 +83,17 @@ data class MapUndo(val message: String, val undo: suspend () -> Unit)
  * suggested route) or freely. Selecting an item or a line shows what can be done with it.
  */
 class MapViewModel(savedState: SavedStateHandle, private val links: LinkRepository) : ViewModel() {
-    enum class Layout { BY_ROUTE, FREE }
+    /** [MIND_MAP] is Think mode's own: rings round the item in the middle. */
+    enum class Layout(val label: String) {
+        MIND_MAP("Mind map"),
+        BY_ROUTE("By route"),
+        FREE("Free"),
+        ;
+
+        companion object {
+            fun of(mode: AppMode): List<Layout> = if (mode == AppMode.THINK) entries else listOf(BY_ROUTE, FREE)
+        }
+    }
 
     private val startRoot = Routes.parseRef(savedState.get<String>(Routes.ARG_ROOT))
     private val focus = savedState.get<String>(Routes.ARG_FOCUS)?.takeIf { it.isNotBlank() }
@@ -85,7 +105,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     var lastRoot = MutableStateFlow(startRoot)
         private set
 
-    val layout = MutableStateFlow(Layout.BY_ROUTE)
+    /** The layout picked; null shows the mode's own (mind map in Think, by route in Do). */
+    private val pickedLayout = MutableStateFlow<Layout?>(null)
     val selection = MutableStateFlow<MapSelection?>(null)
 
     /** While set, the next item tapped is linked to this one. */
@@ -95,8 +116,11 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
 
     private var focused = false
 
-    val state: StateFlow<MapState?> = combine(links.observeGraph(), root, layout) { graph, root, layout ->
-        build(graph, root, layout)
+    val state: StateFlow<MapState?> = combine(
+        links.observeGraph(), root, pickedLayout, links.mode, links.tabModes,
+    ) { graph, root, picked, mode, tabModes ->
+        val layout = picked?.takeIf { it in Layout.of(mode) } ?: Layout.of(mode).first()
+        build(graph, root, layout, mode, tabModes)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
@@ -113,41 +137,72 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         }
     }
 
-    private fun build(graph: LinkGraph, root: ItemRef?, layout: Layout): MapState {
-        val shown = graph.nodes(root)
-        val nodes = shown.mapNotNull { graph.entries[it] }.sortedWith(compareBy({ graph.route.layer(it.type) }, { it.title.lowercase() }))
-        val inside = graph.links.filter { it.a in shown && it.b in shown }
+    private fun build(graph: LinkGraph, root: ItemRef?, layout: Layout, mode: AppMode, tabModes: TabModes): MapState {
+        val think = mode == AppMode.THINK
+        val shown = graph.nodes(root, mode)
+        // By route: Do's layers, or in Think the kinds' layers, then sources, then Do's items.
+        fun layer(ref: ItemRef): Int = if (!think) graph.route.layer(ref.type) else when {
+            ref.type == ItemType.IDEA -> graph.thinkRoute.layer(graph.kindOf[ref.id] ?: IdeaKind.IDEA)
+            tabModes.isOtherMode(ref.type, mode) -> graph.thinkRoute.depth + 1
+            else -> graph.thinkRoute.depth
+        }
+        val nodes = shown.mapNotNull { graph.entries[it] }.sortedWith(compareBy({ layer(it.ref) }, { it.title.lowercase() }))
+        // In Think mode only links that touch an idea are drawn: two end points (a goal and its habit)
+        // aren't part of the thinking, and following them would put the habit a ring out from the goal.
+        val inside = graph.links.filter { it.a in shown && it.b in shown && (!think || it.a.type == ItemType.IDEA || it.b.type == ItemType.IDEA) }
         // One line per pair of items (a book and its chapter may both be linked to a task).
-        val findings = (graph.analysis.findings).filter { f -> f.items.any { it in shown } }
+        val findings = graph.analysis(mode).findings.filter { f -> f.items.any { it in shown } }
         val byLink = findings.filter { it.link != null }.associateBy { it.link!!.id }
         val shared = findings.filter { it.kind == LinkAnalysis.Kind.SHARED_END_POINT }
             .flatMap { f -> f.sharedBy.map { setOf(it, f.endPoint!!) } }.toSet()
-        val edges = inside.groupBy { setOf(it.a, it.b) }.map { (pair, group) ->
-            val link = group.firstOrNull { it.id in byLink } ?: group.first()
-            val finding = byLink[link.id]
-            val stored = graph.stored[link.id]
-            val label = stored?.labelId?.let(graph.labels::get)
-            val style = when {
-                link.contradiction -> EdgeStyle.CONTRADICTS
-                finding?.remove?.id == link.id -> EdgeStyle.SUGGEST_REMOVE
-                graph.route.kind(link.a.type, link.b.type) != LinkRoute.Kind.ON_ROUTE -> EdgeStyle.OFF_ROUTE
-                pair in shared -> EdgeStyle.SHARED
-                else -> EdgeStyle.ROUTE
+        // In Think mode each idea also hangs from the one it is under: the mind map's tree.
+        val under = if (think) graph.under.filter { (child, parent) -> child in shown && parent in shown } else emptyList()
+        val underEdges = under.map { (child, parent) -> MapEdge(LinkAnalysis.Link(-child.id, child, parent), EdgeStyle.UNDER, null) }
+        val linkEdges = inside.groupBy { setOf(it.a, it.b) }
+            .map { (pair, group) ->
+                val link = group.firstOrNull { it.id in byLink } ?: group.first()
+                val finding = byLink[link.id]
+                val stored = graph.stored[link.id]
+                val label = stored?.labelId?.let(graph.labels::get)
+                val style = when {
+                    link.contradiction -> EdgeStyle.CONTRADICTS
+                    think -> EdgeStyle.ROUTE
+                    finding?.remove?.id == link.id -> EdgeStyle.SUGGEST_REMOVE
+                    graph.route.kind(link.a.type, link.b.type) != LinkRoute.Kind.ON_ROUTE -> EdgeStyle.OFF_ROUTE
+                    pair in shared -> EdgeStyle.SHARED
+                    else -> EdgeStyle.ROUTE
+                }
+                MapEdge(
+                    link, style, finding,
+                    label = label?.forward,
+                    subject = if (stored?.labelFromA != false) link.a else link.b,
+                    directed = label != null && !label.symmetric,
+                )
             }
-            MapEdge(
-                link, style, finding,
-                label = label?.forward,
-                subject = if (stored?.labelFromA != false) link.a else link.b,
-                directed = label != null && !label.symmetric,
-            )
-        }
+        val edges = underEdges + linkEdges
         val refs = nodes.map { it.ref }
+        // The tree's own lines first, so they decide the mind map's rings.
         val pairs = edges.map { it.link.a to it.link.b }
-        val layered = GraphLayout.layered(refs, pairs, maxPerRow = if (root == null) 8 else 6) { graph.route.layer(it.type) }
-        val places = if (layout == Layout.FREE) GraphLayout.free(refs, pairs, layered) else layered
+        val layered = GraphLayout.layered(refs, pairs, maxPerRow = if (root == null) 8 else 6, layerOf = ::layer)
+        val places = when (layout) {
+            Layout.FREE -> GraphLayout.free(refs, pairs, layered)
+            Layout.BY_ROUTE -> layered
+            Layout.MIND_MAP -> {
+                val parents = under.toMap()
+                // With no item in the middle, the top-level ideas share the first ring.
+                val roots = if (root != null) listOf(root) else refs.filter { it.type == ItemType.IDEA && it !in parents }
+                GraphLayout.radial(roots, refs, pairs, aspect = MIND_MAP_ASPECT)
+            }
+        }
         return MapState(
+            mode = mode,
+            layout = layout,
             root = root?.let { graph.entries[it] },
-            nodes = nodes.map { n -> places.getValue(n.ref).let { MapNode(n, it.x, it.y) } },
+            nodes = nodes.map { n ->
+                places.getValue(n.ref).let {
+                    MapNode(n, it.x, it.y, otherMode = tabModes.isOtherMode(n.type, mode), kind = if (n.type == ItemType.IDEA) graph.kindOf[n.id] else null)
+                }
+            },
             edges = edges,
             route = graph.route,
             findings = findings,
@@ -156,7 +211,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     }
 
     fun setLayout(value: Layout) {
-        layout.value = value
+        pickedLayout.value = value
     }
 
     fun showEverything() {

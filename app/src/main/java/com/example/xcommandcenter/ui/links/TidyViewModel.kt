@@ -13,11 +13,16 @@ import com.example.xcommandcenter.ui.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.LinkLabels
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class TidyState(
+    val mode: AppMode,
+    /** How many findings ask for something in each mode, for the switch. */
+    val counts: Map<AppMode, Int>,
     val root: ItemIndexEntry?,
     val findings: List<LinkAnalysis.Finding>,
     val kept: List<LinkAnalysis.Finding>,
@@ -29,18 +34,32 @@ data class TidyState(
     fun title(ref: ItemRef): String = entries[ref]?.title ?: "an item"
 }
 
-/** Tidy links (§2.57): the findings of [LinkAnalysis] within one network, or all of them, with their fixes. */
+/**
+ * Tidy links (§2.57, §2.62): the findings within one network, or all of them, with their fixes;
+ * Do mode's ([LinkAnalysis]) or Think mode's (`ThinkAnalysis`), starting with the app's mode.
+ */
 class TidyViewModel(savedState: SavedStateHandle, private val links: LinkRepository) : ViewModel() {
     private val root = Routes.parseRef(savedState.get<String>(Routes.ARG_ROOT))
 
     val undo = MutableStateFlow<MapUndo?>(null)
 
-    val state: StateFlow<TidyState?> = links.observeGraph().map { graph ->
-        val shown = if (root == null) null else graph.nodes(root)
-        fun inScope(f: LinkAnalysis.Finding) = shown == null || f.items.any { it in shown }
-        val findings = graph.analysis.findings.filter(::inScope)
-        val kept = graph.analysis.kept.filter(::inScope)
+    /** The mode picked on this screen; null follows the app's. */
+    private val picked = MutableStateFlow<AppMode?>(null)
+
+    private var sourceLabel: Long? = null
+
+    val state: StateFlow<TidyState?> = combine(links.observeGraph(), picked, links.mode) { graph, picked, appMode ->
+        val mode = picked ?: appMode
+        sourceLabel = graph.labels.values.firstOrNull { it.key == LinkLabels.SOURCE }?.id
+        fun scoped(m: AppMode): Pair<List<LinkAnalysis.Finding>, List<LinkAnalysis.Finding>> {
+            val shown = if (root == null) null else graph.nodes(root, m)
+            fun inScope(f: LinkAnalysis.Finding) = shown == null || f.items.any { it in shown }
+            return graph.analysis(m).findings.filter(::inScope) to graph.analysis(m).kept.filter(::inScope)
+        }
+        val (findings, kept) = scoped(mode)
         TidyState(
+            mode = mode,
+            counts = AppMode.entries.associateWith { m -> scoped(m).first.count { it.suggests } },
             root = root?.let { graph.entries[it] },
             findings = findings,
             kept = kept,
@@ -51,8 +70,23 @@ class TidyViewModel(savedState: SavedStateHandle, private val links: LinkReposit
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** The finding's main fix: remove its link, or for a skipped layer link through the suggested item first. */
+    fun setMode(mode: AppMode) {
+        picked.value = mode
+    }
+
+    /**
+     * The finding's main fix: remove its link, or for a skipped layer link through the suggested
+     * item first; for an author in People, link the person as the quote's source.
+     */
     fun fix(finding: LinkAnalysis.Finding) {
+        if (finding.kind == LinkAnalysis.Kind.AUTHOR_IS_PERSON) {
+            val (person, quote) = finding.add ?: return
+            viewModelScope.launch {
+                links.link(person, quote, sourceLabel)
+                undo.value = MapUndo("Linked as its source") { links.unlink(person, quote) }
+            }
+            return
+        }
         val stored = finding.remove?.let { state.value?.stored?.get(it.id) }
         val add = finding.add
         viewModelScope.launch {

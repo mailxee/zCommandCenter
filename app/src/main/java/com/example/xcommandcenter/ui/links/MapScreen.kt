@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.links
 
+import com.example.xcommandcenter.ui.common.kindIcon
+import com.example.xcommandcenter.ui.common.kindColor
+import com.example.xcommandcenter.domain.AppMode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -86,6 +89,9 @@ internal val RemoveColor = Color(0xFFD32F2F)
 /** A contradiction: purple and dotted, so it isn't taken for a suggested removal. */
 internal val ContradictColor = Color(0xFF8E24AA)
 
+/** Items of the other mode, which end this mode's networks: green, marked ⇄. */
+internal val OtherModeColor = Color(0xFF2E7D32)
+
 private val ColumnWidth = 150.dp
 private val RowHeight = 96.dp
 private val NodeWidth = 132.dp
@@ -107,7 +113,6 @@ fun MapScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val root by viewModel.root.collectAsStateWithLifecycle()
     val lastRoot by viewModel.lastRoot.collectAsStateWithLifecycle()
-    val layout by viewModel.layout.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val linkingFrom by viewModel.linkingFrom.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
@@ -128,7 +133,8 @@ fun MapScreen(
                         Text("Map")
                         if (s != null) {
                             Text(
-                                (s.root?.let { "Network of ${it.title}" } ?: "Every network") + " · ${s.nodes.size} items",
+                                (if (s.mode == AppMode.THINK) "Think · " else "") +
+                                    (s.root?.let { "Network of ${it.title}" } ?: "Every network") + " · ${s.nodes.size} items",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -149,13 +155,14 @@ fun MapScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val layouts = MapViewModel.Layout.of(s?.mode ?: AppMode.DO)
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    MapViewModel.Layout.entries.forEachIndexed { i, option ->
+                    layouts.forEachIndexed { i, option ->
                         SegmentedButton(
-                            selected = layout == option,
+                            selected = s?.layout == option,
                             onClick = { viewModel.setLayout(option) },
-                            shape = SegmentedButtonDefaults.itemShape(i, MapViewModel.Layout.entries.size),
-                        ) { Text(if (option == MapViewModel.Layout.BY_ROUTE) "By route" else "Free layout", maxLines = 1) }
+                            shape = SegmentedButtonDefaults.itemShape(i, layouts.size),
+                        ) { Text(if (option == MapViewModel.Layout.FREE && s?.mode != AppMode.THINK) "Free layout" else option.label, maxLines = 1) }
                     }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
@@ -168,9 +175,16 @@ fun MapScreen(
                         )
                     }
                     FilterChip(selected = root == null, onClick = viewModel::showEverything, label = { Text("Everything") })
-                    Legend(MaterialTheme.colorScheme.outline, false, "On route")
-                    Legend(OffRouteColor, false, "Off route")
-                    Legend(RemoveColor, true, "Suggest removing")
+                    if (s?.mode == AppMode.THINK) {
+                        Legend(MaterialTheme.colorScheme.outline, false, "Under", thick = true)
+                        Legend(MaterialTheme.colorScheme.outline, false, "Link")
+                        if (s.nodes.any { it.otherMode }) Legend(OtherModeColor, false, "⇄ Do")
+                    } else {
+                        Legend(MaterialTheme.colorScheme.outline, false, "On route")
+                        Legend(OffRouteColor, false, "Off route")
+                        Legend(RemoveColor, true, "Suggest removing")
+                        if (s?.nodes?.any { it.otherMode } == true) Legend(OtherModeColor, false, "⇄ Think")
+                    }
                     if (s?.edges?.any { it.style == EdgeStyle.CONTRADICTS } == true) Legend(ContradictColor, true, "Contradicts")
                 }
             }
@@ -183,7 +197,7 @@ fun MapScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                     )
-                    else -> MapCanvas(s, layout, selection, linkingFrom, viewModel)
+                    else -> MapCanvas(s, s.layout, selection, linkingFrom, viewModel)
                 }
                 Column(Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
                     val from = linkingFrom
@@ -203,11 +217,11 @@ fun MapScreen(
 }
 
 @Composable
-private fun Legend(color: Color, dashed: Boolean, label: String) {
+private fun Legend(color: Color, dashed: Boolean, label: String, thick: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Canvas(Modifier.width(20.dp).height(10.dp)) {
             drawLine(
-                color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.5.dp.toPx(),
+                color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), (if (thick) 4.dp else 2.5.dp).toPx(),
                 pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx())) else null,
             )
         }
@@ -313,7 +327,7 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                     val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
                     val selected = selection == MapSelection.Edge(edge.link.id)
                     val color = when (edge.style) {
-                        EdgeStyle.ROUTE, EdgeStyle.SHARED -> outline
+                        EdgeStyle.ROUTE, EdgeStyle.SHARED, EdgeStyle.UNDER -> outline
                         EdgeStyle.OFF_ROUTE -> OffRouteColor
                         EdgeStyle.SUGGEST_REMOVE -> RemoveColor
                         EdgeStyle.CONTRADICTS -> ContradictColor
@@ -321,6 +335,7 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                     val width = when (edge.style) {
                         EdgeStyle.ROUTE, EdgeStyle.SHARED -> 1.5.dp.toPx()
                         EdgeStyle.CONTRADICTS -> 2.dp.toPx()
+                        EdgeStyle.UNDER -> 4.dp.toPx()
                         else -> 2.5.dp.toPx()
                     }
                     val dash = when (edge.style) {
@@ -432,11 +447,12 @@ private fun segmentDistance(p: Offset, a: Offset, b: Offset): Float {
 
 @Composable
 private fun NodePill(node: MapNode, selected: Boolean, root: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val accent = tabAccent(node.entry.type)
+    // An idea in its kind's colour; an item of the other mode in green with ⇄, as an end point.
+    val accent = node.kind?.let { kindColor(it) } ?: if (node.otherMode) OtherModeColor else tabAccent(node.entry.type)
     val colors = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(NodeHeight / 2),
-        color = if (selected) accent.copy(alpha = 0.22f) else colors.surface,
+        color = if (selected) accent.copy(alpha = 0.22f) else if (node.otherMode) OtherModeColor.copy(alpha = 0.08f) else colors.surface,
         border = BorderStroke(if (selected || root) 2.dp else 1.dp, accent),
         modifier = modifier
             .width(NodeWidth)
@@ -445,7 +461,11 @@ private fun NodePill(node: MapNode, selected: Boolean, root: Boolean, modifier: 
             .clickable(onClick = onClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 10.dp)) {
-            Icon(painterResource(tabIcon(node.entry.type)), contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
+            if (node.otherMode) {
+                Icon(painterResource(R.drawable.ic_swap), contentDescription = null, tint = OtherModeColor, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.width(2.dp))
+            }
+            Icon(painterResource(node.kind?.let { kindIcon(it) } ?: tabIcon(node.entry.type)), contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(5.dp))
             Text(node.entry.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -489,6 +509,18 @@ private fun NodePanel(node: MapNode, state: MapState, viewModel: MapViewModel, o
 
 @Composable
 private fun EdgePanel(edge: MapEdge, state: MapState, viewModel: MapViewModel) {
+    if (edge.style == EdgeStyle.UNDER) {
+        Panel {
+            PanelHeader("Under", "${state.title(edge.link.a)} is under ${state.title(edge.link.b)}") { viewModel.select(null) }
+            Text(
+                "Change it with Under on the idea's page.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 10.dp, bottom = 8.dp),
+            )
+        }
+        return
+    }
     val finding = edge.finding
     val text = finding?.let { findingText(it, state.route, state::title) }
     Panel {

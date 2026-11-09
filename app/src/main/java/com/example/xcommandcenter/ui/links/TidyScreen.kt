@@ -1,5 +1,10 @@
 package com.example.xcommandcenter.ui.links
 
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.foundation.layout.FlowRow
+import com.example.xcommandcenter.domain.AppMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +62,7 @@ import com.example.xcommandcenter.ui.AppViewModelProvider
 fun TidyScreen(
     onBack: () -> Unit,
     onShowOnMap: (root: ItemRef?, focus: String) -> Unit,
+    onOpen: (ItemRef) -> Unit = {},
     viewModel: TidyViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -79,10 +85,14 @@ fun TidyScreen(
                     Column {
                         Text("Tidy links")
                         if (s != null) {
-                            val routes = when (s.extraRoutes) {
-                                0 -> "no extra routes"
-                                1 -> "1 extra route"
-                                else -> "${s.extraRoutes} extra routes"
+                            val routes = if (s.mode == AppMode.THINK) {
+                                if (s.findings.isEmpty()) "nothing to look at" else "${s.findings.size} to look at"
+                            } else {
+                                when (s.extraRoutes) {
+                                    0 -> "no extra routes"
+                                    1 -> "1 extra route"
+                                    else -> "${s.extraRoutes} extra routes"
+                                }
                             }
                             Text(
                                 (s.root?.title ?: "All networks") + " · $routes",
@@ -106,10 +116,22 @@ fun TidyScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    AppMode.entries.forEachIndexed { i, m ->
+                        SegmentedButton(
+                            selected = s.mode == m,
+                            onClick = { viewModel.setMode(m) },
+                            shape = SegmentedButtonDefaults.itemShape(i, AppMode.entries.size),
+                        ) { Text("${m.label} · ${s.counts[m] ?: 0}", maxLines = 1) }
+                    }
+                }
+            }
             if (s.findings.isEmpty()) {
                 item {
                     Text(
-                        "Nothing to tidy: every link follows a single route.",
+                        if (s.mode == AppMode.THINK) "Nothing to look at: quotes are placed, ideas grounded and beliefs acted on."
+                        else "Nothing to tidy: every link follows a single route.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp),
@@ -122,6 +144,7 @@ fun TidyScreen(
                     onFix = { viewModel.fix(finding) },
                     onKeep = { viewModel.keep(finding) },
                     onShow = { onShowOnMap(s.root?.ref ?: finding.items.first(), finding.key) },
+                    onOpen = finding.endPoint?.let { ref -> { onOpen(ref) } },
                 )
             }
             if (s.kept.isNotEmpty()) {
@@ -148,8 +171,13 @@ fun TidyScreen(
             }
             item {
                 Text(
-                    "Suggestions follow the suggested route in Settings. Every change can be undone from the message at the bottom; " +
-                        "kept findings stay hidden until the links involved change.",
+                    if (s.mode == AppMode.THINK) {
+                        "In Think mode, loops between ideas are normal and aren't reported. Labelled links are never suggested for removal " +
+                            "before plain ones, and a contradiction never is. Kept findings stay hidden until you show them again."
+                    } else {
+                        "Suggestions follow the suggested route in Settings. Every change can be undone from the message at the bottom; " +
+                            "kept findings stay hidden until the links involved change."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -164,10 +192,22 @@ fun findingColor(kind: LinkAnalysis.Kind): Color = when (kind) {
     LinkAnalysis.Kind.SHORTCUT, LinkAnalysis.Kind.EXTRA_ROUTE -> RemoveColor
     LinkAnalysis.Kind.OFF_ROUTE_LOOP, LinkAnalysis.Kind.SKIPS_LAYER -> OffRouteColor
     LinkAnalysis.Kind.SHARED_END_POINT -> MaterialTheme.colorScheme.outline
+    LinkAnalysis.Kind.GOAL_WITHOUT_WHY, LinkAnalysis.Kind.BELIEF_NOT_ACTED -> Color(0xFFC2185B)
+    LinkAnalysis.Kind.AUTHOR_IS_PERSON -> Color(0xFF1565C0)
+    LinkAnalysis.Kind.UNPLACED_QUOTE -> Color(0xFFB26A00)
+    LinkAnalysis.Kind.UNGROUNDED_IDEA -> Color(0xFF00796B)
+    LinkAnalysis.Kind.CONTRADICTION -> ContradictColor
 }
 
 @Composable
-private fun FindingCard(finding: LinkAnalysis.Finding, state: TidyState, onFix: () -> Unit, onKeep: () -> Unit, onShow: () -> Unit) {
+private fun FindingCard(
+    finding: LinkAnalysis.Finding,
+    state: TidyState,
+    onFix: () -> Unit,
+    onKeep: () -> Unit,
+    onShow: () -> Unit,
+    onOpen: (() -> Unit)?,
+) {
     val text = findingText(finding, state.route, state::title)
     val color = findingColor(finding.kind)
     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
@@ -177,9 +217,10 @@ private fun FindingCard(finding: LinkAnalysis.Finding, state: TidyState, onFix: 
                 Text(text.label.uppercase(), style = MaterialTheme.typography.labelLarge, color = color, fontWeight = FontWeight.Bold)
                 Text(text.text, style = MaterialTheme.typography.bodyMedium)
                 Text(text.suggestion, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     if (text.action != null) FilledTonalButton(onClick = onFix) { Text(text.action) }
-                    TextButton(onClick = onKeep) { Text("Keep as is") }
+                    else if (onOpen != null) FilledTonalButton(onClick = onOpen) { Text("Open") }
+                    TextButton(onClick = onKeep) { Text(if (finding.kind == LinkAnalysis.Kind.CONTRADICTION) "Hide" else "Keep as is") }
                     TextButton(onClick = onShow) { Text("Show on map") }
                 }
             }

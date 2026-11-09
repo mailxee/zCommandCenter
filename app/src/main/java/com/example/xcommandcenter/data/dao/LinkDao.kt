@@ -12,6 +12,7 @@ import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.data.entity.LabelUse
 import com.example.xcommandcenter.data.entity.OwnedLink
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.ThinkAnalysis
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -92,6 +93,10 @@ interface LinkDao {
 
     @Query("SELECT * FROM links")
     fun observeAll(): Flow<List<LinkEntity>>
+
+    /** Every idea's parent and kind: the mind map's tree and Think mode's checks. */
+    @Query("SELECT id, parentId, kind FROM ideas")
+    fun observeIdeas(): Flow<List<ThinkAnalysis.Idea>>
 
     /** One item's links, as stored, for their labels. */
     @Query("SELECT * FROM links WHERE (aType = :type AND aId = :id) OR (bType = :type AND bId = :id)")

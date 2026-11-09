@@ -1,6 +1,7 @@
 package com.example.xcommandcenter.ui.links
 
 import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LinkAnalysis.Finding
 import com.example.xcommandcenter.domain.LinkAnalysis.Kind
 import com.example.xcommandcenter.domain.LinkRoute
@@ -8,7 +9,9 @@ import com.example.xcommandcenter.domain.LinkRoute
 /** A finding in words, for Tidy links and the map's panel: a label, what is found, and the suggestion. */
 data class FindingText(val label: String, val text: String, val suggestion: String, val action: String?)
 
-fun findingText(f: Finding, route: LinkRoute, title: (ItemRef) -> String): FindingText {
+fun findingText(f: Finding, route: LinkRoute, itemTitle: (ItemRef) -> String): FindingText {
+    // A quote reads as a quote, so the sentence around it stays clear.
+    val title: (ItemRef) -> String = { ref -> itemTitle(ref).let { if (ref.type == ItemType.QUOTE) "“$it”" else it } }
     fun names(refs: List<ItemRef>): String {
         val shown = refs.take(3).map(title)
         val more = if (refs.size > 3) " and ${refs.size - 3} more" else ""
@@ -69,6 +72,42 @@ fun findingText(f: Finding, route: LinkRoute, title: (ItemRef) -> String): Findi
             "${title(f.endPoint!!)} is linked to ${f.sharedBy.size} items in one network: ${names(f.sharedBy)}. " +
                 "A shared ${f.endPoint.type.singular.lowercase()} is usually intended.",
             "No change suggested.",
+            null,
+        )
+        Kind.GOAL_WITHOUT_WHY -> FindingText(
+            "Goal without a why",
+            "No vision, belief, principle or idea links to ${title(f.endPoint!!)}, so nothing says why it matters.",
+            "Suggestion: link it to the idea behind it, or keep it as is. This check can be turned off in Settings.",
+            null,
+        )
+        Kind.AUTHOR_IS_PERSON -> FindingText(
+            "Author is in People",
+            "${title(f.endPoint!!)} is by ${title(f.add!!.first)}, who is in People but isn't linked to it.",
+            "Suggestion: link ${title(f.add.first)} as its source.",
+            "Link",
+        )
+        Kind.UNPLACED_QUOTE -> FindingText(
+            "Unplaced quote",
+            "${title(f.endPoint!!)} isn't linked to any idea.",
+            "Suggestion: link it to the idea it supports, inspired or contradicts.",
+            null,
+        )
+        Kind.UNGROUNDED_IDEA -> FindingText(
+            "Ungrounded idea",
+            "${title(f.endPoint!!)} has no quote, book, person or note behind it.",
+            "Suggestion: link where it came from, or keep it as your own.",
+            null,
+        )
+        Kind.BELIEF_NOT_ACTED -> FindingText(
+            "Not acted on",
+            "${title(f.endPoint!!)} doesn't lead to any goal, plan, task or habit, nor do the ideas under it.",
+            "Suggestion: link it to what it should change in Do mode.",
+            null,
+        )
+        Kind.CONTRADICTION -> FindingText(
+            "Contradiction",
+            "${title(link!!.a)} and ${title(link.b)} contradict each other.",
+            "Just a note: worth coming back to now and then.",
             null,
         )
     }

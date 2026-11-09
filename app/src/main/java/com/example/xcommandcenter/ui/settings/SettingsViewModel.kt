@@ -18,6 +18,8 @@ import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
 import com.example.xcommandcenter.data.prefs.RoutePrefsRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.domain.LinkRoute
+import com.example.xcommandcenter.domain.ThinkRoute
+import com.example.xcommandcenter.domain.IdeaKind
 import kotlinx.coroutines.flow.map
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
@@ -86,8 +88,28 @@ class SettingsViewModel(
         viewModelScope.launch { routePrefs.setRoute(LinkRoute()) }
     }
 
-    /** How many Tidy links findings suggest a change, across every network. */
-    val tidySuggestions: StateFlow<Int> = links.observeGraph().map { g -> g.analysis.findings.count { it.actionable } }
+    /** Think mode's route: a layer for each idea kind. */
+    val thinkRoute: StateFlow<ThinkRoute> = routePrefs.thinkRoute
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThinkRoute())
+
+    fun setThinkLayer(kind: IdeaKind, layer: Int) {
+        viewModelScope.launch { routePrefs.setThinkRoute(thinkRoute.value.with(kind, layer)) }
+    }
+
+    fun resetThinkRoute() {
+        viewModelScope.launch { routePrefs.setThinkRoute(ThinkRoute()) }
+    }
+
+    /** Whether Tidy links points out goals no idea links to. */
+    val checkWhy: StateFlow<Boolean> = routePrefs.checkWhy
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setCheckWhy(on: Boolean) {
+        viewModelScope.launch { routePrefs.setCheckWhy(on) }
+    }
+
+    /** How many Tidy links findings ask for something, across every network, in both modes. */
+    val tidySuggestions: StateFlow<Int> = links.observeGraph().map { g -> (g.analysis.findings + g.thinkAnalysis.findings).count { it.suggests } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /** Days until an open task's or plan's reminder is carried over; 0 is off. */

@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.settings
 
+import androidx.compose.material3.Switch
+import com.example.xcommandcenter.ui.common.KindIcon
+import com.example.xcommandcenter.domain.IdeaKind
 import androidx.compose.foundation.layout.height
 import com.example.xcommandcenter.domain.TabMode
 import androidx.compose.material3.OutlinedTextField
@@ -430,6 +433,49 @@ private fun LinksSettings(viewModel: SettingsViewModel, onTidy: () -> Unit) {
         }
     }
     TextButton(onClick = viewModel::resetRoute) { Text("Reset to default route") }
+    val thinkRoute by viewModel.thinkRoute.collectAsStateWithLifecycle()
+    val checkWhy by viewModel.checkWhy.collectAsStateWithLifecycle()
+    Text(
+        "Think route: the same for Think mode's map, one layer per kind of idea. Sources (notes, quotes, books, people) come after the ideas, " +
+            "and Do mode's items last.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            IdeaKind.entries.forEach { kind ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    KindIcon(kind)
+                    Spacer(Modifier.width(8.dp))
+                    Text(kind.plural, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    val current = thinkRoute.layerSet(kind)
+                    val choices = LinkRoute.choices.toList()
+                    SingleChoiceSegmentedButtonRow(Modifier.width(196.dp)) {
+                        choices.forEachIndexed { i, n ->
+                            SegmentedButton(
+                                selected = n == current,
+                                onClick = { viewModel.setThinkLayer(kind, n) },
+                                shape = SegmentedButtonDefaults.itemShape(i, choices.size),
+                                icon = {},
+                                modifier = Modifier.semantics { contentDescription = "${kind.plural} in layer $n" },
+                            ) { Text("$n") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    TextButton(onClick = viewModel::resetThinkRoute) { Text("Reset to default Think route") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Goals without a why", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Tidy links points out goals that no vision, belief, principle or idea links to.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checkWhy, onCheckedChange = viewModel::setCheckWhy)
+    }
     Card(Modifier.fillMaxWidth().clickable(onClick = onTidy)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
             Icon(painterResource(R.drawable.ic_map), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -438,9 +484,9 @@ private fun LinksSettings(viewModel: SettingsViewModel, onTidy: () -> Unit) {
                 Text("Tidy links", style = MaterialTheme.typography.bodyLarge)
                 Text(
                     when (suggestions) {
-                        0 -> "No suggestions across all networks"
-                        1 -> "1 suggestion across all networks"
-                        else -> "$suggestions suggestions across all networks"
+                        0 -> "No suggestions in either mode"
+                        1 -> "1 suggestion across Do and Think"
+                        else -> "$suggestions suggestions across Do and Think"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

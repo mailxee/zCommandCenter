@@ -107,4 +107,83 @@ object GraphLayout {
         // Items are wide and short, so stretch across.
         return list.indices.associate { list[it] to Point(x[it] * 0.8f, y[it] * 0.9f) }
     }
+
+    /**
+     * Mind map: [roots] in the middle (one root at the centre, several spread on the first ring),
+     * and everything else on rings by how many steps it is from them, following [edges] in order
+     * (put the tree's own edges first so they decide the rings). Each item gets a share of its
+     * parent's angle by the number of items at the ends of its branch, so branches don't overlap,
+     * and a ring is pushed out when it has more items than fit round it. [aspect] is a column's
+     * width over a row's height, so the rings come out round on screen.
+     */
+    fun radial(roots: List<ItemRef>, nodes: List<ItemRef>, edges: List<Pair<ItemRef, ItemRef>>, aspect: Float = 1.5f): Map<ItemRef, Point> {
+        val list = nodes.distinct()
+        if (list.isEmpty()) return emptyMap()
+        val neighbours = LinkedHashMap<ItemRef, MutableList<ItemRef>>()
+        edges.forEach { (a, b) ->
+            neighbours.getOrPut(a) { mutableListOf() } += b
+            neighbours.getOrPut(b) { mutableListOf() } += a
+        }
+        val inGraph = list.toSet()
+        val starts = roots.filter { it in inGraph }.distinct().ifEmpty { listOf(list.first()) }
+        val parent = HashMap<ItemRef, ItemRef?>()
+        val depth = HashMap<ItemRef, Int>()
+        val order = mutableListOf<ItemRef>()
+        val single = starts.size == 1
+        fun bfs(from: List<ItemRef>, baseDepth: Int) {
+            val queue = ArrayDeque<ItemRef>()
+            from.forEach { if (it !in depth) { depth[it] = baseDepth; parent[it] = null; queue += it; order += it } }
+            while (queue.isNotEmpty()) {
+                val at = queue.removeFirst()
+                neighbours[at].orEmpty().filter { it in inGraph && it !in depth }.forEach {
+                    depth[it] = depth.getValue(at) + 1
+                    parent[it] = at
+                    queue += it
+                    order += it
+                }
+            }
+        }
+        bfs(starts, if (single) 0 else 1)
+        // Anything not reached hangs on the first ring as a root of its own.
+        list.filter { it !in depth }.forEach { bfs(listOf(it), 1) }
+        val children = order.groupBy { parent[it] }
+        val leaves = HashMap<ItemRef, Int>()
+        fun countLeaves(n: ItemRef): Int = leaves.getOrPut(n) { children[n].orEmpty().sumOf { countLeaves(it) }.coerceAtLeast(1) }
+        val tops = children[null].orEmpty()
+        tops.forEach { countLeaves(it) }
+        // Ring radii in columns: at least one apart, and wide enough for the items on them.
+        val perRing = order.groupingBy { depth.getValue(it) }.eachCount()
+        val radius = HashMap<Int, Float>()
+        var r = 0f
+        (0..(perRing.keys.maxOrNull() ?: 0)).forEach { d ->
+            val needed = (perRing[d] ?: 0) * 1.0f / (2f * Math.PI.toFloat())
+            r = if (d == 0) 0f else max(r + 1.15f, needed)
+            radius[d] = r
+        }
+        val angle = HashMap<ItemRef, Float>()
+        fun place(n: ItemRef, from: Float, to: Float) {
+            angle[n] = (from + to) / 2
+            val kids = children[n].orEmpty()
+            val total = kids.sumOf { leaves.getValue(it) }.toFloat()
+            var at = from
+            kids.forEach { k ->
+                val share = (to - from) * leaves.getValue(k) / total
+                place(k, at, at + share)
+                at += share
+            }
+        }
+        val full = 2f * Math.PI.toFloat()
+        val total = tops.sumOf { leaves.getValue(it) }.toFloat()
+        var at = -Math.PI.toFloat() / 2
+        tops.forEach { t ->
+            val share = full * leaves.getValue(t) / total
+            place(t, at, at + share)
+            at += share
+        }
+        return order.associateWith { n ->
+            val d = radius.getValue(depth.getValue(n))
+            val a = angle.getValue(n)
+            Point(d * kotlin.math.cos(a), d * kotlin.math.sin(a) * aspect)
+        }
+    }
 }

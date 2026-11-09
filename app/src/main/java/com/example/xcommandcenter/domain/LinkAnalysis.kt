@@ -43,6 +43,16 @@ object LinkAnalysis {
 
         /** An end point linked to several items of one network; usually intended. */
         SHARED_END_POINT,
+
+        /** Do mode: a goal no idea links to (see [ThinkAnalysis]). */
+        GOAL_WITHOUT_WHY,
+
+        // Think mode (see [ThinkAnalysis]).
+        AUTHOR_IS_PERSON,
+        UNPLACED_QUOTE,
+        UNGROUNDED_IDEA,
+        BELIEF_NOT_ACTED,
+        CONTRADICTION,
     }
 
     data class Finding(
@@ -69,6 +79,9 @@ object LinkAnalysis {
 
         /** Suggested fixes are in order of how much they matter. */
         val actionable: Boolean get() = remove != null || add != null
+
+        /** Whether the finding asks for something, as counted on the Tidy links buttons; information doesn't. */
+        val suggests: Boolean get() = actionable || kind in setOf(Kind.GOAL_WITHOUT_WHY, Kind.UNPLACED_QUOTE, Kind.UNGROUNDED_IDEA, Kind.BELIEF_NOT_ACTED)
     }
 
     data class Result(

@@ -53,4 +53,27 @@ class GraphLayoutTest {
             assertTrue(dx * dx + dy * dy > 0.05f)
         }
     }
+
+    @Test
+    fun `the mind map puts the root in the middle and rings by steps`() {
+        val vision = ItemRef(ItemType.IDEA, 1)
+        val b1 = ItemRef(ItemType.IDEA, 2)
+        val b2 = ItemRef(ItemType.IDEA, 3)
+        val leaf = ItemRef(ItemType.QUOTE, 4)
+        val p = GraphLayout.radial(listOf(vision), listOf(vision, b1, b2, leaf), listOf(b1 to vision, b2 to vision, leaf to b1), aspect = 1f)
+        assertEquals(0f, p.getValue(vision).x, 0.001f)
+        assertEquals(0f, p.getValue(vision).y, 0.001f)
+        fun dist(r: ItemRef) = kotlin.math.hypot(p.getValue(r).x, p.getValue(r).y)
+        assertEquals(dist(b1), dist(b2), 0.001f)
+        assertTrue(dist(leaf) > dist(b1))
+    }
+
+    @Test
+    fun `several roots share the first ring`() {
+        val a = ItemRef(ItemType.IDEA, 1)
+        val b = ItemRef(ItemType.IDEA, 2)
+        val p = GraphLayout.radial(listOf(a, b), listOf(a, b), emptyList(), aspect = 1f)
+        assertTrue(kotlin.math.hypot(p.getValue(a).x, p.getValue(a).y) > 0.5f)
+        assertTrue(p.getValue(a) != p.getValue(b))
+    }
 }
