@@ -5,6 +5,7 @@ import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.ReminderToday
 import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.domain.IdeaKindFilter
@@ -76,13 +77,18 @@ enum class RepeatFilter(val label: String) {
  * The tag filter shared by every tab: an item shows only if it carries all [selected] tags and none
  * of the [excluded] ones (tags pressed and held in the filter bar). [UNTAGGED] stands for "no
  * tags": selected, it shows only items without tags; excluded, it hides them.
+ *
+ * The "Reminder" chip works the same way on every tab: [reminder] ONLY shows just the items in
+ * [remindedToday] (a reminder going off today), HIDDEN hides them.
  */
 data class TagFilter(
     val tagsByItem: Map<ItemRef, List<TagEntity>> = emptyMap(),
     val selected: Set<Long> = emptySet(),
     val excluded: Set<Long> = emptySet(),
+    val reminder: ChipState = ChipState.ANY,
+    val remindedToday: Set<ItemRef> = emptySet(),
 ) {
-    val active: Boolean get() = selected.isNotEmpty() || excluded.isNotEmpty()
+    val active: Boolean get() = selected.isNotEmpty() || excluded.isNotEmpty() || reminder != ChipState.ANY
 
     fun tagsOf(ref: ItemRef): List<TagEntity> = tagsByItem[ref].orEmpty()
 
@@ -90,10 +96,12 @@ data class TagFilter(
     private fun idsOf(ref: ItemRef): Set<Long> = tagsOf(ref).map { it.id }.toSet().ifEmpty { setOf(UNTAGGED) }
 
     /** True when the item carries an excluded tag (or has none, with [UNTAGGED] excluded). */
-    fun excludes(ref: ItemRef): Boolean = excluded.isNotEmpty() && idsOf(ref).any { it in excluded }
+    fun excludes(ref: ItemRef): Boolean =
+        (excluded.isNotEmpty() && idsOf(ref).any { it in excluded }) || (reminder == ChipState.HIDDEN && ref in remindedToday)
 
     fun matches(ref: ItemRef): Boolean =
-        (selected.isEmpty() || idsOf(ref).containsAll(selected)) && !excludes(ref)
+        (selected.isEmpty() || idsOf(ref).containsAll(selected)) && !excludes(ref) &&
+            (reminder != ChipState.ONLY || ref in remindedToday)
 
     companion object {
         /** The "Untagged" chip; no tag has this id. */
@@ -185,11 +193,38 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     private val excludedTagIds = MutableStateFlow<Set<Long>>(emptySet())
 
+    /** The "Reminder" chip: tap shows only items with a reminder today, hold hides them; lasts like tag choices. */
+    private val reminderChip = MutableStateFlow(ChipState.ANY)
+
+    /** Items with a reminder going off today (see [ReminderToday]). */
+    private val remindedToday: Flow<Set<ItemRef>> = combine(
+        container.reminderRepository.observeAll(),
+        container.habitRepository.observeAll(),
+        container.habitRepository.observeAllMarks(),
+        container.blockRepository.observeAll(),
+        container.scheduleRepository.active,
+    ) { byItem, habitList, marks, blockList, active ->
+        val today = LocalDate.now()
+        val due = habitList.filter { habitSummary(it, marks[it.id].orEmpty(), today).scheduledToday }.map { it.id }.toSet()
+        val shownBlocks = blockList.filter { it.scheduleId == active?.id }.map { it.id }.toSet()
+        ReminderToday.items(byItem, today, java.time.ZoneId.systemDefault(), { it in due }, { it in shownBlocks })
+    }
+
+    fun tapReminderChip() {
+        reminderChip.value = if (reminderChip.value == ChipState.ANY) ChipState.ONLY else ChipState.ANY
+    }
+
+    fun holdReminderChip() {
+        reminderChip.value = if (reminderChip.value == ChipState.HIDDEN) ChipState.ANY else ChipState.HIDDEN
+    }
+
     /** Only chosen tags that still exist count, so removing a tag from its last item can't leave an empty filter stuck on. */
     val tagFilter: StateFlow<TagFilter> =
-        combine(tagsRepo.observeTagsByItem(), selectedTagIds, excludedTagIds, allTags) { byItem, selected, excluded, inUse ->
+        combine(
+            combine(tagsRepo.observeTagsByItem(), selectedTagIds, excludedTagIds, ::Triple), allTags, reminderChip, remindedToday,
+        ) { (byItem, selected, excluded), inUse, reminder, reminded ->
             val existing = inUse.map { it.id }.toSet() + TagFilter.UNTAGGED
-            TagFilter(byItem, selected intersect existing, excluded intersect existing)
+            TagFilter(byItem, selected intersect existing, excluded intersect existing, reminder, reminded)
         }.stateIn(TagFilter())
 
     /** The search box: every tab shows only the items whose text contains each word typed. */
@@ -569,6 +604,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     fun clearTags() {
         selectedTagIds.value = emptySet()
         excludedTagIds.value = emptySet()
+        reminderChip.value = ChipState.ANY
         ideaKinds.value = IdeaKindFilter()
         setTaskStatus(TaskStatusFilter())
     }

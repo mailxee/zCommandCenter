@@ -6,6 +6,7 @@ import com.example.xcommandcenter.data.prefs.ModeRepository
 import com.example.xcommandcenter.data.repository.GlossaryRepository
 import android.content.Context
 import com.example.xcommandcenter.data.backup.BackupRepository
+import com.example.xcommandcenter.data.backup.AutoBackupRepository
 import com.example.xcommandcenter.data.db.AppDatabase
 import com.example.xcommandcenter.data.prefs.CollapsedPlansRepository
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
@@ -79,4 +80,5 @@ class AppContainer(context: Context) {
     val backupRepository = BackupRepository(
         context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository, scheduleChoiceRepository, modeRepository,
     )
+    val autoBackupRepository = AutoBackupRepository(context, backupRepository)
 }

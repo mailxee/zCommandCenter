@@ -1125,6 +1125,31 @@ The map and Tidy links follow the mode (§2.61).
 - The Tidy links buttons count findings that ask for something (`Finding.suggests`), so notes such
   as a contradiction or a shared end point don't add to them.
 
+### 2.63 Reminder chip
+
+Every tab's filter panel has a **Reminder** chip beside Untagged: tap to show only items with a
+reminder going off today, hold to hide them, like Past due. It is part of the shared `TagFilter`
+(`reminder`, `remindedToday`), so it works on every tab, the Plans outline and link mode alike, and
+Clear turns it off. Today counts (`domain/ReminderToday`): a one-off reminder (carried-over ones
+included) on today's date; a habit's reminder on a day the habit is due; a block's when its
+schedule is the one in use today.
+
+### 2.64 Daily backup
+
+Settings › Daily backup saves the Export workbook once a day to a folder the user picks with
+Android's folder picker: on the phone, or in a cloud app that offers folders (OneDrive, Nextcloud,
+and so on; Google Drive's app offers none to other apps, so it can't be used this way).
+
+- `AutoBackupRepository` keeps the settings in DataStore (on/off, the folder's tree URI with a
+  persisted read and write grant, how many to keep: 3, 7, 14 or 30, and how the last backup went).
+- WorkManager (`AutoBackupWorker`, a new dependency, `androidx.work`) runs it once a day when the
+  battery isn't low, also with the app closed; it is registered at start while backups are on.
+  "Back up now" runs it once at once. A failure is retried twice and shown in Settings.
+- Each day's file is "Manage Everything backup YYYY-MM-DD.xlsx", replacing that day's if it ran
+  before; then the oldest backups beyond the number to keep are deleted (`domain/BackupNames`).
+  Other files in the folder are never touched.
+- "Delete everything" clears settings, the backup folder included, so daily backups stop.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1308,6 +1333,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/LinkLabelDialog.kt` | Picking a link's label and direction (§2.59). |
 | `data/entity/GlossaryEntity.kt`, `data/dao/GlossaryDao.kt`, `data/repository/GlossaryRepository.kt` | Rewritten definitions (§2.60). |
 | `ui/settings/GlossaryScreen.kt` | Settings › Glossary and its view model (§2.60). |
+| `domain/ReminderToday.kt` | Which items have a reminder today, for the Reminder chip (§2.63). |
+| `domain/BackupNames.kt`, `data/backup/AutoBackupRepository.kt`, `AutoBackupWorker.kt` | Daily backups to a chosen folder (§2.64). |
 | `domain/ThinkRoute.kt`, `domain/ThinkAnalysis.kt` | Think mode's route and checks; goals without a why (§2.62). |
 | `domain/AppMode.kt`, `data/prefs/ModeRepository.kt` | Do and Think: the mode, each tab's mode, what each mode's networks run through (§2.61). |
 
@@ -1334,6 +1361,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
 | `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
+| `domain/ReminderTodayTest.kt`, `domain/BackupNamesTest.kt` | Reminders today; backup names and which old ones go. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |

@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.settings
 
+import com.example.xcommandcenter.domain.BackupNames
 import androidx.compose.material3.Switch
 import com.example.xcommandcenter.ui.common.KindIcon
 import com.example.xcommandcenter.domain.IdeaKind
@@ -297,6 +298,7 @@ fun SettingsScreen(
                     contentColor = MaterialTheme.colorScheme.onError,
                 ),
             ) { Text("Delete everything") }
+            DailyBackupSettings(viewModel)
         }
     }
 
@@ -572,5 +574,68 @@ private fun LinkLabelsSettings(viewModel: SettingsViewModel) {
                 }
             },
         )
+    }
+}
+
+/**
+ * Daily backups: a folder picked once with Android's folder picker (the phone's storage, or a
+ * cloud app that offers folders), how many to keep, how the last one went, and "Back up now".
+ */
+@Composable
+private fun DailyBackupSettings(viewModel: SettingsViewModel) {
+    val settings by viewModel.autoBackupSettings.collectAsStateWithLifecycle()
+    val folderName by viewModel.backupFolderName.collectAsStateWithLifecycle()
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let(viewModel::chooseBackupFolder)
+    }
+    SectionTitle("Daily backup")
+    Text(
+        "Once a day, the same workbook as Export is saved to a folder you choose: on the phone, or in a cloud app that offers folders " +
+            "(such as OneDrive or Nextcloud). Each day's file is named by its date, and the oldest are deleted beyond the number to keep. " +
+            "Google Drive's app doesn't offer folders to other apps.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Back up every day", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        when {
+                            settings.folder == null -> "Choose a folder first"
+                            folderName == null -> "The folder can't be reached: choose it again"
+                            else -> "To $folderName"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = settings.enabled && settings.folder != null, enabled = settings.folder != null, onCheckedChange = viewModel::setAutoBackup)
+            }
+            Text("Backups to keep", style = MaterialTheme.typography.bodyMedium)
+            val choices = BackupNames.keepChoices
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                choices.forEachIndexed { i, n ->
+                    SegmentedButton(
+                        selected = settings.keep == n,
+                        onClick = { viewModel.setBackupKeep(n) },
+                        shape = SegmentedButtonDefaults.itemShape(i, choices.size),
+                        icon = {},
+                    ) { Text("$n") }
+                }
+            }
+            if (settings.lastRun > 0) {
+                val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(settings.lastRun))
+                Text(
+                    if (settings.lastError == null) "Last backup: $time" else "Last backup failed ($time): ${settings.lastError}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (settings.lastError == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { pickFolder.launch(null) }) { Text(if (settings.folder == null) "Choose folder" else "Change folder") }
+                OutlinedButton(onClick = viewModel::backUpNow, enabled = settings.folder != null) { Text("Back up now") }
+            }
+        }
     }
 }

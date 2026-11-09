@@ -402,8 +402,8 @@ private fun LinkModeStatus(viewModel: HomeViewModel, onMap: (ItemRef?) -> Unit) 
 /**
  * One filter for every tab: tap a tag to show only items with it, press and hold it to hide items
  * with it; both stay on when switching tabs. Shows "Untagged" (items without tags) and the tags
- * used on [tab]'s items, plus any tag in use by the filter, so it can always be turned off; hidden
- * when there are no tags to offer. The chips wrap onto more lines, so every tag stays on screen.
+ * used on [tab]'s items, plus any tag in use by the filter, so it can always be turned off. The chips wrap onto more lines, so every tag stays on screen.
+ * Every tab has "Reminder" (items with a reminder going off today, see [TagFilter.reminder]).
  * The Tasks tab also has "Past due" and "Completed" (see [TaskStatusFilter]), and the Ideas tab a
  * chip per kind (see [IdeaKindFilter]), which work the same way.
  */
@@ -419,7 +419,6 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
     val kinds by viewModel.ideaKinds.collectAsStateWithLifecycle()
     val tasks = tab == ItemType.TASK
     val ideas = tab == ItemType.IDEA
-    if (!tasks && !ideas && tags.isEmpty() && untagged !in filter.selected && untagged !in filter.excluded) return
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -448,6 +447,15 @@ private fun TagFilterBar(viewModel: HomeViewModel, tab: ItemType) {
             excluded = untagged in filter.excluded,
             onClick = { viewModel.toggleTag(untagged) },
             onLongClick = { viewModel.toggleExcludedTag(untagged) },
+        )
+        TagChip(
+            label = "Reminder",
+            icon = R.drawable.ic_notifications,
+            selected = filter.reminder == ChipState.ONLY,
+            excluded = filter.reminder == ChipState.HIDDEN,
+            onClick = viewModel::tapReminderChip,
+            onLongClick = viewModel::holdReminderChip,
+            holdLabel = "items with a reminder today",
         )
         if (tasks) {
             listOf(

@@ -50,4 +50,11 @@ class TagFilterTest {
     fun bothTogether() {
         assertEquals(listOf(a), shown(TagFilter(byItem, selected = setOf(1), excluded = setOf(2))))
     }
+
+    @Test
+    fun `the Reminder chip shows only or hides the items with a reminder today`() {
+        val today = setOf(b)
+        assertEquals(listOf(b), shown(TagFilter(byItem, reminder = com.example.xcommandcenter.domain.ChipState.ONLY, remindedToday = today)))
+        assertEquals(listOf(a, c), shown(TagFilter(byItem, reminder = com.example.xcommandcenter.domain.ChipState.HIDDEN, remindedToday = today)))
+    }
 }

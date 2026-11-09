@@ -15,5 +15,7 @@ class XCommandCenterApp : Application() {
         // Opens the database (seeding it on first launch) and makes sure every pending reminder,
         // including seeded ones, has an alarm registered.
         container.applicationScope.launch { container.reminderRepository.rescheduleAll() }
+        // Makes sure the daily backup is registered when it is on (an existing registration is kept).
+        container.applicationScope.launch { container.autoBackupRepository.schedule() }
     }
 }

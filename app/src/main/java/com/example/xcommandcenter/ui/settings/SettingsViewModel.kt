@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.entity.TagUsage
+import com.example.xcommandcenter.data.backup.AutoBackupRepository
+import com.example.xcommandcenter.data.backup.AutoBackupSettings
 import com.example.xcommandcenter.data.prefs.ModeRepository
 import com.example.xcommandcenter.domain.TabMode
 import com.example.xcommandcenter.domain.TabModes
@@ -43,7 +45,41 @@ class SettingsViewModel(
     private val routePrefs: RoutePrefsRepository,
     private val links: LinkRepository,
     private val modes: ModeRepository,
+    private val autoBackup: AutoBackupRepository,
 ) : ViewModel() {
+
+    /** The daily backup's settings and how the last one went. */
+    val autoBackupSettings: StateFlow<AutoBackupSettings> = autoBackup.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AutoBackupSettings())
+
+    /** The chosen folder's name as the file picker shows it; null if none or it can't be read. */
+    val backupFolderName: StateFlow<String?> = autoBackup.settings
+        .map { s -> s.folder?.let { autoBackup.folderName(it) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun chooseBackupFolder(folder: Uri) {
+        viewModelScope.launch {
+            try {
+                autoBackup.setFolder(folder)
+                message = "Daily backups go to that folder now."
+            } catch (e: SecurityException) {
+                message = "That folder can't be kept for backups. Try another."
+            }
+        }
+    }
+
+    fun setAutoBackup(on: Boolean) {
+        viewModelScope.launch { autoBackup.setEnabled(on) }
+    }
+
+    fun setBackupKeep(keep: Int) {
+        viewModelScope.launch { autoBackup.setKeep(keep) }
+    }
+
+    fun backUpNow() {
+        autoBackup.runNow()
+        message = "Backing up in the background…"
+    }
 
     /** Which mode, Do or Think, shows each tab. */
     val tabModes: StateFlow<TabModes> = modes.tabModes
@@ -186,6 +222,8 @@ class SettingsViewModel(
 
     fun deleteEverything() = run("Delete failed") {
         backup.deleteEverything()
+        // Settings are gone, the backup folder with them, so the daily job stops too.
+        autoBackup.schedule()
         "Everything was deleted."
     }
 
