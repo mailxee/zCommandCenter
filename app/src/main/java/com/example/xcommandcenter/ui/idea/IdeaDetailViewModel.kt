@@ -59,6 +59,8 @@ class IdeaDetailViewModel(
 
     override fun formState(): Any = idea
 
+    override val selfName: String get() = "This ${idea.kind.label.lowercase()}"
+
     fun update(transform: (IdeaEntity) -> IdeaEntity) {
         idea = transform(idea)
     }

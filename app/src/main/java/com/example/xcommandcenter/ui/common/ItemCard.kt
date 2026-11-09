@@ -271,6 +271,7 @@ fun ItemCard(
     shape: Shape = RoundedCornerShape(12.dp),
     outline: OutlineGuides? = null,
     onLongClick: (() -> Unit)? = null,
+    longClickLabel: String = "Show linked items",
 ) {
     val haptics = LocalHapticFeedback.current
     val depth = outline?.depth ?: 0
@@ -358,7 +359,7 @@ fun ItemCard(
                         show()
                     }
                 },
-                onLongClickLabel = if (onLongClick != null) "Show linked items" else null,
+                onLongClickLabel = if (onLongClick != null) longClickLabel else null,
             ),
             content = content,
         )

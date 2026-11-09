@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.settings
 
+import androidx.compose.material3.OutlinedTextField
+import com.example.xcommandcenter.domain.LinkLabels
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -228,6 +231,7 @@ fun SettingsScreen(
             CarryOverSetting(viewModel)
 
             LinksSettings(viewModel, onTidy)
+            LinkLabelsSettings(viewModel)
 
             SectionTitle("Data")
             Text(
@@ -407,5 +411,83 @@ private fun LinksSettings(viewModel: SettingsViewModel, onTidy: () -> Unit) {
             }
             Text("Open", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
+    }
+}
+
+/** The labels links can carry, each with its two wordings and how many links use it. */
+@Composable
+private fun LinkLabelsSettings(viewModel: SettingsViewModel) {
+    val labels by viewModel.labels.collectAsStateWithLifecycle()
+    val uses by viewModel.labelUses.collectAsStateWithLifecycle()
+    // The label being edited; a blank one (id 0) is a new label.
+    var editing by remember { mutableStateOf<LinkLabelEntity?>(null) }
+    SectionTitle("Link labels")
+    Text(
+        "Words a link can carry, like \"supports\" or \"leads to\", with a wording for each end. Pick one when linking, " +
+            "or press and hold a linked item to change it. Leave the second wording blank for a label that reads the same both ways.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+            labels.forEach { label ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Edit") { editing = label }.padding(vertical = 6.dp),
+                ) {
+                    val warn = label.key == LinkLabels.CONTRADICTS
+                    Icon(
+                        painterResource(R.drawable.ic_label), contentDescription = null,
+                        tint = if (warn) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(listOfNotNull(label.forward, label.backward).joinToString(" · "), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    val n = uses[label.id] ?: 0
+                    Text(if (n == 1) "1 link" else "$n links", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        painterResource(R.drawable.ic_edit), contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 10.dp).size(18.dp),
+                    )
+                }
+            }
+            TextButton(onClick = { editing = LinkLabelEntity(forward = "") }) { Text("Add label") }
+        }
+    }
+    editing?.let { label ->
+        var forward by remember(label) { mutableStateOf(label.forward) }
+        var backward by remember(label) { mutableStateOf(label.backward.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(if (label.id == 0L) "New label" else "Edit label") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(forward, { forward = it }, label = { Text("One way (\"supports\")") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(backward, { backward = it }, label = { Text("The other way (\"supported by\")") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "Blank if it reads the same both ways, like \"contradicts\".",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = forward.isNotBlank(),
+                    onClick = {
+                        viewModel.saveLabel(label.id.takeIf { it != 0L }, forward, backward)
+                        editing = null
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                Row {
+                    if (label.id != 0L) {
+                        TextButton(onClick = { viewModel.deleteLabel(label); editing = null }) {
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    TextButton(onClick = { editing = null }) { Text("Cancel") }
+                }
+            },
+        )
     }
 }

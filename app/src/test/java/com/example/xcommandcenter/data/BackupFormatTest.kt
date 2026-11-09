@@ -18,6 +18,7 @@ import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
@@ -73,7 +74,14 @@ class BackupFormatTest {
         books = listOf(BookEntity(1, "Atomic Habits", "James Clear", "", created, readCount = 2, internalized = true, priority = Priority.HIGH)),
         chapters = listOf(ChapterEntity(5, 1, 0, "The surprising power", 2, true, created)),
         quotes = listOf(QuoteEntity(1, "Done is better than perfect.", createdAt = created, priority = Priority.LOW)),
-        links = listOf(LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PLAN, 2)).copy(createdAt = created)),
+        links = listOf(
+            LinkEntity.between(ItemRef(ItemType.TASK, 1), ItemRef(ItemType.PLAN, 2)).copy(createdAt = created),
+            LinkEntity.labelled(ItemRef(ItemType.QUOTE, 1), ItemRef(ItemType.IDEA, 5), labelId = 3).copy(createdAt = created),
+        ),
+        linkLabels = listOf(
+            LinkLabelEntity(3, "SUPPORTS", "supports", "supported by", 0),
+            LinkLabelEntity(8, null, "echoes", null, 1),
+        ),
         tags = listOf(TagEntity(7, "Home")),
         itemTags = listOf(ItemTagEntity(ItemType.TASK, 1, 7), ItemTagEntity(ItemType.CHAPTER, 5, 7)),
         checklistItems = listOf(
@@ -140,6 +148,16 @@ class BackupFormatTest {
         assertEquals(data.personItems, back.personItems)
         // Parents first, as with plans.
         assertEquals(data.ideas.reversed(), back.ideas)
+        assertEquals(data.linkLabels, back.linkLabels)
+        assertEquals(false, back.links[1].labelFromA)
+    }
+
+    @Test
+    fun `a workbook without the Link labels sheet brings plain links`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).filterNot { it.name == "Link labels" }
+        val back = BackupFormat.fromSheets(sheets, zone).data
+        assertTrue(back.linkLabels.isEmpty())
+        assertTrue(back.links.all { it.labelId == null })
     }
 
     @Test
@@ -260,7 +278,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Tags", "Reminders", "Settings", "Schedules"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Link labels", "Tags", "Reminders", "Settings", "Schedules"), names)
     }
 
     @Test
@@ -296,7 +314,7 @@ class BackupFormatTest {
         }
         val result = BackupFormat.fromSheets(sheets, zone)
         assertEquals(2, result.skipped)
-        assertEquals(1, result.data.links.size)
+        assertEquals(data.links.size, result.data.links.size)
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.backup.BackupRepository
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.entity.TagUsage
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.ReminderPrefsRepository
 import com.example.xcommandcenter.data.prefs.RoutePrefsRepository
@@ -35,8 +36,31 @@ class SettingsViewModel(
     private val tags: TagRepository,
     private val reminderPrefs: ReminderPrefsRepository,
     private val routePrefs: RoutePrefsRepository,
-    links: LinkRepository,
+    private val links: LinkRepository,
 ) : ViewModel() {
+
+    /** Every link label, with how many links carry it. */
+    val labels: StateFlow<List<LinkLabelEntity>> = links.labels
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val labelUses: StateFlow<Map<Long, Int>> = links.labelUses
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Adds a label, or renames [id]'s; a blank [backward] makes it read the same both ways. */
+    fun saveLabel(id: Long?, forward: String, backward: String) {
+        if (forward.isBlank()) return
+        viewModelScope.launch {
+            if (id == null) links.addLabel(forward, backward) else links.renameLabel(id, forward, backward)
+        }
+    }
+
+    /** Its links stay, without the label. */
+    fun deleteLabel(label: LinkLabelEntity) {
+        viewModelScope.launch {
+            links.deleteLabel(label.id)
+            message = "Deleted the label \"${label.forward}\"; its links stay, unlabelled."
+        }
+    }
 
     /** The suggested route of links: which layer each linking type sits in. */
     val route: StateFlow<LinkRoute> = routePrefs.route

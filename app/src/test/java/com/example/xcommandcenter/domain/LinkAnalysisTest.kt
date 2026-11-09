@@ -23,6 +23,27 @@ class LinkAnalysisTest {
         LinkAnalysis.analyze(links.toList(), mapOf(7L to 1L), LinkRoute(), kept)
 
     @Test
+    fun anUnlabelledLinkIsSuggestedBeforeALabelledOne() {
+        // The shortcut is labelled, so one of the unlabelled links through the plan is the one left over.
+        val shortcut = link(goal, meditations).copy(labelled = true)
+        val r = analyze(link(goal, reading), link(reading, meditations), shortcut)
+        val removed = r.findings.single().remove!!
+        assertTrue(removed != shortcut && !removed.labelled)
+    }
+
+    @Test
+    fun aContradictionIsNeverARoute() {
+        val r = analyze(link(goal, reading), link(reading, meditations), link(goal, meditations).copy(labelled = true, contradiction = true))
+        assertTrue(r.findings.isEmpty())
+    }
+
+    @Test
+    fun aLabelledLinkThatSkipsALayerGetsNoBetterPlace() {
+        val r = analyze(link(goal, reading), link(goal, journal).copy(labelled = true))
+        assertTrue(r.findings.none { it.kind == Kind.SKIPS_LAYER })
+    }
+
+    @Test
     fun aTreeHasNoFindings() {
         val r = analyze(link(goal, reading), link(reading, meditations), link(meditations, book), link(goal, practice))
         assertTrue(r.findings.isEmpty())

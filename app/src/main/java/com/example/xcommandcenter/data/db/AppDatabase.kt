@@ -19,6 +19,8 @@ import com.example.xcommandcenter.data.dao.NoteDao
 import com.example.xcommandcenter.data.dao.PersonDao
 import com.example.xcommandcenter.data.dao.IdeaDao
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
+import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.data.dao.PlanDao
 import com.example.xcommandcenter.data.dao.QuoteDao
 import com.example.xcommandcenter.data.dao.ReminderDao
@@ -72,6 +74,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         PersonItemEntity::class,
         KeptFindingEntity::class,
         IdeaEntity::class,
+        LinkLabelEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -85,7 +88,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 9: reminders can be carried over (a flag on each).
     // 10: Tidy links findings kept as they are.
     // 11: the Ideas tab.
-    version = 11,
+    // 12: link labels, with the starting set.
+    version = 12,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -97,6 +101,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
+        AutoMigration(from = 11, to = 12, spec = AppDatabase.AddLinkLabels::class),
     ],
 )
 @TypeConverters(Converters::class)
@@ -125,6 +130,11 @@ abstract class AppDatabase : RoomDatabase() {
         }
     }
 
+    /** The labels links start with. */
+    class AddLinkLabels : AutoMigrationSpec {
+        override fun onPostMigrate(db: SupportSQLiteDatabase) = insertDefaultLabels(db)
+    }
+
     /** The first schedule, which every existing block now belongs to. */
     class AddSchedules : AutoMigrationSpec {
         override fun onPostMigrate(db: SupportSQLiteDatabase) = insertFirstSchedule(db)
@@ -142,6 +152,16 @@ abstract class AppDatabase : RoomDatabase() {
 
         const val FIRST_SCHEDULE = "My schedule"
 
+        /** The starting labels (see [LinkLabels.defaults]); ones already there are left alone. */
+        fun insertDefaultLabels(db: SupportSQLiteDatabase) {
+            LinkLabels.defaults.forEachIndexed { i, label ->
+                db.execSQL(
+                    "INSERT OR IGNORE INTO link_labels (`key`, forward, backward, sortOrder) VALUES (?, ?, ?, ?)",
+                    arrayOf<Any?>(label.key, label.forward, label.backward, i),
+                )
+            }
+        }
+
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "xcommandcenter.db")
                 .addCallback(
@@ -150,6 +170,7 @@ abstract class AppDatabase : RoomDatabase() {
                         // seed is all-or-nothing and never re-inserted on later launches.
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             insertFirstSchedule(db)
+                            insertDefaultLabels(db)
                             SeedData.insert(db)
                         }
                     },

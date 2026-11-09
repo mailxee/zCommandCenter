@@ -39,6 +39,8 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.LinkLabels
+import androidx.compose.foundation.layout.size
 import com.example.xcommandcenter.ui.plan.CompletePlanDialog
 import kotlinx.coroutines.flow.Flow
 
@@ -49,14 +51,22 @@ fun ItemIndexEntry.describe(): String? = when (type) {
 }
 
 /**
- * "Linked items" of a detail screen, grouped by tab: each linked item is a card as in its own tab,
- * with the same checkbox or "today" chip, plus a button to remove the link. Also the link picker.
+ * "Linked items" of a detail screen: labelled links first, grouped by their label as read from this
+ * item ("Supported by"), then the rest grouped by tab. Each linked item is a card as in its own tab,
+ * with the same checkbox or "today" chip, plus a button to remove the link; pressing and holding a
+ * card changes its label. Also the link picker, which asks for a label once an item is chosen.
  */
 @Composable
 fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit) {
     val cards by viewModel.linkedCards.collectAsStateWithLifecycle()
+    val readings by viewModel.linkLabels.collectAsStateWithLifecycle()
+    val labels by viewModel.labels.collectAsStateWithLifecycle()
     var picking by rememberSaveable { mutableStateOf(false) }
+    // The item whose link is being labelled: just picked (new) or held (existing).
+    var labelling by remember { mutableStateOf<ItemIndexEntry?>(null) }
+    var labellingNew by remember { mutableStateOf(false) }
     val saved = viewModel.itemId.collectAsState().value != 0L
+    val selfName = viewModel.selfName
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -66,13 +76,27 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
         when {
             !saved -> HintText("Save this item to start linking it.")
             cards.isEmpty() -> HintText("Nothing linked yet.")
-            else -> ItemType.tabs.forEach { tab ->
-                val group = cards.filter { it.ref.type.tab == tab }
-                if (group.isNotEmpty()) {
-                    val labelStyle = itemTextStyle(tab, MaterialTheme.typography.labelLarge)
-                    Text(tab.tabLabel, style = labelStyle, color = labelStyle.color.takeOrElse { MaterialTheme.colorScheme.primary })
-                    group.forEach { card -> LinkedCard(card, viewModel, onOpen) }
+            else -> {
+                val hold: (ItemCardData) -> Unit = { labelling = it.entry; labellingNew = false }
+                // Labelled links, by label in the labels' order, then by which way they read.
+                val labelled = cards.filter { it.ref in readings }
+                labelled.groupBy { readings.getValue(it.ref).let { r -> r.label.id to (r.subject || r.label.symmetric) } }
+                    .toList()
+                    .sortedWith(compareBy({ (key, _) -> labels.indexOfFirst { it.id == key.first } }, { (key, _) -> !key.second }))
+                    .forEach { (_, group) ->
+                        val reading = readings.getValue(group.first().ref)
+                        LabelHeading(reading.wording, contradiction = reading.label.key == LinkLabels.CONTRADICTS)
+                        group.forEach { card -> LinkedCard(card, viewModel, onOpen, onHold = hold) }
+                    }
+                ItemType.tabs.forEach { tab ->
+                    val group = cards.filter { it.ref.type.tab == tab && it.ref !in readings }
+                    if (group.isNotEmpty()) {
+                        val labelStyle = itemTextStyle(tab, MaterialTheme.typography.labelLarge)
+                        Text(tab.tabLabel, style = labelStyle, color = labelStyle.color.takeOrElse { MaterialTheme.colorScheme.primary })
+                        group.forEach { card -> LinkedCard(card, viewModel, onOpen, onHold = hold) }
+                    }
                 }
+                if (labelled.isEmpty()) HintText("Press and hold a linked item to label its link.")
             }
         }
     }
@@ -83,8 +107,23 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
             alreadyLinked = cards.map { it.ref }.toSet(),
             search = viewModel::searchLinkTargets,
             chapters = viewModel::chaptersOf,
-            onPick = { viewModel.link(it.ref); picking = false },
+            onPick = { picking = false; labelling = it; labellingNew = true },
             onDismiss = { picking = false },
+        )
+    }
+    labelling?.let { entry ->
+        val current = readings[entry.ref]
+        LinkLabelDialog(
+            self = selfName,
+            other = entry.title,
+            labels = labels,
+            initial = current?.let { LabelChoice(it.label.id, it.subject) },
+            confirmLabel = if (labellingNew) "Link" else "Save",
+            onConfirm = { choice ->
+                viewModel.link(entry.ref, choice)
+                labelling = null
+            },
+            onDismiss = { labelling = null },
         )
     }
     viewModel.linkedBlocked?.let {
@@ -104,15 +143,33 @@ fun LinkedCardsGroup(title: String, cards: List<ItemCardData>, viewModel: ItemDe
     }
 }
 
-/** [removable] offers a button that removes the link to this page's item. */
+/** A label's wording heading the links that carry it; a contradiction in the error colour. */
 @Composable
-private fun LinkedCard(card: ItemCardData, viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit, removable: Boolean = true) {
+private fun LabelHeading(wording: String, contradiction: Boolean) {
+    val color = if (contradiction) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(painterResource(R.drawable.ic_label), contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+        Text(wording.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelLarge, color = color)
+    }
+}
+
+/** [removable] offers a button that removes the link to this page's item; [onHold] changes its label. */
+@Composable
+private fun LinkedCard(
+    card: ItemCardData,
+    viewModel: ItemDetailViewModel,
+    onOpen: (ItemRef) -> Unit,
+    removable: Boolean = true,
+    onHold: ((ItemCardData) -> Unit)? = null,
+) {
     val control = card.control
     ItemCard(
         type = card.ref.type,
         text = card.text,
         links = card.links,
         onClick = { onOpen(card.ref) },
+        onLongClick = onHold?.let { { it(card) } },
+        longClickLabel = "Label this link",
         tags = card.tags,
         reminder = card.reminder,
         leading = when (control) {

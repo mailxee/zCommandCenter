@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
@@ -67,6 +68,7 @@ data class BackupData(
     val personProfiles: List<PersonProfileEntity> = emptyList(),
     val personItems: List<PersonItemEntity> = emptyList(),
     val ideas: List<IdeaEntity> = emptyList(),
+    val linkLabels: List<LinkLabelEntity> = emptyList(),
 ) {
     val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size + ideas.size
 }
@@ -93,6 +95,7 @@ object BackupFormat {
     const val PROFILES = "Profiles"
     const val PERSON_ITEMS = "Person items"
     const val REMINDERS = "Reminders"
+    const val LINK_LABELS = "Link labels"
     const val SETTINGS = "Settings"
     const val SCHEDULES = "Schedules"
 
@@ -258,12 +261,20 @@ object BackupFormat {
         )
         val links = Sheet(
             LINKS,
-            listOf(listOf("Type A", "ID A", "Title A", "Type B", "ID B", "Title B", "Created")) +
+            listOf(listOf("Type A", "ID A", "Title A", "Type B", "ID B", "Title B", "Created", "Label ID", "Label reads from")) +
                 data.links.map {
                     val a = ItemRef(it.aType, it.aId)
                     val b = ItemRef(it.bType, it.bId)
-                    listOf(a.type.singular, a.id.toString(), title(a), b.type.singular, b.id.toString(), title(b), time(it.createdAt))
+                    listOf(
+                        a.type.singular, a.id.toString(), title(a), b.type.singular, b.id.toString(), title(b), time(it.createdAt),
+                        it.labelId?.toString().orEmpty(), if (it.labelId == null) "" else if (it.labelFromA) "A" else "B",
+                    )
                 },
+        )
+        val linkLabels = Sheet(
+            LINK_LABELS,
+            listOf(listOf("ID", "One way", "Other way", "Key", "Order")) +
+                data.linkLabels.map { listOf(it.id.toString(), it.forward, it.backward.orEmpty(), it.key.orEmpty(), it.sortOrder.toString()) },
         )
         val tagNames = data.tags.associate { it.id to it.name }
         val tags = Sheet(
@@ -304,7 +315,7 @@ object BackupFormat {
                     )
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, profiles, personItems, chapters, history, links, tags, reminders, settings, schedules)
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, profiles, personItems, chapters, history, links, linkLabels, tags, reminders, settings, schedules)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -512,11 +523,24 @@ object BackupFormat {
             ideas.forEach { add(ItemRef(ItemType.IDEA, it.id)) }
         }
 
+        // Labels came later: without their sheet, links come in plain and the app keeps its labels.
+        val linkLabels = sheet(LINK_LABELS, false)?.items("One way") { r ->
+            LinkLabelEntity(
+                id = r.id(), forward = r.required("One way"), backward = r.text("Other way").ifBlank { null },
+                key = r.text("Key").ifBlank { null }, sortOrder = r.order(),
+            )
+        }.orEmpty().withIds(LINK_LABELS) { l, id -> l.copy(id = id) }.distinctBy { it.key ?: "#${it.id}" }
+        val labelIds = linkLabels.map { it.id }.toSet()
+
         val links = sheet(LINKS, false)?.rows("ID A", "ID B").orEmpty().mapNotNull { r ->
             val a = ItemRef(r.itemType("Type A"), r.long("ID A") ?: r.fail("ID A is required"))
             val b = ItemRef(r.itemType("Type B"), r.long("ID B") ?: r.fail("ID B is required"))
             if (a == b || a !in existing || b !in existing) return@mapNotNull null.also { skipped++ }
-            LinkEntity.between(a, b).copy(createdAt = r.dateTime("Created") ?: now)
+            val link = LinkEntity.between(a, b).copy(createdAt = r.dateTime("Created") ?: now)
+            val labelId = r.long("Label ID")?.takeIf { it in labelIds } ?: return@mapNotNull link
+            // "Label reads from" names A or B as given in this row, which may not be the stored order.
+            val subject = if (r.text("Label reads from").trim().equals("B", ignoreCase = true)) b else a
+            link.copy(labelId = labelId, labelFromA = link.isA(subject))
         }.distinctBy { listOf(it.aType, it.aId, it.bType, it.bId) }
 
         // Tag names are unique ignoring case; the first spelling seen wins.
@@ -580,7 +604,7 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas,
+                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas, linkLabels,
             ),
             skipped,
             settings,

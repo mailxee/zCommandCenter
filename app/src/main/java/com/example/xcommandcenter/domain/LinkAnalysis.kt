@@ -13,9 +13,20 @@ package com.example.xcommandcenter.domain
  * a layer without making a loop is reported with a better place for it ([Kind.SKIPS_LAYER]), and an
  * end point shared by several items of one network is noted ([Kind.SHARED_END_POINT], for
  * information only).
+ *
+ * A labelled link counts as intentional: it is kept ahead of any unlabelled one, so an unlabelled
+ * link is always the one suggested first, and it gets no better place suggested. A contradiction
+ * isn't a route at all, so it is never suggested for removal.
  */
 object LinkAnalysis {
-    data class Link(val id: Long, val a: ItemRef, val b: ItemRef, val createdAt: Long = 0)
+    data class Link(
+        val id: Long,
+        val a: ItemRef,
+        val b: ItemRef,
+        val createdAt: Long = 0,
+        val labelled: Boolean = false,
+        val contradiction: Boolean = false,
+    )
 
     enum class Kind {
         /** A link that jumps over items already connecting its two ends: goal to task, beside goal to plan to task. */
@@ -79,12 +90,12 @@ object LinkAnalysis {
         fun node(ref: ItemRef): ItemRef =
             if (ref.type == ItemType.CHAPTER) bookOfChapter[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
         val all = links.map { it.copy(a = node(it.a), b = node(it.b)) }.filter { it.a != it.b }
-        val passing = all.filter { !route.isEndPoint(it.a.type) && !route.isEndPoint(it.b.type) }
+        val passing = all.filter { !it.contradiction && !route.isEndPoint(it.a.type) && !route.isEndPoint(it.b.type) }
         val found = mutableListOf<Finding>()
 
         // Loops: a spanning forest keeps the best-fitting, oldest links; the rest each close a loop.
         val rank = mapOf(LinkRoute.Kind.ON_ROUTE to 0, LinkRoute.Kind.SKIPS to 1, LinkRoute.Kind.SIDEWAYS to 2)
-        val ordered = passing.sortedWith(compareBy<Link>({ rank.getValue(route.kind(it.a.type, it.b.type)) }, { it.createdAt }, { it.id }))
+        val ordered = passing.sortedWith(compareBy<Link>({ !it.labelled }, { rank.getValue(route.kind(it.a.type, it.b.type)) }, { it.createdAt }, { it.id }))
         val parent = HashMap<ItemRef, ItemRef>()
         fun find(x: ItemRef): ItemRef {
             var r = x
@@ -138,7 +149,7 @@ object LinkAnalysis {
             neighbours.getOrPut(it.b) { mutableListOf() } += it.a to it
         }
         val inLoops = extra.map { it.id }.toSet()
-        passing.filter { it.id !in inLoops && route.kind(it.a.type, it.b.type) == LinkRoute.Kind.SKIPS }.forEach { link ->
+        passing.filter { it.id !in inLoops && !it.labelled && route.kind(it.a.type, it.b.type) == LinkRoute.Kind.SKIPS }.forEach { link ->
             val (upper, lower) = if (route.layer(link.a.type) < route.layer(link.b.type)) link.a to link.b else link.b to link.a
             val target = route.layer(lower.type) - 1
             val bridge = neighbours[upper].orEmpty()

@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -52,12 +53,13 @@ interface BackupDao {
     @Query("SELECT * FROM person_profiles ORDER BY personId, position") suspend fun personProfiles(): List<PersonProfileEntity>
     @Query("SELECT * FROM person_items ORDER BY personId, position") suspend fun personItems(): List<PersonItemEntity>
     @Query("SELECT * FROM ideas ORDER BY id") suspend fun ideas(): List<IdeaEntity>
+    @Query("SELECT * FROM link_labels ORDER BY sortOrder, id") suspend fun linkLabels(): List<LinkLabelEntity>
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(),
+        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(), linkLabels(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -81,6 +83,8 @@ interface BackupDao {
     @Insert suspend fun insertPersonProfiles(rows: List<PersonProfileEntity>)
     @Insert suspend fun insertPersonItems(rows: List<PersonItemEntity>)
     @Insert suspend fun insertIdeas(rows: List<IdeaEntity>)
+    @Insert suspend fun insertLinkLabels(rows: List<LinkLabelEntity>)
+    @Query("DELETE FROM link_labels") suspend fun deleteLinkLabels()
 
     // Children before parents, so foreign keys never point at a deleted row mid-way.
     @Query("DELETE FROM item_tags") suspend fun deleteItemTags()
@@ -165,7 +169,13 @@ interface BackupDao {
         insertPersonProfiles(data.personProfiles)
         insertPersonItems(data.personItems)
         insertIdeas(data.ideas)
-        insertLinks(data.links)
+        // Labels are kept like settings unless the data brings its own (an older workbook has none).
+        if (data.linkLabels.isNotEmpty()) {
+            deleteLinkLabels()
+            insertLinkLabels(data.linkLabels)
+        }
+        val labelIds = linkLabels().map { it.id }.toSet()
+        insertLinks(data.links.map { if (it.labelId != null && it.labelId !in labelIds) it.copy(labelId = null, labelFromA = true) else it })
         insertTags(data.tags)
         insertItemTags(data.itemTags)
         insertReminders(data.reminders)

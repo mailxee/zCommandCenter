@@ -4,6 +4,9 @@ import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
+import com.example.xcommandcenter.domain.LinkLabels
+import kotlinx.coroutines.flow.map
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LinkAnalysis
@@ -23,6 +26,8 @@ import kotlinx.coroutines.flow.flowOn
  * its book's, see [LinkAnalysis]), and the analysis under the current route and kept findings.
  */
 data class LinkGraph(
+    /** Every link label by id, for the map's line labels. */
+    val labels: Map<Long, LinkLabelEntity>,
     val entries: Map<ItemRef, ItemIndexEntry>,
     /** Links by id as stored, to undo a removal. */
     val stored: Map<Long, LinkEntity>,
@@ -42,6 +47,11 @@ data class LinkGraph(
         return all.map { if (it.type == ItemType.CHAPTER) bookOfChapter[it.id]?.let { b -> ItemRef(ItemType.BOOK, b) } ?: it else it }
             .filter { it in entries }.toSet()
     }
+}
+
+/** A link's label as read from one end: [subject] when the label points away from that end. */
+data class LabelReading(val label: LinkLabelEntity, val subject: Boolean) {
+    val wording: String get() = label.wording(subject)
 }
 
 class LinkRepository(private val dao: LinkDao, private val route: Flow<LinkRoute> = flowOf(LinkRoute())) {
@@ -108,13 +118,65 @@ class LinkRepository(private val dao: LinkDao, private val route: Flow<LinkRoute
         if (a != b) dao.insert(LinkEntity.between(a, b))
     }
 
+    /** Links [subject] to [obj] with [labelId] reading from [subject]; an existing link gets the label. */
+    suspend fun link(subject: ItemRef, obj: ItemRef, labelId: Long?) {
+        if (subject == obj) return
+        val link = LinkEntity.labelled(subject, obj, labelId)
+        dao.insert(link)
+        dao.setLabel(link.aType, link.aId, link.bType, link.bId, link.labelId, link.labelFromA)
+    }
+
+    /** Sets the label of the link between [subject] and [obj], reading from [subject]; null makes it plain. */
+    suspend fun setLabel(subject: ItemRef, obj: ItemRef, labelId: Long?) {
+        val link = LinkEntity.labelled(subject, obj, labelId)
+        dao.setLabel(link.aType, link.aId, link.bType, link.bId, link.labelId, link.labelFromA)
+    }
+
+    val labels: Flow<List<LinkLabelEntity>> = dao.observeLabels()
+
+    /** How many links carry each label, by label id. */
+    val labelUses: Flow<Map<Long, Int>> = dao.observeLabelUses().map { uses -> uses.associate { it.id to it.uses } }
+
+    suspend fun addLabel(forward: String, backward: String?) {
+        dao.insertLabel(LinkLabelEntity(forward = forward.trim(), backward = backward?.trim()?.ifBlank { null }, sortOrder = dao.newLabelOrder()))
+    }
+
+    suspend fun renameLabel(id: Long, forward: String, backward: String?) = dao.renameLabel(id, forward.trim(), backward?.trim()?.ifBlank { null })
+
+    suspend fun deleteLabel(id: Long) = dao.deleteLabel(id)
+
+    /**
+     * The label on each of [ref]'s links, by the item at the other end, read from [ref]'s side.
+     * Plain links are left out.
+     */
+    fun observeLabelsOf(ref: ItemRef): Flow<Map<ItemRef, LabelReading>> =
+        combine(dao.observeLinksOf(ref.type, ref.id), labels) { links, labels ->
+            val byId = labels.associateBy { it.id }
+            links.mapNotNull { link ->
+                val label = link.labelId?.let(byId::get) ?: return@mapNotNull null
+                val selfIsA = link.isA(ref)
+                val other = if (selfIsA) ItemRef(link.bType, link.bId) else ItemRef(link.aType, link.aId)
+                other to LabelReading(label, LinkLabels.isSubject(selfIsA, link.labelFromA))
+            }.toMap()
+        }
+
     /** See [LinkGraph]; worked out off the main thread. */
     fun observeGraph(): Flow<LinkGraph> =
-        combine(dao.observeIndex(), dao.observeAll(), dao.observeChapterBooks(), route, dao.observeKept()) { index, stored, chapterBooks, route, kept ->
+        combine(
+            combine(dao.observeIndex(), dao.observeAll(), ::Pair), dao.observeChapterBooks(), route, dao.observeKept(), labels,
+        ) { (index, stored), chapterBooks, route, kept, labels ->
             val bookOf = chapterBooks.associate { it.chapterId to it.id }
             fun node(ref: ItemRef) = if (ref.type == ItemType.CHAPTER) bookOf[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
-            val links = stored.map { LinkAnalysis.Link(it.id, ItemRef(it.aType, it.aId), ItemRef(it.bType, it.bId), it.createdAt) }
+            val labelById = labels.associateBy { it.id }
+            val links = stored.map {
+                val label = it.labelId?.let(labelById::get)
+                LinkAnalysis.Link(
+                    it.id, ItemRef(it.aType, it.aId), ItemRef(it.bType, it.bId), it.createdAt,
+                    labelled = label != null, contradiction = label?.key == LinkLabels.CONTRADICTS,
+                )
+            }
             LinkGraph(
+                labels = labelById,
                 entries = index.associateBy { it.ref },
                 stored = stored.associateBy { it.id },
                 links = links.map { it.copy(a = node(it.a), b = node(it.b)) }.filter { it.a != it.b },

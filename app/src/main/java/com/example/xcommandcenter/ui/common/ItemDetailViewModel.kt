@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.PlanEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
+import com.example.xcommandcenter.data.repository.LabelReading
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.ReminderRepository
@@ -165,6 +167,31 @@ abstract class ItemDetailViewModel(
     fun link(target: ItemRef) {
         if (itemId.value == 0L) return
         viewModelScope.launch { links.link(ref, target) }
+    }
+
+    /** How the label picker names this page's item: "This task", or for an idea its kind. */
+    open val selfName: String get() = "This ${type.singular.lowercase()}"
+
+    /** Every link label, for the label picker. */
+    val labels: StateFlow<List<LinkLabelEntity>> = links.labels
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The label on each link of this item, by the linked item, read from this item's side. */
+    val linkLabels: StateFlow<Map<ItemRef, LabelReading>> = _itemId
+        .flatMapLatest { id -> if (id == 0L) flowOf(emptyMap()) else links.observeLabelsOf(ItemRef(type, id)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Links [target] with [choice]'s label (none for "relates to"), or changes the label of the
+     * link already there.
+     */
+    fun link(target: ItemRef, choice: LabelChoice?) {
+        if (itemId.value == 0L) return
+        viewModelScope.launch {
+            if (choice == null) links.link(ref, target, null)
+            else if (choice.subject) links.link(ref, target, choice.labelId)
+            else links.link(target, ref, choice.labelId)
+        }
     }
 
     fun unlink(target: ItemRef) {

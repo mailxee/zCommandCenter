@@ -18,6 +18,7 @@ import com.example.xcommandcenter.domain.ItemType.PLAN
 import com.example.xcommandcenter.domain.ItemType.PERSON
 import com.example.xcommandcenter.domain.ItemType.IDEA
 import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.ItemType.QUOTE
 import com.example.xcommandcenter.domain.ItemType.TASK
 import com.example.xcommandcenter.domain.Priority
@@ -232,6 +233,7 @@ internal object SeedData {
         idea(7, 2, IdeaKind.QUESTION, "How much planning is too much?", 4)
         idea(8, 1, IdeaKind.VISION, "Make music part of every day")
         idea(9, 0, IdeaKind.PRINCIPLE, "Practise a little, every day", 8, "Thirty minutes daily beats three hours on Sunday.")
+        idea(10, 2, IdeaKind.IDEA, "Answer messages right away", body = "Being reachable shows I care.")
 
         // Schedules: the first (created with the database) becomes "Weekday"; "Weekend" is added. Automatic switching stays off.
         db.execSQL("UPDATE schedules SET name = 'Weekday', days = ${Recurrence.maskFromDays(DayOfWeek.entries.take(5).toSet())} WHERE id = 1")
@@ -309,17 +311,23 @@ internal object SeedData {
             PERSON to 3L to (QUOTE to 4L),
             PERSON to 3L to (NOTE to 1L),
             IDEA to 1L to (GOAL to 1L),
-            IDEA to 2L to (QUOTE to 4L),
-            IDEA to 2L to (PERSON to 3L),
             IDEA to 2L to (NOTE to 1L),
-            IDEA to 3L to (HABIT to 5L),
-            IDEA to 4L to (BOOK to 2L),
-            IDEA to 5L to (PLAN to 1L),
-            IDEA to 6L to (HABIT to 1L),
             IDEA to 6L to (BLOCK to 3L),
-            IDEA to 9L to (HABIT to 3L),
-            IDEA to 9L to (BOOK to 4L),
         ).forEach { (from, to) -> link(db, from, to, created()) }
+
+        // Labelled links, read from the first item: the labels' ids follow LinkLabels.defaults.
+        fun label(key: String) = LinkLabels.defaults.indexOfFirst { it.key == key } + 1L
+        listOf(
+            Triple(QUOTE to 4L, "SUPPORTS", IDEA to 2L),
+            Triple(PERSON to 3L, "INSPIRED", IDEA to 2L),
+            Triple(BOOK to 2L, "INSPIRED", IDEA to 4L),
+            Triple(IDEA to 3L, LinkLabels.LEADS_TO, HABIT to 5L),
+            Triple(IDEA to 5L, LinkLabels.LEADS_TO, PLAN to 1L),
+            Triple(IDEA to 6L, LinkLabels.LEADS_TO, HABIT to 1L),
+            Triple(IDEA to 9L, LinkLabels.LEADS_TO, HABIT to 3L),
+            Triple(BOOK to 4L, "SUPPORTS", IDEA to 9L),
+            Triple(IDEA to 10L, LinkLabels.CONTRADICTS, IDEA to 6L),
+        ).forEach { (from, key, to) -> link(db, from, to, created(), label(key)) }
 
         // Tags (no createdAt column, so not through row()).
         listOf(1L to "stoic", 2L to "music", 3L to "running", 4L to "reading").forEach { (id, name) ->
@@ -341,14 +349,16 @@ internal object SeedData {
         }
     }
 
-    private fun link(db: SupportSQLiteDatabase, from: Pair<ItemType, Long>, to: Pair<ItemType, Long>, createdAt: Long) {
-        val link = LinkEntity.between(ItemRef(from.first, from.second), ItemRef(to.first, to.second))
+    private fun link(db: SupportSQLiteDatabase, from: Pair<ItemType, Long>, to: Pair<ItemType, Long>, createdAt: Long, labelId: Long? = null) {
+        val link = LinkEntity.labelled(ItemRef(from.first, from.second), ItemRef(to.first, to.second), labelId)
         db.insert("links", SQLiteDatabase.CONFLICT_IGNORE, ContentValues().apply {
             put("aType", link.aType.name)
             put("aId", link.aId)
             put("bType", link.bType.name)
             put("bId", link.bId)
             put("createdAt", createdAt)
+            if (link.labelId != null) put("labelId", link.labelId)
+            put("labelFromA", if (link.labelFromA) 1 else 0)
         })
     }
 }

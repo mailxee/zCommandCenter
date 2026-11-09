@@ -22,13 +22,24 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** How a line on the map is drawn. */
-enum class EdgeStyle { ROUTE, OFF_ROUTE, SUGGEST_REMOVE, SHARED }
+enum class EdgeStyle { ROUTE, OFF_ROUTE, SUGGEST_REMOVE, SHARED, CONTRADICTS }
 
 data class MapNode(val entry: ItemIndexEntry, val x: Float, val y: Float) {
     val ref: ItemRef get() = entry.ref
 }
 
-data class MapEdge(val link: LinkAnalysis.Link, val style: EdgeStyle, val finding: LinkAnalysis.Finding?)
+/**
+ * A line on the map. [label] is the link's label read forward, from [subject] (null for a plain
+ * link); [directed] when it reads differently from the other end, so the line shows an arrow.
+ */
+data class MapEdge(
+    val link: LinkAnalysis.Link,
+    val style: EdgeStyle,
+    val finding: LinkAnalysis.Finding?,
+    val label: String? = null,
+    val subject: ItemRef? = null,
+    val directed: Boolean = false,
+)
 
 /** What the map draws: items in grid units (see [GraphLayout]) and the lines between them. */
 data class MapState(
@@ -114,13 +125,21 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         val edges = inside.groupBy { setOf(it.a, it.b) }.map { (pair, group) ->
             val link = group.firstOrNull { it.id in byLink } ?: group.first()
             val finding = byLink[link.id]
+            val stored = graph.stored[link.id]
+            val label = stored?.labelId?.let(graph.labels::get)
             val style = when {
+                link.contradiction -> EdgeStyle.CONTRADICTS
                 finding?.remove?.id == link.id -> EdgeStyle.SUGGEST_REMOVE
                 graph.route.kind(link.a.type, link.b.type) != LinkRoute.Kind.ON_ROUTE -> EdgeStyle.OFF_ROUTE
                 pair in shared -> EdgeStyle.SHARED
                 else -> EdgeStyle.ROUTE
             }
-            MapEdge(link, style, finding)
+            MapEdge(
+                link, style, finding,
+                label = label?.forward,
+                subject = if (stored?.labelFromA != false) link.a else link.b,
+                directed = label != null && !label.symmetric,
+            )
         }
         val refs = nodes.map { it.ref }
         val pairs = edges.map { it.link.a to it.link.b }

@@ -1,6 +1,8 @@
 package com.example.xcommandcenter.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.xcommandcenter.domain.ItemRef
@@ -10,12 +12,20 @@ import com.example.xcommandcenter.domain.ItemType
  * The single many-to-many link table. A link is undirected: it is stored once, with the pair
  * normalized so that side A sorts before side B (see [between]). The unique index then rejects
  * both A-B and B-A duplicates, and queries match the item on either side.
+ *
+ * A link can carry a label ([labelId], see [LinkLabelEntity]); [labelFromA] says which end it reads
+ * forward from ("A supports B" when true, "B supports A" when false). No label reads "relates to".
+ * Removing a label leaves its links plain.
  */
 @Entity(
     tableName = "links",
     indices = [
         Index(value = ["aType", "aId", "bType", "bId"], unique = true),
         Index(value = ["bType", "bId"]),
+        Index(value = ["labelId"]),
+    ],
+    foreignKeys = [
+        ForeignKey(entity = LinkLabelEntity::class, parentColumns = ["id"], childColumns = ["labelId"], onDelete = ForeignKey.SET_NULL),
     ],
 )
 data class LinkEntity(
@@ -25,7 +35,11 @@ data class LinkEntity(
     val bType: ItemType,
     val bId: Long,
     val createdAt: Long = System.currentTimeMillis(),
+    val labelId: Long? = null,
+    @ColumnInfo(defaultValue = "1") val labelFromA: Boolean = true,
 ) {
+    fun isA(ref: ItemRef): Boolean = aType == ref.type && aId == ref.id
+
     companion object {
         private val order = compareBy<ItemRef>({ it.type.name }, { it.id })
 
@@ -33,6 +47,12 @@ data class LinkEntity(
             require(first != second) { "An item cannot be linked to itself" }
             val (a, b) = if (order.compare(first, second) <= 0) first to second else second to first
             return LinkEntity(aType = a.type, aId = a.id, bType = b.type, bId = b.id)
+        }
+
+        /** A link from [subject] to [obj] carrying [labelId], reading forward from [subject]. */
+        fun labelled(subject: ItemRef, obj: ItemRef, labelId: Long?): LinkEntity {
+            val link = between(subject, obj)
+            return link.copy(labelId = labelId, labelFromA = labelId == null || link.isA(subject))
         }
     }
 }

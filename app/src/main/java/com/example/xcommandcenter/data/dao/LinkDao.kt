@@ -8,6 +8,8 @@ import com.example.xcommandcenter.data.entity.ChapterBook
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
+import com.example.xcommandcenter.data.entity.LinkLabelEntity
+import com.example.xcommandcenter.data.entity.LabelUse
 import com.example.xcommandcenter.data.entity.OwnedLink
 import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
@@ -90,6 +92,32 @@ interface LinkDao {
 
     @Query("SELECT * FROM links")
     fun observeAll(): Flow<List<LinkEntity>>
+
+    /** One item's links, as stored, for their labels. */
+    @Query("SELECT * FROM links WHERE (aType = :type AND aId = :id) OR (bType = :type AND bId = :id)")
+    fun observeLinksOf(type: ItemType, id: Long): Flow<List<LinkEntity>>
+
+    @Query("UPDATE links SET labelId = :labelId, labelFromA = :fromA WHERE aType = :aType AND aId = :aId AND bType = :bType AND bId = :bId")
+    suspend fun setLabel(aType: ItemType, aId: Long, bType: ItemType, bId: Long, labelId: Long?, fromA: Boolean)
+
+    @Query("SELECT * FROM link_labels ORDER BY sortOrder, id")
+    fun observeLabels(): Flow<List<LinkLabelEntity>>
+
+    @Query("SELECT labelId AS id, COUNT(*) AS uses FROM links WHERE labelId IS NOT NULL GROUP BY labelId")
+    fun observeLabelUses(): Flow<List<LabelUse>>
+
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM link_labels")
+    suspend fun newLabelOrder(): Int
+
+    @Insert
+    suspend fun insertLabel(label: LinkLabelEntity): Long
+
+    @Query("UPDATE link_labels SET forward = :forward, backward = :backward WHERE id = :id")
+    suspend fun renameLabel(id: Long, forward: String, backward: String?)
+
+    /** Its links lose the label through the foreign key (SET NULL). */
+    @Query("DELETE FROM link_labels WHERE id = :id")
+    suspend fun deleteLabel(id: Long)
 
     /** One item's index entry; emits null once the item is deleted. */
     @Query("SELECT * FROM item_index WHERE type = :type AND id = :id")

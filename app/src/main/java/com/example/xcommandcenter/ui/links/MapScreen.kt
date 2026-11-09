@@ -66,6 +66,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
@@ -80,6 +82,9 @@ import kotlin.math.sqrt
 /** Amber for links off the suggested route; red for a link Tidy links suggests removing. */
 internal val OffRouteColor = Color(0xFFE6A100)
 internal val RemoveColor = Color(0xFFD32F2F)
+
+/** A contradiction: purple and dotted, so it isn't taken for a suggested removal. */
+internal val ContradictColor = Color(0xFF8E24AA)
 
 private val ColumnWidth = 150.dp
 private val RowHeight = 96.dp
@@ -166,6 +171,7 @@ fun MapScreen(
                     Legend(MaterialTheme.colorScheme.outline, false, "On route")
                     Legend(OffRouteColor, false, "Off route")
                     Legend(RemoveColor, true, "Suggest removing")
+                    if (s?.edges?.any { it.style == EdgeStyle.CONTRADICTS } == true) Legend(ContradictColor, true, "Contradicts")
                 }
             }
             Box(Modifier.weight(1f).fillMaxWidth().padding(top = 6.dp)) {
@@ -310,13 +316,16 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                         EdgeStyle.ROUTE, EdgeStyle.SHARED -> outline
                         EdgeStyle.OFF_ROUTE -> OffRouteColor
                         EdgeStyle.SUGGEST_REMOVE -> RemoveColor
+                        EdgeStyle.CONTRADICTS -> ContradictColor
                     }.copy(alpha = if (dim) 0.25f else 1f)
                     val width = when (edge.style) {
                         EdgeStyle.ROUTE, EdgeStyle.SHARED -> 1.5.dp.toPx()
+                        EdgeStyle.CONTRADICTS -> 2.dp.toPx()
                         else -> 2.5.dp.toPx()
                     }
                     val dash = when (edge.style) {
                         EdgeStyle.SUGGEST_REMOVE -> PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx()))
+                        EdgeStyle.CONTRADICTS -> PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx()))
                         EdgeStyle.SHARED -> PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 4.dp.toPx()))
                         else -> null
                     }
@@ -327,6 +336,48 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
                     }
                     if (selected) drawPath(path, color.copy(alpha = 0.2f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
                     drawPath(path, color, style = Stroke(width, pathEffect = dash))
+                    // A label that reads one way gets an arrow from its subject, past the middle of the line.
+                    if (edge.directed) {
+                        val (from, to) = if (edge.subject == edge.link.a) a to b else b to a
+                        val c = geometry.control(a, b)
+                        val t = 0.68f
+                        val at = curvePoint(from, c, to, t)
+                        val ahead = curvePoint(from, c, to, t + 0.02f)
+                        val dir = (ahead - at).let { d -> val len = sqrt(d.x * d.x + d.y * d.y); if (len == 0f) d else d / len }
+                        val size = 6.dp.toPx()
+                        val side = Offset(-dir.y, dir.x)
+                        val arrow = Path().apply {
+                            moveTo(at.x + dir.x * size, at.y + dir.y * size)
+                            lineTo(at.x - dir.x * size + side.x * size * 0.7f, at.y - dir.y * size + side.y * size * 0.7f)
+                            lineTo(at.x - dir.x * size - side.x * size * 0.7f, at.y - dir.y * size - side.y * size * 0.7f)
+                            close()
+                        }
+                        drawPath(arrow, color)
+                    }
+                }
+            }
+            // Labels sit on the middle of their lines.
+            state.edges.filter { it.label != null }.forEach { edge ->
+                val a = state.byRef[edge.link.a]?.let(geometry::center) ?: return@forEach
+                val b = state.byRef[edge.link.b]?.let(geometry::center) ?: return@forEach
+                val mid = curvePoint(a, geometry.control(a, b), b, 0.5f)
+                val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
+                Box(
+                    Modifier
+                        .offset((mid.x / density).dp - LabelWidth / 2, (mid.y / density).dp - 8.dp)
+                        .width(LabelWidth)
+                        .alpha(if (dim) 0.3f else 1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        edge.label.orEmpty(),
+                        fontSize = 10.sp,
+                        fontStyle = FontStyle.Italic,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (edge.style == EdgeStyle.CONTRADICTS) ContradictColor else colors.onSurfaceVariant,
+                        modifier = Modifier.background(colors.surfaceContainerLowest, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
+                    )
                 }
             }
             state.nodes.forEach { node ->
@@ -346,6 +397,15 @@ private fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: M
             }
         }
     }
+}
+
+private val LabelWidth = 96.dp
+
+/** The point at [t] (0 to 1) along a line from [a] to [b], or along the curve through control point [c]. */
+private fun curvePoint(a: Offset, c: Offset?, b: Offset, t: Float): Offset {
+    if (c == null) return a + (b - a) * t
+    val u = 1 - t
+    return Offset(u * u * a.x + 2 * u * t * c.x + t * t * b.x, u * u * a.y + 2 * u * t * c.y + t * t * b.y)
 }
 
 /** How far [at] is from an edge's line (or curve), in content pixels. */
@@ -432,7 +492,14 @@ private fun EdgePanel(edge: MapEdge, state: MapState, viewModel: MapViewModel) {
     val finding = edge.finding
     val text = finding?.let { findingText(it, state.route, state::title) }
     Panel {
-        PanelHeader(text?.label ?: "Link", "${state.title(edge.link.a)} — ${state.title(edge.link.b)}") { viewModel.select(null) }
+        val title = if (edge.label != null) {
+            val subject = edge.subject ?: edge.link.a
+            val obj = if (subject == edge.link.a) edge.link.b else edge.link.a
+            "${state.title(subject)} ${edge.label} ${state.title(obj)}"
+        } else {
+            "${state.title(edge.link.a)} — ${state.title(edge.link.b)}"
+        }
+        PanelHeader(text?.label ?: "Link", title) { viewModel.select(null) }
         if (text != null) {
             Text(text.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 10.dp))
             Text(text.suggestion, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 10.dp))

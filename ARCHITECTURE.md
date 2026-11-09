@@ -1023,6 +1023,37 @@ default tab order, so an existing order gets it at the end.
 - **Demo data:** two visions with beliefs, principles, an idea and a question, linked to the
   goals, habits, books and people.
 
+### 2.59 Link labels
+
+A link can carry a label, so the networks say how things relate, not only that they do.
+
+- **Data** (database version 12, an automatic migration that also inserts the starting labels):
+  `link_labels` (a wording each way, `forward` "supports" and `backward` "supported by"; no
+  `backward` reads the same both ways, like "contradicts"; a `key` for the starting ones, so the
+  app can tell a contradiction). `links` gains `labelId` (a foreign key that sets it back to null
+  when the label is deleted, so the link stays, plain) and `labelFromA`, which end the label reads
+  forward from. Pairs stay stored in order (§2.1); `LinkEntity.labelled(subject, object, label)`
+  works out the flag. No label reads "relates to".
+- **Starting labels** (`domain/LinkLabels`): supports · supported by, contradicts, inspired ·
+  inspired by, leads to · comes from, example of · has example, source of · from, depends on ·
+  needed by. Settings › Link labels lists them with how many links use each; tap one to rename or
+  delete it, or add your own.
+- **Linking:** after an item is picked, the label picker offers "relates to" and both wordings of
+  every label, so picking a wording also sets the direction; a line reads the link back ("This
+  belief — supported by — …"). Pressing and holding a linked card opens the same picker to change
+  it. Labels work between any items.
+- **Detail pages:** labelled links come first, grouped by their wording read from this item
+  ("Supported by", "Leads to"), then the rest by tab as before (`LinkRepository.observeLabelsOf`).
+- **Map:** a label sits on the middle of its line; a label that reads differently each way has an
+  arrow from its subject. A contradiction is a purple dotted line, not a route. The line's panel
+  reads it as a sentence.
+- **Tidy links:** a labelled link counts as intentional. It is kept ahead of unlabelled links when
+  loops are broken, so an unlabelled one is suggested first, and it gets no "skips a layer" advice.
+  A contradiction never takes part in a route, so it is never suggested for removal.
+- **Backup:** the Links sheet gains Label ID and "Label reads from" (A or B as written on the row),
+  and a Link labels sheet holds the labels. Without that sheet, links come in plain and the app
+  keeps its labels; "Delete everything" keeps the labels too, like settings.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1202,6 +1233,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/IdeaEntity.kt`, `data/dao/IdeaDao.kt`, `data/repository/IdeaRepository.kt` | Ideas as a tree; turning a note into an idea (§2.58). |
 | `ui/idea/IdeaDetailViewModel.kt`, `IdeaDetailScreen.kt` | An idea's kind, text, Under and the ideas under it; tags; links (§2.58). |
 | `ui/common/IdeaKinds.kt` | Each kind's icon and colour (§2.58). |
+| `data/entity/LinkLabelEntity.kt`, `domain/LinkLabels.kt` | Link labels with a wording each way, and the starting set (§2.59). |
+| `ui/common/LinkLabelDialog.kt` | Picking a link's label and direction (§2.59). |
 
 ### Resources
 | File | Purpose |
