@@ -2,6 +2,7 @@ package com.example.xcommandcenter.ui
 
 import com.example.xcommandcenter.ui.person.PersonDetailViewModel
 import com.example.xcommandcenter.ui.idea.IdeaDetailViewModel
+import com.example.xcommandcenter.ui.settings.GlossaryViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.CreationExtras
@@ -27,6 +28,7 @@ import com.example.xcommandcenter.ui.task.TaskDetailViewModel
 object AppViewModelProvider {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
         initializer { with(container()) { HomeViewModel(this) } }
+        initializer { with(container()) { GlossaryViewModel(glossaryRepository, linkRepository) } }
         initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository) } }
         initializer { with(container()) { MapViewModel(createSavedStateHandle(), linkRepository) } }
         initializer { with(container()) { TidyViewModel(createSavedStateHandle(), linkRepository) } }

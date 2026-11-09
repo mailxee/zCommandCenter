@@ -1008,8 +1008,7 @@ default tab order, so an existing order gets it at the end.
   everything under it. The filter panel has a chip per kind (`IdeaKindFilter`): tap to show only
   that kind (several can be on), hold to hide it; with any filter on, the ideas above a match stay so
   the tree reads.
-- **Idea page:** the kind as chips with its definition below (from `domain/Glossary` until the
-  editable glossary), the idea, the explanation, **Under** (a picker showing the tree) and the ideas
+- **Idea page:** the kind as chips with its definition below (from the glossary, §2.60), the idea, the explanation, **Under** (a picker showing the tree) and the ideas
   under this one with "Add an idea under this" (one kind narrower than the parent by default).
 - **Turn into idea** (a note's page): saves the note, then makes it an idea of the chosen kind and
   deletes the note (`IdeaRepository.fromNote`). The title (or the note's first line) becomes the
@@ -1053,6 +1052,23 @@ A link can carry a label, so the networks say how things relate, not only that t
 - **Backup:** the Links sheet gains Label ID and "Label reads from" (A or B as written on the row),
   and a Link labels sheet holds the labels. Without that sheet, links come in plain and the app
   keeps its labels; "Delete everything" keeps the labels too, like settings.
+
+### 2.60 Glossary
+
+Settings › Glossary keeps an editable definition for every term: the five idea kinds, every tab
+(Doing: goal, plan, task, habit, schedule block; Thinking and sources: idea, note, book, chapter,
+quote, person) and every link label.
+
+- **Defaults** live in code (`domain/Glossary`); only rewritten definitions are stored, in the
+  `glossary` table by key (`KIND:BELIEF`, `TYPE:GOAL`, `LABEL:3`), database version 13. Saving the
+  starting text or a blank one removes the row, which is what "Reset to default" does too.
+  `Glossary.Terms` merges the two. A label the user adds starts with no definition.
+- **Where definitions show:** under the kind chips on an idea's page; in the label picker under the
+  chosen label; and on an empty tab, under "No … yet" (through `LocalTerms`). Holding a tab name was
+  in the plan, but Material's tabs take no long press, so it was left out.
+- `ItemCardSource.terms` hands the definitions to every detail page, as they all have one.
+- **Backup:** a Glossary sheet (Term, Definition) with the rewritten definitions only. Like the
+  labels, definitions are kept on "Delete everything" and on importing a workbook without the sheet.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1229,12 +1245,14 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57). |
 | `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
-| `domain/IdeaKind.kt`, `domain/IdeaOutline.kt`, `domain/Glossary.kt` | Idea kinds, the Ideas outline and kind chips, default definitions (§2.58). |
+| `domain/IdeaKind.kt`, `domain/IdeaOutline.kt`, `domain/Glossary.kt` | Idea kinds, the Ideas outline and kind chips (§2.58); the glossary's terms and starting definitions (§2.60). |
 | `data/entity/IdeaEntity.kt`, `data/dao/IdeaDao.kt`, `data/repository/IdeaRepository.kt` | Ideas as a tree; turning a note into an idea (§2.58). |
 | `ui/idea/IdeaDetailViewModel.kt`, `IdeaDetailScreen.kt` | An idea's kind, text, Under and the ideas under it; tags; links (§2.58). |
 | `ui/common/IdeaKinds.kt` | Each kind's icon and colour (§2.58). |
 | `data/entity/LinkLabelEntity.kt`, `domain/LinkLabels.kt` | Link labels with a wording each way, and the starting set (§2.59). |
 | `ui/common/LinkLabelDialog.kt` | Picking a link's label and direction (§2.59). |
+| `data/entity/GlossaryEntity.kt`, `data/dao/GlossaryDao.kt`, `data/repository/GlossaryRepository.kt` | Rewritten definitions (§2.60). |
+| `ui/settings/GlossaryScreen.kt` | Settings › Glossary and its view model (§2.60). |
 
 ### Resources
 | File | Purpose |
@@ -1259,6 +1277,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/BackupFormatTest.kt` | Data round trip, sheet order, values typed in Excel, skipped references, plan consistency, error messages. |
 | `ui/home/TagFilterTest.kt` | Selected tags (all required), hidden tags (any hides), and both together. |
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
+| `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |
 | `domain/IdeaOutlineTest.kt` | The Ideas outline (depths, collapsing, filtering keeps ancestors) and the kind chips. |
 
 Run them with `./gradlew testDebugUnitTest`.

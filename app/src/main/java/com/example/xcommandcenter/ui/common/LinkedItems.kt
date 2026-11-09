@@ -61,6 +61,7 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
     val cards by viewModel.linkedCards.collectAsStateWithLifecycle()
     val readings by viewModel.linkLabels.collectAsStateWithLifecycle()
     val labels by viewModel.labels.collectAsStateWithLifecycle()
+    val terms by viewModel.terms.collectAsStateWithLifecycle()
     var picking by rememberSaveable { mutableStateOf(false) }
     // The item whose link is being labelled: just picked (new) or held (existing).
     var labelling by remember { mutableStateOf<ItemIndexEntry?>(null) }
@@ -118,6 +119,7 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
             other = entry.title,
             labels = labels,
             initial = current?.let { LabelChoice(it.label.id, it.subject) },
+            definition = { terms.ofLabel(it.id, it.key) },
             confirmLabel = if (labellingNew) "Link" else "Save",
             onConfirm = { choice ->
                 viewModel.link(entry.ref, choice)

@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.GlossaryEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import androidx.room.Dao
 import androidx.room.Insert
@@ -54,12 +55,15 @@ interface BackupDao {
     @Query("SELECT * FROM person_items ORDER BY personId, position") suspend fun personItems(): List<PersonItemEntity>
     @Query("SELECT * FROM ideas ORDER BY id") suspend fun ideas(): List<IdeaEntity>
     @Query("SELECT * FROM link_labels ORDER BY sortOrder, id") suspend fun linkLabels(): List<LinkLabelEntity>
+    @Query("SELECT * FROM glossary ORDER BY `key`") suspend fun glossary(): List<GlossaryEntity>
+    @Insert suspend fun insertGlossary(rows: List<GlossaryEntity>)
+    @Query("DELETE FROM glossary") suspend fun deleteGlossary()
 
     /** A consistent snapshot: all tables read inside one transaction. */
     @Transaction
     suspend fun snapshot(): BackupData = BackupData(
         tasks(), goals(), habits(), habitMarks(), plans(), notes(), books(), chapters(), quotes(), links(), tags(), itemTags(), checklistItems(), noteListItems(),
-        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(), linkLabels(),
+        reminders(), blocks(), schedules(), people(), personProfiles(), personItems(), ideas(), linkLabels(), glossary(),
     )
 
     @Insert suspend fun insertTasks(rows: List<TaskEntity>)
@@ -173,6 +177,11 @@ interface BackupDao {
         if (data.linkLabels.isNotEmpty()) {
             deleteLinkLabels()
             insertLinkLabels(data.linkLabels)
+        }
+        // Definitions are kept like settings too, unless the data brings its own.
+        if (data.glossary.isNotEmpty()) {
+            deleteGlossary()
+            insertGlossary(data.glossary)
         }
         val labelIds = linkLabels().map { it.id }.toSet()
         insertLinks(data.links.map { if (it.labelId != null && it.labelId !in labelIds) it.copy(labelId = null, labelFromA = true) else it })

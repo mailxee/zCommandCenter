@@ -43,7 +43,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.IdeaEntity
-import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -70,6 +69,7 @@ fun IdeaDetailScreen(
     val id by viewModel.itemId.collectAsStateWithLifecycle()
     val all by viewModel.allIdeas.collectAsStateWithLifecycle()
     val idea = viewModel.idea
+    val terms by viewModel.terms.collectAsStateWithLifecycle()
     var choosingParent by rememberSaveable { mutableStateOf(false) }
     val parent = all.firstOrNull { it.id == idea.parentId }
     val children = if (id == 0L) emptyList() else all.filter { it.parentId == id }
@@ -94,7 +94,7 @@ fun IdeaDetailScreen(
                 )
             }
         }
-        KindDefinition(idea.kind)
+        KindDefinition(idea.kind, terms.of(idea.kind))
         OutlinedTextField(
             value = idea.title,
             onValueChange = { v -> viewModel.update { it.copy(title = v) } },
@@ -170,7 +170,7 @@ fun IdeaDetailScreen(
 
 /** The kind's definition under the picker, so the choice is easy to make. */
 @Composable
-fun KindDefinition(kind: IdeaKind, definition: String = Glossary.default(kind)) {
+fun KindDefinition(kind: IdeaKind, definition: String) {
     val color = kindColor(kind)
     Surface(shape = RoundedCornerShape(10.dp), color = color.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

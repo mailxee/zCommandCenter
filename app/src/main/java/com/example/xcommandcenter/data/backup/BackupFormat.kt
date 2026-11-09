@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.entity.PersonProfileEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.GlossaryEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.data.entity.BlockEntity
@@ -69,6 +70,7 @@ data class BackupData(
     val personItems: List<PersonItemEntity> = emptyList(),
     val ideas: List<IdeaEntity> = emptyList(),
     val linkLabels: List<LinkLabelEntity> = emptyList(),
+    val glossary: List<GlossaryEntity> = emptyList(),
 ) {
     val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size + ideas.size
 }
@@ -96,6 +98,7 @@ object BackupFormat {
     const val PERSON_ITEMS = "Person items"
     const val REMINDERS = "Reminders"
     const val LINK_LABELS = "Link labels"
+    const val GLOSSARY = "Glossary"
     const val SETTINGS = "Settings"
     const val SCHEDULES = "Schedules"
 
@@ -271,6 +274,10 @@ object BackupFormat {
                     )
                 },
         )
+        val glossary = Sheet(
+            GLOSSARY,
+            listOf(listOf("Term", "Definition")) + data.glossary.sortedBy { it.key }.map { listOf(it.key, it.definition) },
+        )
         val linkLabels = Sheet(
             LINK_LABELS,
             listOf(listOf("ID", "One way", "Other way", "Key", "Order")) +
@@ -315,7 +322,7 @@ object BackupFormat {
                     )
                 },
         )
-        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, profiles, personItems, chapters, history, links, linkLabels, tags, reminders, settings, schedules)
+        return tabOrder.mapNotNull { tabSheets[it] } + listOf(checklists, noteLists, profiles, personItems, chapters, history, links, linkLabels, tags, reminders, settings, schedules, glossary)
     }
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
@@ -531,6 +538,11 @@ object BackupFormat {
             )
         }.orEmpty().withIds(LINK_LABELS) { l, id -> l.copy(id = id) }.distinctBy { it.key ?: "#${it.id}" }
         val labelIds = linkLabels.map { it.id }.toSet()
+        // Only rewritten definitions are kept; a term no longer known (a deleted label) is harmless.
+        val glossary = sheet(GLOSSARY, false)?.rows("Term", "Definition").orEmpty().mapNotNull { r ->
+            val definition = r.text("Definition").ifBlank { return@mapNotNull null }
+            GlossaryEntity(r.required("Term"), definition)
+        }.distinctBy { it.key }
 
         val links = sheet(LINKS, false)?.rows("ID A", "ID B").orEmpty().mapNotNull { r ->
             val a = ItemRef(r.itemType("Type A"), r.long("ID A") ?: r.fail("ID A is required"))
@@ -604,7 +616,7 @@ object BackupFormat {
         return ImportResult(
             BackupData(
                 tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
-                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas, linkLabels,
+                noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas, linkLabels, glossary,
             ),
             skipped,
             settings,

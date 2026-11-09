@@ -18,6 +18,7 @@ import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.GlossaryEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.data.entity.PersonItemEntity
@@ -82,6 +83,7 @@ class BackupFormatTest {
             LinkLabelEntity(3, "SUPPORTS", "supports", "supported by", 0),
             LinkLabelEntity(8, null, "echoes", null, 1),
         ),
+        glossary = listOf(GlossaryEntity("KIND:BELIEF", "Held true, tested by experience."), GlossaryEntity("LABEL:8", "Says it again")),
         tags = listOf(TagEntity(7, "Home")),
         itemTags = listOf(ItemTagEntity(ItemType.TASK, 1, 7), ItemTagEntity(ItemType.CHAPTER, 5, 7)),
         checklistItems = listOf(
@@ -149,6 +151,7 @@ class BackupFormatTest {
         // Parents first, as with plans.
         assertEquals(data.ideas.reversed(), back.ideas)
         assertEquals(data.linkLabels, back.linkLabels)
+        assertEquals(data.glossary, back.glossary)
         assertEquals(false, back.links[1].labelFromA)
     }
 
@@ -278,7 +281,7 @@ class BackupFormatTest {
     fun `sheets follow the tab order, then the extra sheets`() {
         val order = TabOrder.default.reversed()
         val names = BackupFormat.toSheets(data, order, zone).map { it.name }
-        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Link labels", "Tags", "Reminders", "Settings", "Schedules"), names)
+        assertEquals(order.map { it.tabLabel } + listOf("Checklists", "Note lists", "Profiles", "Person items", "Chapters", "Habit history", "Links", "Link labels", "Tags", "Reminders", "Settings", "Schedules", "Glossary"), names)
     }
 
     @Test

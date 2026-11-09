@@ -48,6 +48,8 @@ fun LinkLabelDialog(
     other: String,
     labels: List<LinkLabelEntity>,
     initial: LabelChoice?,
+    /** A label's definition from the glossary, shown once it is chosen; may be blank. */
+    definition: (LinkLabelEntity) -> String,
     confirmLabel: String,
     onConfirm: (LabelChoice?) -> Unit,
     onDismiss: () -> Unit,
@@ -75,6 +77,9 @@ fun LinkLabelDialog(
                         modifier = Modifier.padding(10.dp),
                     )
                 }
+                chosen?.let(definition)?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     LabelOption("relates to", selected = chosen == null) { choiceId = null }
                 }
@@ -93,7 +98,7 @@ fun LinkLabelDialog(
                     }
                 }
                 Text(
-                    "Labels are only words on the link; any label works between any items. Edit them in Settings.",
+                    "Labels are only words on the link; any label works between any items. Edit them in Settings, and what they mean in Settings › Glossary.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

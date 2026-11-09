@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
 import com.example.xcommandcenter.domain.IdeaKind
+import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.domain.IdeaKindFilter
 import com.example.xcommandcenter.domain.IdeaOutline
 import androidx.lifecycle.ViewModel
@@ -142,6 +143,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val schedulesRepo = container.scheduleRepository
     private val taskSortRepo = container.taskSortRepository
     private val linksRepo = container.linkRepository
+
+    /** The glossary's definitions, shown on empty tabs. */
+    val terms: StateFlow<Glossary.Terms> = container.glossaryRepository.terms.stateIn(Glossary.Terms())
 
     val tabOrder: StateFlow<List<ItemType>> = container.tabOrderRepository.order.stateIn(TabOrder.default)
 

@@ -81,6 +81,7 @@ import sh.calvin.reorderable.ReorderableColumn
 fun SettingsScreen(
     onBack: () -> Unit,
     onTidy: () -> Unit = {},
+    onGlossary: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val order by viewModel.order.collectAsStateWithLifecycle()
@@ -232,6 +233,22 @@ fun SettingsScreen(
 
             LinksSettings(viewModel, onTidy)
             LinkLabelsSettings(viewModel)
+            SectionTitle("Glossary")
+            Card(Modifier.fillMaxWidth().clickable(onClick = onGlossary)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
+                    Icon(painterResource(R.drawable.ic_glossary), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Glossary", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "What visions, beliefs, goals, labels and the rest mean to you",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("Open", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+            }
 
             SectionTitle("Data")
             Text(

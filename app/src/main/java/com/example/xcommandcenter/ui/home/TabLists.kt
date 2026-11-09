@@ -2,6 +2,7 @@ package com.example.xcommandcenter.ui.home
 
 import com.example.xcommandcenter.ui.common.personCardText
 import com.example.xcommandcenter.ui.common.ideaCardText
+import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.ui.common.KindIcon
 import com.example.xcommandcenter.data.entity.IdeaEntity
 import androidx.compose.foundation.background
@@ -611,7 +612,7 @@ fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
     ItemList(
         ItemType.IDEA,
         empty = rows.isEmpty(),
-        emptyText = "No ideas yet. Visions, beliefs, principles, ideas and questions go here, nested under each other.",
+        emptyText = "No ideas yet.",
         filtered = viewModel.filtering(tagFilter) || view.filtered || kinds.active,
         controls = controls, state = drag.listState,
         spacing = 0.dp,
@@ -733,6 +734,9 @@ private fun LazyListScope.priorityFilterChips(tab: ItemType, view: PriorityView,
     }
 }
 
+/** The glossary's definitions, for the empty lists. */
+val LocalTerms = staticCompositionLocalOf { Glossary.Terms() }
+
 /** What the add button does, for the empty lists' own add button. */
 val LocalCreateItem = staticCompositionLocalOf<(ItemType) -> Unit> { {} }
 
@@ -783,6 +787,16 @@ private fun EmptyList(type: ItemType, text: String, offerAdd: Boolean) {
             textAlign = TextAlign.Center,
         )
         if (offerAdd) {
+            // What this tab is for, in the user's own words from the glossary.
+            val definition = LocalTerms.current.of(type)
+            if (definition.isNotBlank()) {
+                Text(
+                    "${if (type == ItemType.BLOCK) "A schedule block" else "A ${type.singular.lowercase()}"}: $definition",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
             FilledTonalButton(onClick = { create(type) }) {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))

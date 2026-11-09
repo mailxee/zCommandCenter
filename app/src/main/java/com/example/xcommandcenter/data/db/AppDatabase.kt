@@ -19,6 +19,8 @@ import com.example.xcommandcenter.data.dao.NoteDao
 import com.example.xcommandcenter.data.dao.PersonDao
 import com.example.xcommandcenter.data.dao.IdeaDao
 import com.example.xcommandcenter.data.entity.IdeaEntity
+import com.example.xcommandcenter.data.entity.GlossaryEntity
+import com.example.xcommandcenter.data.dao.GlossaryDao
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.data.dao.PlanDao
@@ -75,6 +77,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         KeptFindingEntity::class,
         IdeaEntity::class,
         LinkLabelEntity::class,
+        GlossaryEntity::class,
     ],
     views = [ItemIndexEntry::class],
     // Reset to 1 when Projects became Plans; databases from before that are not migrated (the app is reinstalled).
@@ -89,7 +92,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 10: Tidy links findings kept as they are.
     // 11: the Ideas tab.
     // 12: link labels, with the starting set.
-    version = 12,
+    // 13: definitions rewritten in the glossary.
+    version = 13,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -102,6 +106,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12, spec = AppDatabase.AddLinkLabels::class),
+        AutoMigration(from = 12, to = 13),
     ],
 )
 @TypeConverters(Converters::class)
@@ -121,6 +126,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
     abstract fun personDao(): PersonDao
     abstract fun ideaDao(): IdeaDao
+    abstract fun glossaryDao(): GlossaryDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {

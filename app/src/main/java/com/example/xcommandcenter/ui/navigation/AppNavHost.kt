@@ -24,6 +24,7 @@ import com.example.xcommandcenter.ui.note.NoteDetailScreen
 import com.example.xcommandcenter.ui.plan.PlanDetailScreen
 import com.example.xcommandcenter.ui.quote.QuoteDetailScreen
 import com.example.xcommandcenter.ui.settings.SettingsScreen
+import com.example.xcommandcenter.ui.settings.GlossaryScreen
 import com.example.xcommandcenter.ui.task.TaskDetailScreen
 
 /**
@@ -56,8 +57,13 @@ fun AppNavHost(
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = back, onTidy = { navController.navigate(Routes.tidy(null)) })
+            SettingsScreen(
+                onBack = back,
+                onTidy = { navController.navigate(Routes.tidy(null)) },
+                onGlossary = { navController.navigate(Routes.GLOSSARY) },
+            )
         }
+        composable(Routes.GLOSSARY) { GlossaryScreen(onBack = back) }
         composable(
             Routes.MAP,
             arguments = listOf(

@@ -7,6 +7,7 @@ import com.example.xcommandcenter.domain.ItemType
 object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"
+    const val GLOSSARY = "glossary"
 
     /** The map of links and Tidy links; [ARG_ROOT] is an item as "TYPE:id", empty for every network. */
     const val ARG_ROOT = "root"

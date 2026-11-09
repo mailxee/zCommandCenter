@@ -5,6 +5,8 @@ import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.repository.PersonRepository
 import com.example.xcommandcenter.data.repository.IdeaRepository
+import com.example.xcommandcenter.data.repository.GlossaryRepository
+import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
@@ -68,11 +70,15 @@ class ItemCardSource(
     private val blocks: BlockRepository,
     private val people: PersonRepository,
     private val ideas: IdeaRepository,
+    /** Not card data, but every detail page shows definitions (an idea's kind, a link's label), so they come from here too. */
+    glossary: GlossaryRepository,
     private val schedules: ScheduleRepository,
     private val links: LinkRepository,
     private val tags: TagRepository,
     private val reminders: ReminderRepository,
 ) {
+    val terms: Flow<Glossary.Terms> = glossary.terms
+
     private val baseTexts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
         combine(tasks.observeAll(), tasks.observeChecklistCounts(), goals.observeAll(), ::Triple),
         combine(habits.observeAll(), habits.observeAllMarks(), plans.observeAll(), ::Triple),

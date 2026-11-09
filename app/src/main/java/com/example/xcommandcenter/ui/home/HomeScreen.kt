@@ -203,7 +203,8 @@ fun HomeScreen(
             AnimatedVisibility(visible = showFilters) {
                 TagFilterBar(viewModel, selected)
             }
-            CompositionLocalProvider(LocalCreateItem provides onCreate) {
+            val terms by viewModel.terms.collectAsStateWithLifecycle()
+            CompositionLocalProvider(LocalCreateItem provides onCreate, LocalTerms provides terms) {
                 AnimatedContent(
                     targetState = selected,
                     transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(90)) },

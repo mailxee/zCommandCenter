@@ -16,6 +16,7 @@ import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.Glossary
 import com.example.xcommandcenter.ui.navigation.Routes
 import com.example.xcommandcenter.ui.plan.BlockedCompletion
 import kotlinx.coroutines.flow.Flow
@@ -171,6 +172,10 @@ abstract class ItemDetailViewModel(
 
     /** How the label picker names this page's item: "This task", or for an idea its kind. */
     open val selfName: String get() = "This ${type.singular.lowercase()}"
+
+    /** The glossary's definitions, for the idea kinds and the label picker. */
+    val terms: StateFlow<Glossary.Terms> = cards.terms
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Glossary.Terms())
 
     /** Every link label, for the label picker. */
     val labels: StateFlow<List<LinkLabelEntity>> = links.labels
