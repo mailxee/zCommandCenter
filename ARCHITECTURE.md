@@ -1447,6 +1447,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/MapFilterTest.kt` | Hiding tabs and kinds of link on the map; line styles. |
 | `domain/MapPositionsTest.kt` | Dragged positions kept per view, replaced and reset. |
 | `data/db/MigrationTest.kt` | Every older database version upgrades to the current schema; data and the upgrades' inserts survive (§2.68). |
+| `reminder/NotificationsTest.kt` | Task reminders have Done, habit reminders Done or Missed today, other reminders no button. |
 | `ui/home/PlanRowsTest.kt` | Plans tab rows: tasks under their plan, completed plans hidden, collapsing, a search keeping the plans above. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
