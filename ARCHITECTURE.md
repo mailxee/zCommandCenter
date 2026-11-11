@@ -93,7 +93,8 @@ grouped by tab, so chapters appear under Books.
 ### 2.4 Deleting items: transactional DAO methods
 
 **Chosen:** each DAO has `@Transaction suspend fun delete(id)` that deletes the item's links and
-tags, then the item. Special cases:
+tags, then the item. The links and tags go through `ItemCleanup.deleteRefs(type, id)`, which every
+item DAO extends (§2.68), so the queries are written once. Special cases:
 - **Book:** also deletes the links and tags of all its chapters. The chapters themselves go through the foreign key's `ON DELETE CASCADE`.
 - **Habit:** marks cascade through their foreign key.
 - **Plan:** child plans are moved up to the deleted plan's parent, so a subtree is never silently deleted.
@@ -1184,6 +1185,46 @@ positions** shows once anything in the view was moved and puts the layout's plac
 Each linked item on a page now has a label button beside its remove button (holding the card still
 works too), so a link's label can be changed from either of its two items.
 
+### 2.68 Notification buttons, marking today, and a review's clean-ups
+
+**Notification buttons.** A task reminder has a **Done** button, and a habit reminder **Done**
+(positive) or **Missed today** (negative). Each is a broadcast to `ReminderReceiver`
+(`ACTION_TASK_DONE`, `ACTION_HABIT_MARK`), handled with `goAsync` on the application scope, so it
+works with the app closed and never opens it. Both are idempotent: an already-completed task is left
+alone (so a second press can't create a second next occurrence of a repeating task), and
+`HabitRepository.mark` only adds today's mark if it is missing, unlike the cards' toggle. The
+notification is then removed. Other items' reminders have no button, as completing a plan can need
+a choice (§2.11) that a notification can't offer.
+
+**Top of the page.** A task's **Completed** checkbox is the first thing on its page. A habit's page
+starts with the cards' today button and its state ("Mark done today", "Missed today", …) on days the
+habit is due or already marked, and "Not due today" otherwise.
+
+**Today.** `domain/Today.kt` is today's date, checked each minute. The tabs' lists (past due tasks,
+habits due today), the cards and the Reminder chip combine it, so they move on at midnight with the
+app left open; before, they kept yesterday's day until something was edited. The Schedule's
+automatic switching already worked this way and now uses the same flow.
+
+**Shared delete queries.** `data/dao/ItemCleanup.kt` holds the two queries every item's delete runs
+(links and tags of `type`/`id`), which ten DAOs repeated with their type name typed in. Room supports
+`@Query` methods in a DAO's parent interface.
+
+**Upgrade tests.** `MigrationTest` (Robolectric) builds a database as each older version left it,
+from that version's schema in `app/schemas`, and opens it with `AppDatabase`, as a phone does after an
+update: Room runs the upgrades and checks every table and view against the current schema. It also
+checks that data survives and that the upgrades' own inserts (reminders copied from tasks and habits,
+the first schedule, the link labels) happen. Room's `MigrationTestHelper` was not used because it
+reads schemas from test assets, which local unit tests don't get. The schemas are declared as a test
+input, so changing one reruns the tests. Robolectric downloads its Android jars on first run;
+`-Probolectric.deps=<dir>` uses a folder of them instead, for a machine without that access.
+
+**Tests on every push.** `.github/workflows/ci.yml` runs the unit tests and a debug build on each push
+to main (and on pull requests), with no secrets; the release workflow is unchanged.
+
+**HomeViewModel split.** The tabs' shared sorts and filters (`TaskSort`, `PrioritySort`,
+`RepeatFilter`, `TagFilter`, `TabCount`) moved to `ui/home/HomeFilters.kt`, and the Plans tab's rows to
+`ui/home/PlanRows.kt` as a pure function, now tested. The view model keeps the state and wires it up.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1309,7 +1350,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | File | Purpose |
 |---|---|
 | `reminder/ReminderScheduler.kt` | Registers/cancels one `AlarmManager` alarm per task; exact when permitted, otherwise allow-while-idle. |
-| `reminder/ReminderReceiver.kt` | Alarm target; posts the notification with the app closed. |
+| `reminder/ReminderReceiver.kt` | Alarm target; posts the notification with the app closed. Also takes the notifications' Done and Missed today buttons (§2.68). |
 | `reminder/RescheduleReceiver.kt` | Re-registers reminders after boot, app update, or exact-alarm permission grant. |
 | `reminder/Notifications.kt` | Notification channel, permission check, reminder notification that opens the task. |
 
@@ -1333,6 +1374,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/common/ItemCard.kt` | The item card shared by the tabs and the linked items, the per-type card text, and habit summaries (§2.22, §2.49). |
 | `ui/common/ItemCardSource.kt` | Card data (text, control, tags, links) for every item, and the card controls' actions, for detail pages (§2.22). |
 | `ui/common/Fields.kt` | Date and date-time fields with Material pickers, date formatting, section title, transparent list-row colors. |
+| `ui/home/HomeFilters.kt` | The tabs' shared sorts and filters: task sorts, priority sort, repeat filter, tag filter, tab counts (§2.68). |
+| `ui/home/PlanRows.kt` | The Plans tab's rows: plans with their tasks, collapsing, filters keeping ancestors (§2.68). |
 | `ui/home/HomeViewModel.kt` | State for all seven tab lists (sorted and filtered tasks, habit summaries, plan tree, …), the shared tag filter and quick actions. |
 | `ui/home/HomeScreen.kt` | Top bar, scrollable tab row in the saved order, tag filter bar, FAB to create an item in the current tab. |
 | `ui/home/TabLists.kt` | The seven tab lists; every row shows its tags and what it is linked to. Tasks has sort and repeat filters; Plans is a collapsible outline with linked tasks. In reorder mode every row gets a drag handle. |
@@ -1359,6 +1402,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
 | `domain/MapFilter.kt`, `data/prefs/MapPrefsRepository.kt` | What the map hides and each kind of link's line style (§2.66). |
+| `domain/Today.kt` | Today's date, checked each minute, so day-dependent views move on at midnight (§2.68). |
+| `data/dao/ItemCleanup.kt` | The links-and-tags queries every item DAO's delete runs (§2.4, §2.68). |
 | `domain/MapPositions.kt` | Where items were dragged to on the map, per view (§2.67). |
 | `data/entity/IdeaListItemEntity.kt` | An idea's list (§2.65). |
 | `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
@@ -1401,6 +1446,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/ReminderTodayTest.kt`, `domain/BackupNamesTest.kt` | Reminders today; backup names and which old ones go. |
 | `domain/MapFilterTest.kt` | Hiding tabs and kinds of link on the map; line styles. |
 | `domain/MapPositionsTest.kt` | Dragged positions kept per view, replaced and reset. |
+| `data/db/MigrationTest.kt` | Every older database version upgrades to the current schema; data and the upgrades' inserts survive (§2.68). |
+| `ui/home/PlanRowsTest.kt` | Plans tab rows: tasks under their plan, completed plans hidden, collapsing, a search keeping the plans above. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |

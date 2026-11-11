@@ -48,96 +48,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** [CUSTOM] is the user's own order, set by reordering; the only sort in which tasks can be moved. */
-enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priority"), CUSTOM("Custom") }
-
-/**
- * How the Goals, Habits, Plans, Notes, Books and Quotes tabs are sorted: [CUSTOM] is the user's own
- * order, the only one in which items can be moved; [PRIORITY] puts Critical first, keeping the
- * custom order among items of the same priority.
- */
-enum class PrioritySort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
-
-/** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts but the same priority filter. */
-val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.PERSON, ItemType.IDEA)
-
-enum class RepeatFilter(val label: String) {
-    ALL("All"),
-    REPEATING("Repeating"),
-    ONE_OFF("One-off"),
-    ;
-
-    fun matches(task: TaskEntity): Boolean = when (this) {
-        ALL -> true
-        REPEATING -> task.recurrenceType != null
-        ONE_OFF -> task.recurrenceType == null
-    }
-}
-
-/**
- * The tag filter shared by every tab: an item shows only if it carries all [selected] tags and none
- * of the [excluded] ones (tags pressed and held in the filter bar). [UNTAGGED] stands for "no
- * tags": selected, it shows only items without tags; excluded, it hides them.
- *
- * The "Reminder" chip works the same way on every tab: [reminder] ONLY shows just the items in
- * [remindedToday] (a reminder going off today), HIDDEN hides them.
- */
-data class TagFilter(
-    val tagsByItem: Map<ItemRef, List<TagEntity>> = emptyMap(),
-    val selected: Set<Long> = emptySet(),
-    val excluded: Set<Long> = emptySet(),
-    val reminder: ChipState = ChipState.ANY,
-    val remindedToday: Set<ItemRef> = emptySet(),
-) {
-    val active: Boolean get() = selected.isNotEmpty() || excluded.isNotEmpty() || reminder != ChipState.ANY
-
-    fun tagsOf(ref: ItemRef): List<TagEntity> = tagsByItem[ref].orEmpty()
-
-    /** The item's tag ids, or [UNTAGGED] alone for an item without tags. */
-    private fun idsOf(ref: ItemRef): Set<Long> = tagsOf(ref).map { it.id }.toSet().ifEmpty { setOf(UNTAGGED) }
-
-    /** True when the item carries an excluded tag (or has none, with [UNTAGGED] excluded). */
-    fun excludes(ref: ItemRef): Boolean =
-        (excluded.isNotEmpty() && idsOf(ref).any { it in excluded }) || (reminder == ChipState.HIDDEN && ref in remindedToday)
-
-    fun matches(ref: ItemRef): Boolean =
-        (selected.isEmpty() || idsOf(ref).containsAll(selected)) && !excludes(ref) &&
-            (reminder != ChipState.ONLY || ref in remindedToday)
-
-    companion object {
-        /** The "Untagged" chip; no tag has this id. */
-        const val UNTAGGED = -1L
-    }
-}
-
-/** In normal mode (null) every item; in link mode only the network's. */
-private fun Set<ItemRef>?.has(ref: ItemRef): Boolean = this == null || ref in this
-
-/** A tab's counter: [shown] of [total] items. */
-data class TabCount(val shown: Int, val total: Int)
-
-/** One row of the Plans tab: a plan, or a task linked to the plan above it. */
-sealed interface PlanTreeItem {
-    val key: String
-    val depth: Int
-
-    data class Plan(
-        val plan: PlanEntity,
-        override val depth: Int,
-        val collapsed: Boolean,
-        val subplanCount: Int,
-        val taskCount: Int,
-    ) : PlanTreeItem {
-        override val key: String get() = "plan-${plan.id}"
-        val hasChildren: Boolean get() = subplanCount + taskCount > 0
-    }
-
-    /** A task linked to several plans appears under each, so the key includes the plan. */
-    data class Task(val task: TaskEntity, val planId: Long, override val depth: Int) : PlanTreeItem {
-        override val key: String get() = "task-$planId-${task.id}"
-    }
-}
-
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val tasksRepo = container.taskRepository
     private val habitsRepo = container.habitRepository
@@ -353,14 +263,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 .toMap()
         }
 
-    /**
-     * The Plans tab: the plan tree with each plan's linked tasks right below it, ahead of
-     * its subplans. Completed plans and tasks are left out unless their toggle is on; hiding
-     * a completed plan never orphans an open one, because everything below it is completed too.
-     * A collapsed plan hides its tasks and its whole subtree. With a tag filter, a search or link
-     * mode on, only matching plans and tasks show, plus the plans above them so the tree still reads.
-     * Also the number of plans the tab shows, collapsed or not, for its counter.
-     */
+    /** The Plans tab's rows and its plan count (see [PlanRows.build]). */
     private val planView: StateFlow<Pair<List<PlanTreeItem>, Int>> = combine(
         plansRepo.observeAll(),
         tasksByPlan,
@@ -369,40 +272,10 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         combine(combine(tagFilter, search, network, ::Triple), prioritySorts, priorityFilters, ::Triple),
     ) { all, tasksByPlan, (showPlans, showTasks), collapsed, (tagsQueryNetwork, sorts, filters) ->
         val (tags, search, network) = tagsQueryNetwork
-        val narrowed = tags.active || search.active || network != null
-        // Sorting the plans sorts siblings: the tree keeps each plan's children in the order given.
-        val sorted = if (sorts[ItemType.PLAN] == PrioritySort.PRIORITY) all.sortedByDescending { it.priority.ordinal } else all
-        val shown = if (showPlans) sorted else sorted.filterNot { it.completed }
-        val priorities = filters[ItemType.PLAN].orEmpty()
-        fun tasksOf(planId: Long) = tasksByPlan[planId].orEmpty()
-            .filter {
-                (showTasks || !it.completed) && tags.matches(ItemRef(ItemType.TASK, it.id)) &&
-                    search.matches(ItemRef(ItemType.TASK, it.id), it.title, it.description)
-            }
-        val visible = if (!narrowed && priorities.isEmpty()) {
-            shown
-        } else {
-            // The priority filter applies to the plans themselves; their tasks are shown as usual.
-            val hits = shown.filter { plan ->
-                (priorities.isEmpty() || plan.priority in priorities) &&
-                    (!narrowed || (network.has(ItemRef(ItemType.PLAN, plan.id)) && tags.matches(ItemRef(ItemType.PLAN, plan.id)) &&
-                        search.matches(ItemRef(ItemType.PLAN, plan.id), plan.title, plan.description)) ||
-                        (!tags.excludes(ItemRef(ItemType.PLAN, plan.id)) && tasksOf(plan.id).isNotEmpty()))
-            }.map { it.id }
-            val keep = hits.toSet() + hits.flatMap { PlanTree.ancestorIds(it, shown, { p -> p.id }, { p -> p.parentId }) }
-            shown.filter { it.id in keep }
-        }
-        val subplanCounts = visible.groupingBy { it.parentId }.eachCount()
-        val rows = PlanTree.flatten(visible, { it.id }, { it.parentId }, collapsed).flatMap { row ->
-            val plan = row.node
-            val tasks = tasksOf(plan.id)
-            val isCollapsed = plan.id in collapsed
-            val planItem = PlanTreeItem.Plan(plan, row.depth, isCollapsed, subplanCounts[plan.id] ?: 0, tasks.size)
-            if (isCollapsed) listOf(planItem)
-            else listOf(planItem) + tasks.map { PlanTreeItem.Task(it, plan.id, row.depth + 1) }
-        }
-        // A plan outside link mode's network, shown only as a heading, isn't counted.
-        rows to visible.count { network.has(ItemRef(ItemType.PLAN, it.id)) }
+        PlanRows.build(
+            all, tasksByPlan, showPlans, showTasks, collapsed, tags, search, network,
+            byPriority = sorts[ItemType.PLAN] == PrioritySort.PRIORITY, priorities = filters[ItemType.PLAN].orEmpty(),
+        )
     }.stateIn(emptyList<PlanTreeItem>() to 0)
 
     val planTree: StateFlow<List<PlanTreeItem>> = planView.map { it.first }.stateIn(emptyList())
