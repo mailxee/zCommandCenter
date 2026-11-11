@@ -70,6 +70,18 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            // MigrationTest reads the schemas from disk; changing one reruns the tests.
+            test.inputs.dir("$projectDir/schemas").withPropertyName("roomSchemas")
+            // Robolectric downloads its Android jars; -Probolectric.deps=<dir> uses ones already there instead.
+            providers.gradleProperty("robolectric.deps").orNull?.let { dir ->
+                test.systemProperty("robolectric.offline", "true")
+                test.systemProperty("robolectric.dependency.dir", dir)
+            }
+        }
+    }
     packaging {
         jniLibs {
             // Prebuilt libraries from androidx that ship already stripped; skip the strip attempt.
@@ -112,4 +124,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+    // Database upgrade tests (MigrationTest), run on Robolectric's Android.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }
