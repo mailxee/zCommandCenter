@@ -41,6 +41,10 @@ fun TaskDetailScreen(
         onSave = viewModel::save,
         onDelete = if (id == 0L) null else viewModel::delete,
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = form.completed, onCheckedChange = { c -> viewModel.update { it.copy(completed = c) } })
+            Text("Completed")
+        }
         OutlinedTextField(
             value = form.title,
             onValueChange = { v -> viewModel.update { it.copy(title = v) } },
@@ -80,10 +84,6 @@ fun TaskDetailScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = form.completed, onCheckedChange = { c -> viewModel.update { it.copy(completed = c) } })
-            Text("Completed")
         }
     }
 }

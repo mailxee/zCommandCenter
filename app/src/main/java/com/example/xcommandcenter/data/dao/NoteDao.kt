@@ -8,10 +8,11 @@ import androidx.room.Update
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.NoteListCount
 import com.example.xcommandcenter.data.entity.NoteListItemEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface NoteDao {
+interface NoteDao : ItemCleanup {
     @Query("SELECT * FROM notes ORDER BY sortOrder, createdAt DESC")
     fun observeAll(): Flow<List<NoteEntity>>
 
@@ -40,12 +41,6 @@ interface NoteDao {
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
-    @Query("DELETE FROM links WHERE (aType = 'NOTE' AND aId = :id) OR (bType = 'NOTE' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'NOTE' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
-
     @Query("SELECT * FROM note_list_items WHERE noteId = :noteId ORDER BY position")
     suspend fun listItems(noteId: Long): List<NoteListItemEntity>
 
@@ -72,8 +67,7 @@ interface NoteDao {
     /** The list goes with the note through the foreign key's ON DELETE CASCADE. */
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.NOTE, id)
         deleteRow(id)
     }
 }

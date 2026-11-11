@@ -6,10 +6,11 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.xcommandcenter.data.entity.QuoteEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface QuoteDao {
+interface QuoteDao : ItemCleanup {
     @Query("SELECT * FROM quotes ORDER BY sortOrder, createdAt DESC")
     fun observeAll(): Flow<List<QuoteEntity>>
 
@@ -38,16 +39,9 @@ interface QuoteDao {
     @Query("DELETE FROM quotes WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
-    @Query("DELETE FROM links WHERE (aType = 'QUOTE' AND aId = :id) OR (bType = 'QUOTE' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'QUOTE' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
-
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.QUOTE, id)
         deleteRow(id)
     }
 }

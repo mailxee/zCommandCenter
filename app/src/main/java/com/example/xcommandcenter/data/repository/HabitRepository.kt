@@ -42,6 +42,12 @@ class HabitRepository(
         reminders.sync(ItemRef(ItemType.HABIT, habitId))
     }
 
+    /** Marks [date] (done for a positive habit, missed for a negative one), leaving it marked if it already was. */
+    suspend fun mark(habitId: Long, date: LocalDate) {
+        dao.setMark(habitId, date)
+        reminders.sync(ItemRef(ItemType.HABIT, habitId))
+    }
+
     suspend fun delete(id: Long) {
         dao.delete(id)
         reminders.removeOrphans()

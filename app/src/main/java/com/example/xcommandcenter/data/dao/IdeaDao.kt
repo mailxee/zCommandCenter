@@ -15,7 +15,7 @@ import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface IdeaDao {
+interface IdeaDao : ItemCleanup {
     @Query("SELECT * FROM ideas ORDER BY sortOrder, title COLLATE NOCASE")
     fun observeAll(): Flow<List<IdeaEntity>>
 
@@ -48,12 +48,6 @@ interface IdeaDao {
 
     @Query("DELETE FROM ideas WHERE id = :id")
     suspend fun deleteRow(id: Long)
-
-    @Query("DELETE FROM links WHERE (aType = 'IDEA' AND aId = :id) OR (bType = 'IDEA' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'IDEA' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
 
     /** Inserts or updates the editable fields; a stored idea keeps its position. */
     @Transaction
@@ -98,8 +92,7 @@ interface IdeaDao {
     suspend fun delete(id: Long) {
         val idea = get(id) ?: return
         reparentChildren(id, idea.parentId)
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.IDEA, id)
         deleteRow(id)
     }
 

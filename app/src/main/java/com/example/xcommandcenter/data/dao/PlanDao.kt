@@ -7,6 +7,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.domain.PlanTree
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -15,7 +16,7 @@ import kotlinx.coroutines.flow.Flow
  * ([reopen], [saveDetails]) reopens those ancestors.
  */
 @Dao
-interface PlanDao {
+interface PlanDao : ItemCleanup {
     @Query("SELECT * FROM plans ORDER BY sortOrder, title COLLATE NOCASE")
     fun observeAll(): Flow<List<PlanEntity>>
 
@@ -52,12 +53,6 @@ interface PlanDao {
 
     @Query("DELETE FROM plans WHERE id = :id")
     suspend fun deleteRow(id: Long)
-
-    @Query("DELETE FROM links WHERE (aType = 'PLAN' AND aId = :id) OR (bType = 'PLAN' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'PLAN' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
 
     /** Inserts or updates the editable fields; the stored completion state and position are kept. */
     @Transaction
@@ -101,8 +96,7 @@ interface PlanDao {
     suspend fun delete(id: Long) {
         val plan = get(id) ?: return
         reparentChildren(id, plan.parentId)
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.PLAN, id)
         deleteRow(id)
     }
 }

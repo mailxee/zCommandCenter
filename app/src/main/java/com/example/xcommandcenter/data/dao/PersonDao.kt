@@ -8,10 +8,11 @@ import androidx.room.Update
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.PersonItemEntity
 import com.example.xcommandcenter.data.entity.PersonProfileEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface PersonDao {
+interface PersonDao : ItemCleanup {
     @Query("SELECT * FROM people ORDER BY sortOrder, createdAt DESC")
     fun observeAll(): Flow<List<PersonEntity>>
 
@@ -39,12 +40,6 @@ interface PersonDao {
 
     @Query("DELETE FROM people WHERE id = :id")
     suspend fun deleteRow(id: Long)
-
-    @Query("DELETE FROM links WHERE (aType = 'PERSON' AND aId = :id) OR (bType = 'PERSON' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'PERSON' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
 
     @Query("SELECT * FROM person_profiles WHERE personId = :personId ORDER BY position")
     suspend fun profiles(personId: Long): List<PersonProfileEntity>
@@ -84,8 +79,7 @@ interface PersonDao {
     /** The profiles and items go with the person through the foreign keys' ON DELETE CASCADE. */
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.PERSON, id)
         deleteRow(id)
     }
 }

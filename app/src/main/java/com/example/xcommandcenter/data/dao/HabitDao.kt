@@ -8,11 +8,12 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
 @Dao
-interface HabitDao {
+interface HabitDao : ItemCleanup {
     @Query("SELECT * FROM habits ORDER BY sortOrder, createdAt")
     fun observeAll(): Flow<List<HabitEntity>>
 
@@ -56,6 +57,12 @@ interface HabitDao {
     @Query("SELECT COUNT(*) FROM habit_marks WHERE habitId = :habitId AND date = :date")
     suspend fun markCount(habitId: Long, date: LocalDate): Int
 
+    /** Marks [date] if it isn't already; for a notification's button, which may be pressed twice. */
+    @Transaction
+    suspend fun setMark(habitId: Long, date: LocalDate) {
+        if (markCount(habitId, date) == 0) insertMark(HabitMarkEntity(habitId, date))
+    }
+
     @Transaction
     suspend fun toggleMark(habitId: Long, date: LocalDate) {
         if (markCount(habitId, date) > 0) deleteMark(habitId, date) else insertMark(HabitMarkEntity(habitId, date))
@@ -65,16 +72,9 @@ interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
-    @Query("DELETE FROM links WHERE (aType = 'HABIT' AND aId = :id) OR (bType = 'HABIT' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'HABIT' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
-
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.HABIT, id)
         deleteRow(id)
     }
 }

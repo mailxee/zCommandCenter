@@ -33,6 +33,7 @@ import com.example.xcommandcenter.domain.Priority
 import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.domain.SearchScope
 import com.example.xcommandcenter.domain.TabOrder
+import com.example.xcommandcenter.domain.today
 import com.example.xcommandcenter.ui.common.HabitSummary
 import com.example.xcommandcenter.ui.common.habitSummary
 import com.example.xcommandcenter.ui.plan.BlockedCompletion
@@ -202,9 +203,8 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         container.habitRepository.observeAll(),
         container.habitRepository.observeAllMarks(),
         container.blockRepository.observeAll(),
-        container.scheduleRepository.active,
-    ) { byItem, habitList, marks, blockList, active ->
-        val today = LocalDate.now()
+        combine(container.scheduleRepository.active, today, ::Pair),
+    ) { byItem, habitList, marks, blockList, (active, today) ->
         val due = habitList.filter { habitSummary(it, marks[it.id].orEmpty(), today).scheduledToday }.map { it.id }.toSet()
         val shownBlocks = blockList.filter { it.scheduleId == active?.id }.map { it.id }.toSet()
         ReminderToday.items(byItem, today, java.time.ZoneId.systemDefault(), { it in due }, { it in shownBlocks })
@@ -309,9 +309,8 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             taskSort,
             combine(repeatFilter, taskStatus, ::Pair),
             combine(tagFilter, search, network, ::Triple),
-            priorityFilters.map { it[ItemType.TASK].orEmpty() },
-        ) { tasks, sort, (repeat, status), (tags, search, network), priorities ->
-            val today = LocalDate.now()
+            combine(priorityFilters.map { it[ItemType.TASK].orEmpty() }, today, ::Pair),
+        ) { tasks, sort, (repeat, status), (tags, search, network), (priorities, today) ->
             val byDue = compareBy<TaskEntity, LocalDate?>(nullsLast()) { it.dueDate }
             val byPriority = compareByDescending<TaskEntity> { it.priority.ordinal }
             val order = when (sort) {
@@ -332,8 +331,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         goalsRepo.observeAll().sortedAndFiltered(ItemType.GOAL, { it.id }, { it.priority }) { listOf(it.title, it.strategy) }
 
     val habits: StateFlow<List<HabitSummary>> =
-        combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks()) { habits, marks ->
-            val today = LocalDate.now()
+        combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks(), today) { habits, marks, today ->
             habits.map { habit -> habitSummary(habit, marks[habit.id].orEmpty(), today) }
         }.sortedAndFiltered(ItemType.HABIT, { it.habit.id }, { it.habit.priority }) { listOf(it.habit.name, it.habit.notes) }
 

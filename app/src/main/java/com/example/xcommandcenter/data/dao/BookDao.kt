@@ -8,11 +8,12 @@ import androidx.room.Update
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChapterEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 /** Books and their chapters; chapters never exist without their book. */
 @Dao
-interface BookDao {
+interface BookDao : ItemCleanup {
     @Query(
         """
         SELECT b.*,
@@ -51,9 +52,6 @@ interface BookDao {
     @Query("DELETE FROM books WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
-    @Query("DELETE FROM links WHERE (aType = 'BOOK' AND aId = :id) OR (bType = 'BOOK' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
     @Query(
         """
         DELETE FROM links WHERE
@@ -63,9 +61,6 @@ interface BookDao {
     )
     suspend fun deleteChapterLinksOfBook(bookId: Long)
 
-    @Query("DELETE FROM item_tags WHERE type = 'BOOK' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
-
     @Query("DELETE FROM item_tags WHERE type = 'CHAPTER' AND itemId IN (SELECT id FROM chapters WHERE bookId = :bookId)")
     suspend fun deleteChapterTagsOfBook(bookId: Long)
 
@@ -74,8 +69,7 @@ interface BookDao {
     suspend fun delete(id: Long) {
         deleteChapterLinksOfBook(id)
         deleteChapterTagsOfBook(id)
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.BOOK, id)
         deleteRow(id)
     }
 

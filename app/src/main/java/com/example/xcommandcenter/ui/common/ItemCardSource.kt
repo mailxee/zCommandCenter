@@ -28,6 +28,7 @@ import com.example.xcommandcenter.data.repository.TagRepository
 import com.example.xcommandcenter.data.repository.TaskRepository
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.today
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
@@ -88,8 +89,8 @@ class ItemCardSource(
         ) { a, b, c, d, e ->
             NoteBookQuote(a, b, c, d, e.blocks, e.schedules.takeIf { it.size > 1 }?.associate { it.id to it.name }.orEmpty(), e.people, e.personLists)
         },
-    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList, scheduleNames, personList, personLists) ->
-        val today = LocalDate.now()
+        today,
+    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList, scheduleNames, personList, personLists), today ->
         buildMap {
             taskList.forEach { put(ItemRef(ItemType.TASK, it.id), taskCardText(it, checklists[it.id]) to CardControl.Task(it.completed)) }
             goalList.forEach { put(ItemRef(ItemType.GOAL, it.id), goalCardText(it) to null) }

@@ -6,10 +6,11 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.xcommandcenter.data.entity.GoalEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface GoalDao {
+interface GoalDao : ItemCleanup {
     @Query("SELECT * FROM goals ORDER BY sortOrder, createdAt")
     fun observeAll(): Flow<List<GoalEntity>>
 
@@ -38,16 +39,9 @@ interface GoalDao {
     @Query("DELETE FROM goals WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
-    @Query("DELETE FROM links WHERE (aType = 'GOAL' AND aId = :id) OR (bType = 'GOAL' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'GOAL' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
-
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.GOAL, id)
         deleteRow(id)
     }
 }

@@ -6,10 +6,11 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.xcommandcenter.data.entity.BlockEntity
+import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface BlockDao {
+interface BlockDao : ItemCleanup {
     @Query("SELECT * FROM blocks ORDER BY startMinute, endMinute, id")
     fun observeAll(): Flow<List<BlockEntity>>
 
@@ -28,16 +29,9 @@ interface BlockDao {
     @Query("DELETE FROM blocks WHERE id = :id")
     suspend fun deleteRow(id: Long)
 
-    @Query("DELETE FROM links WHERE (aType = 'BLOCK' AND aId = :id) OR (bType = 'BLOCK' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'BLOCK' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
-
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.BLOCK, id)
         deleteRow(id)
     }
 }

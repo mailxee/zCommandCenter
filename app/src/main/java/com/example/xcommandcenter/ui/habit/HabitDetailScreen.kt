@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.habit
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -10,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.example.xcommandcenter.data.entity.HabitEntity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.xcommandcenter.domain.HabitCategory
@@ -19,6 +22,7 @@ import com.example.xcommandcenter.domain.RecurrenceType
 import com.example.xcommandcenter.ui.AppViewModelProvider
 import com.example.xcommandcenter.ui.common.DetailScaffold
 import com.example.xcommandcenter.ui.common.HabitCalendar
+import com.example.xcommandcenter.ui.common.HabitTodayButton
 import com.example.xcommandcenter.ui.common.LinkedItemsSection
 import com.example.xcommandcenter.ui.common.RemindersSection
 import com.example.xcommandcenter.ui.common.LinksInText
@@ -48,6 +52,7 @@ fun HabitDetailScreen(
         onDelete = if (id == 0L) null else viewModel::delete,
         deleteWarning = "This also removes its history and all of its links.",
     ) {
+        viewModel.saved?.let { saved -> TodayMark(saved, marks, viewModel::toggleMark) }
         OutlinedTextField(
             value = habit.name,
             onValueChange = { v -> viewModel.update { it.copy(name = v) } },
@@ -124,5 +129,33 @@ fun HabitDetailScreen(
             HabitCalendar(saved, marks, onToggle = viewModel::toggleMark, today = today)
         }
 
+    }
+}
+
+/**
+ * Marks today from the top of the page, as the card's button does: done for a positive habit,
+ * missed for a negative one. Shown on a day the habit is due, or already marked.
+ */
+@Composable
+private fun TodayMark(saved: HabitEntity, marks: Set<LocalDate>, onToggle: (LocalDate) -> Unit) {
+    val today = LocalDate.now()
+    val positive = saved.category == HabitCategory.POSITIVE
+    val marked = today in marks
+    val due = HabitStats.isDue(saved.category, saved.recurrence, saved.startDate, marks, today)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (due || marked) {
+            HabitTodayButton(positive, marked) { onToggle(today) }
+            Text(
+                when {
+                    positive && marked -> "Done today"
+                    positive -> "Mark done today"
+                    marked -> "Missed today"
+                    else -> "Mark missed today"
+                },
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        } else {
+            Text("Not due today", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

@@ -20,7 +20,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 @Dao
-interface TaskDao {
+interface TaskDao : ItemCleanup {
     @Query("SELECT * FROM tasks")
     fun observeAll(): Flow<List<TaskEntity>>
 
@@ -72,12 +72,6 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks WHERE id = :id")
     suspend fun deleteRow(id: Long)
-
-    @Query("DELETE FROM links WHERE (aType = 'TASK' AND aId = :id) OR (bType = 'TASK' AND bId = :id)")
-    suspend fun deleteLinks(id: Long)
-
-    @Query("DELETE FROM item_tags WHERE type = 'TASK' AND itemId = :id")
-    suspend fun deleteTags(id: Long)
 
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId ORDER BY position")
     suspend fun checklist(taskId: Long): List<ChecklistItemEntity>
@@ -144,8 +138,7 @@ interface TaskDao {
     /** The checklist goes with the task through the foreign key's ON DELETE CASCADE. */
     @Transaction
     suspend fun delete(id: Long) {
-        deleteLinks(id)
-        deleteTags(id)
+        deleteRefs(ItemType.TASK, id)
         deleteRow(id)
     }
 

@@ -7,12 +7,11 @@ import com.example.xcommandcenter.data.prefs.StoredScheduleChoice
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ScheduleChoice
-import kotlinx.coroutines.delay
+import com.example.xcommandcenter.domain.today
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import java.time.LocalDate
 
 /**
@@ -27,14 +26,6 @@ class ScheduleRepository(
     val schedules: Flow<List<ScheduleEntity>> = dao.observeAll()
 
     val choice: Flow<StoredScheduleChoice> = choices.choice
-
-    /** Today's date, checked each minute, so automatic switching happens at midnight. */
-    private val today: Flow<LocalDate> = flow {
-        while (true) {
-            emit(LocalDate.now())
-            delay(60_000)
-        }
-    }.distinctUntilChanged()
 
     val active: Flow<ScheduleEntity?> = combine(schedules, choice, today) { all, choice, today ->
         val id = ScheduleChoice.active(all.options(), choice.selectedId, choice.selectedOn, choice.automatic, today)

@@ -56,6 +56,7 @@ object Notifications {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setContentIntent(open)
             .setAutoCancel(true)
+            .apply { if (ref.type == ItemType.TASK) addAction(R.drawable.ic_check, "Done", action(context, ReminderReceiver.ACTION_TASK_DONE, ref)) }
             .build()
         try {
             NotificationManagerCompat.from(context).notify(tag(ref.type), ref.id.toInt(), notification)
@@ -79,6 +80,11 @@ object Notifications {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setContentIntent(openItem(context, ItemRef(ItemType.HABIT, habit.id)))
             .setAutoCancel(true)
+            .addAction(
+                if (habit.category == HabitCategory.POSITIVE) R.drawable.ic_check else R.drawable.ic_close,
+                if (habit.category == HabitCategory.POSITIVE) "Done" else "Missed today",
+                action(context, ReminderReceiver.ACTION_HABIT_MARK, ItemRef(ItemType.HABIT, habit.id)),
+            )
             .build()
         try {
             NotificationManagerCompat.from(context).notify(tag(ItemType.HABIT), habit.id.toInt(), notification)
@@ -86,6 +92,21 @@ object Notifications {
             // Permission revoked between the check and the call; nothing else to do.
         }
     }
+
+    /** Removes [ref]'s notification, once its button has been pressed. */
+    fun cancel(context: Context, ref: ItemRef) {
+        NotificationManagerCompat.from(context).cancel(tag(ref.type), ref.id.toInt())
+    }
+
+    /** A notification button: [ReminderReceiver] does [actionName] to [ref] without opening the app. */
+    private fun action(context: Context, actionName: String, ref: ItemRef): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        31 * ref.id.toInt() + ref.type.ordinal,
+        Intent(context, ReminderReceiver::class.java)
+            .setAction(actionName)
+            .putExtra(ReminderReceiver.EXTRA_ITEM_ID, ref.id),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
 
     /** Opens [ref]'s page when the notification is tapped. */
     private fun openItem(context: Context, ref: ItemRef): PendingIntent = PendingIntent.getActivity(
