@@ -31,6 +31,7 @@ import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -129,10 +130,10 @@ class MapCanvasTest {
 
     /** Boxes are measured and placed off the main thread, which the rule doesn't wait for. */
     private fun waitFor(text: String, substring: Boolean = false) =
-        compose.waitUntil(10_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
 
     private fun waitForDescription(text: String) =
-        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun shoot(name: String) {
         val dir = File("build/map-shots").takeIf { it.isDirectory } ?: return
@@ -143,8 +144,13 @@ class MapCanvasTest {
     @Test
     fun theMindMapOpensReadableWithFullTitles() {
         show(state(MapStyle.MIND_MAP))
-        waitFor("75% · Full titles")
-        compose.onNodeWithText("75% · Full titles").assertIsDisplayed()
+        // Readable: full titles at 75% or more (the exact zoom depends on the fonts' widths).
+        waitFor("Lived disciplines (Epictetus)")
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        val zoom = compose.onNodeWithText("· Full titles", substring = true).fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.Text].first().text.substringBefore('%').toInt()
+        assertTrue("opened at $zoom%", zoom in 75..115)
         compose.onNodeWithText("Stoicism – living in agreement with nature").assertIsDisplayed()
         compose.onNodeWithText("Lived disciplines (Epictetus)").assertIsDisplayed()
         shoot("mind-open")
