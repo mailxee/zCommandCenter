@@ -127,4 +127,7 @@ dependencies {
     // Database upgrade tests (MigrationTest), run on Robolectric's Android.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

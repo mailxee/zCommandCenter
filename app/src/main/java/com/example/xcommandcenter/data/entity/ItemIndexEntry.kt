@@ -59,3 +59,8 @@ data class OwnedLink(
     val owner: ItemRef get() = ItemRef(ownerType, ownerId)
     val entry: ItemIndexEntry get() = ItemIndexEntry(type, id, title, subtitle)
 }
+
+/** An item's text, such as its explanation for the map. */
+data class ItemText(val type: ItemType, val id: Long, val text: String) {
+    val ref: ItemRef get() = ItemRef(type, id)
+}

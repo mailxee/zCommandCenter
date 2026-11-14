@@ -980,7 +980,7 @@ Three parts, all pure logic in `domain/` (tested) with thin screens in `ui/links
   place of what each item links to so lines cross less; lines within a row bow up and lines that
   jump a row bow outwards, so they never seem to pass through an item. **Free layout** is a
   force-directed layout started from those places, so it is the same every time. Items are pills
-  in their tab's colour; lines are grey on route, amber off route, red dashed where Tidy links
+  in their tab's colour (boxes sized to their text since §2.69, which also changed these layouts); lines are grey on route, amber off route, red dashed where Tidy links
   suggests removing, dotted for a shared end point. Pinch to zoom, drag to move; tapping an item
   highlights it and its links, with Open, Its network and Link to… (then tap the other item);
   tapping a line selects it, with its finding, Remove link, Apply and Keep as is. Opened from the
@@ -1112,7 +1112,8 @@ The map and Tidy links follow the mode (§2.61).
   in the middle (or, for Everything, the top-level ideas on the first ring), then rings by how many
   steps away each item is, following the tree before other links. Each branch gets a share of the
   circle by how many items end it, so branches don't overlap, and a ring moves out when it has more
-  items than fit round it. Rings are kept round on screen (`MIND_MAP_ASPECT`).
+  items than fit round it. Rings are kept round on screen (`MIND_MAP_ASPECT`). Replaced by a tree in
+  §2.69.
 - **Tidy links in Think mode** (`domain/ThinkAnalysis`): loops between ideas are normal, so none are
   reported. Instead: **Author is in People** (a quote's author matches a person it isn't linked to;
   "Link" links the person as its source), **Unplaced quote** (no idea linked), **Ungrounded idea**
@@ -1224,6 +1225,51 @@ to main (and on pull requests), with no secrets; the release workflow is unchang
 **HomeViewModel split.** The tabs' shared sorts and filters (`TaskSort`, `PrioritySort`,
 `RepeatFilter`, `TagFilter`, `TabCount`) moved to `ui/home/HomeFilters.kt`, and the Plans tab's rows to
 `ui/home/PlanRows.kt` as a pure function, now tested. The view model keeps the state and wires it up.
+
+### 2.69 Maps you can read: boxes sized to their text
+
+The maps showed every item as a 132 × 32 dp pill with its title cut to one line, the mind map put
+items on rings (a busy outer ring grew very wide, and a round picture leaves a tall screen half
+empty), and the whole picture was shrunk to fit the screen, often to about 40%. Now, in Do and Think:
+
+- **Boxes fit their text.** A title wraps onto up to three lines; a box is as wide as its title
+  needs, between 64 dp and 150 dp, and as tall as its lines. The screen measures each box with
+  Compose's `TextMeasurer` exactly as `NodeBox` draws it, then lays the boxes out by those sizes, in
+  dp (`ui/links/MapCanvas.kt`). So the layout moved from the view model to the screen, off the main
+  thread; `MapState` now carries what the layouts need instead of places: the map's tree, each item's
+  By route row and the dragged positions.
+- **The map's tree** (`GraphLayout.tree`): each item hangs from the item it is reached from in the
+  fewest links, from the item in the middle (or the top-level ideas, or each network's first item by
+  route). Under links cost nothing, so an idea sits under the idea it is under even when it is also
+  linked to the root.
+- **Mind map as a tree** (`GraphLayout.mindMap`): each item's sub-items stack in a column beside it,
+  the item level with the middle of its column. On a phone held upright every branch goes right and
+  the root sits level with its first branch, so the map is about as wide as the screen and reads down
+  like an outline; on a screen at least 600 dp wide the branches split left and right. Tree lines
+  leave a box's side for the next column; other links bow outwards, away from the middle.
+- **By route** (`GraphLayout.byRoute`) keeps its rows, each as tall as its tallest box. Two or more
+  items linked only to the same item in an earlier row stack as a list under it, joined by a line
+  down its left; a row wider than the screen at a readable size wraps onto another, so the map grows
+  down instead of sideways.
+- **Free layout** (`GraphLayout.free`) pushes boxes apart by their full size once its forces settle,
+  so none overlap.
+- **Readable at first sight.** A map opens fitted to the screen if that leaves it at 75% or more;
+  otherwise at a readable size, from the top (free layout: centred on the item in the middle), and you
+  scroll. **Fit all** shows everything, with one-line titles if needed. When boxes change size
+  (zooming, folding), the item nearest the middle of the screen stays put.
+- **Detail by zoom.** Below 70% boxes show one-line titles; from 135% they also show the start of
+  the explanation (`LinkRepository.explanations`, every item's explanation in one query); in between,
+  full titles. A chip at the top left names the level, beside −, + and Fit all.
+- **Folding.** An item with anything below it in the tree has a small round button; folding hides
+  that branch and the button shows how many items it holds. Folds last for the visit, per view
+  (`MapViewModel.toggleFold`).
+- **Highlighting.** Selecting an item fades what isn't linked to it more strongly than before (items
+  to 25%, lines to 15%).
+
+Dragged positions are still stored in grid units (`GraphLayout.GRID_X`/`GRID_Y`), so ones saved before
+keep their place. `MapCanvasTest` draws a network of ideas on Robolectric: it opens at 75% with full
+titles, Fit all and zooming change the detail, and folding asks for the right item; with a
+`build/map-shots` folder present it also saves each layout as a picture.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1397,10 +1443,11 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TaskStatusFilter.kt` | The Tasks tab's Past due and Completed chips (§2.56). |
 | `domain/LinkRoute.kt` | The suggested route of links: a layer per type (§2.57). |
 | `domain/LinkAnalysis.kt` | Tidy links: loops, skipped layers and shared end points, with fixes (§2.57). |
-| `domain/GraphLayout.kt` | The map's layered and free layouts (§2.57). |
+| `domain/GraphLayout.kt` | The map's tree, mind map, By route and free layouts, by box size (§2.57, §2.69). |
 | `data/prefs/RoutePrefsRepository.kt` | Stores the suggested route (§2.57). |
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
+| `ui/links/MapCanvas.kt` | The map's picture: boxes measured and placed, lines, zoom levels, Fit all, folding (§2.69). |
 | `domain/MapFilter.kt`, `data/prefs/MapPrefsRepository.kt` | What the map hides and each kind of link's line style (§2.66). |
 | `domain/Today.kt` | Today's date, checked each minute, so day-dependent views move on at midnight (§2.68). |
 | `data/dao/ItemCleanup.kt` | The links-and-tags queries every item DAO's delete runs (§2.4, §2.68). |
@@ -1448,6 +1495,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/MapPositionsTest.kt` | Dragged positions kept per view, replaced and reset. |
 | `data/db/MigrationTest.kt` | Every older database version upgrades to the current schema; data and the upgrades' inserts survive (§2.68). |
 | `reminder/NotificationsTest.kt` | Task reminders have Done, habit reminders Done or Missed today, other reminders no button. |
+| `domain/GraphLayoutTest.kt` | The map's tree (Under decides, order kept), mind map on one or both sides, folding, By route's stacked lists and wrapping, free layout without overlaps. |
+| `ui/links/MapCanvasTest.kt` | The map opens readable with full titles, Fit all and zoom change the detail, folding (§2.69). |
 | `ui/home/PlanRowsTest.kt` | Plans tab rows: tasks under their plan, completed plans hidden, collapsing, a search keeping the plans above. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |

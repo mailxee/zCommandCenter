@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.xcommandcenter.data.entity.ChapterBook
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.ItemText
 import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
@@ -160,6 +161,28 @@ interface LinkDao {
         """,
     )
     fun observeExplanation(typeName: String, id: Long): Flow<String?>
+
+    /**
+     * Every item's explanation (as [observeExplanation] picks it), its start only, for the map's
+     * boxes when zoomed in. Items without one are left out.
+     */
+    @Query(
+        """
+        SELECT type, id, text FROM (
+            SELECT 'TASK' AS type, id, SUBSTR(TRIM(description), 1, 240) AS text FROM tasks
+            UNION ALL SELECT 'GOAL', id, SUBSTR(TRIM(strategy), 1, 240) FROM goals
+            UNION ALL SELECT 'HABIT', id, SUBSTR(TRIM(notes), 1, 240) FROM habits
+            UNION ALL SELECT 'PLAN', id, SUBSTR(TRIM(description), 1, 240) FROM plans
+            UNION ALL SELECT 'NOTE', id, SUBSTR(TRIM(body), 1, 240) FROM notes
+            UNION ALL SELECT 'BOOK', id, SUBSTR(TRIM(description), 1, 240) FROM books
+            UNION ALL SELECT 'QUOTE', id, TRIM(author || CASE WHEN TRIM(author) <> '' AND TRIM(source) <> '' THEN ', ' ELSE '' END || source) FROM quotes
+            UNION ALL SELECT 'BLOCK', id, SUBSTR(TRIM(notes), 1, 240) FROM blocks
+            UNION ALL SELECT 'PERSON', id, SUBSTR(TRIM(bio), 1, 240) FROM people
+            UNION ALL SELECT 'IDEA', id, SUBSTR(TRIM(body), 1, 240) FROM ideas
+        ) WHERE text <> ''
+        """,
+    )
+    fun observeExplanations(): Flow<List<ItemText>>
 
     /** An item's list in order: a task's checklist, a note's or an idea's list, a person's items. */
     @Query(

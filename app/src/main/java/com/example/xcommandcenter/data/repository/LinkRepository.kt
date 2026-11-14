@@ -183,6 +183,11 @@ class LinkRepository(
 
     val labels: Flow<List<LinkLabelEntity>> = dao.observeLabels()
 
+    /** Each item's explanation on one line, for the map's boxes when zoomed in. */
+    val explanations: Flow<Map<ItemRef, String>> = dao.observeExplanations().map { rows ->
+        rows.associate { it.ref to it.text.replace(Regex("\\s+"), " ") }
+    }
+
     fun observeDetail(ref: ItemRef): Flow<ItemDetail> =
         combine(dao.observeExplanation(ref.type.name, ref.id), dao.observeList(ref.type.name, ref.id)) { text, list ->
             ItemDetail(text.orEmpty().trim(), list.filter { it.isNotBlank() })
