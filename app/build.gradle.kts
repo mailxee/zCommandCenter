@@ -17,8 +17,8 @@ android {
         applicationId = "com.xeeshan.manage_everything"
         minSdk = 26
         targetSdk = 37
-        // Release builds from GitHub take the workflow's run number, so every Play upload gets a new
-        // versionCode without editing this file; local builds use 1.
+        // Each Play upload needs a higher versionCode than the last: a release build passes it in
+        // VERSION_CODE (see RELEASING.md); otherwise it is 1.
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = "1.0"
 
@@ -36,7 +36,7 @@ android {
             keyPassword = "android"
         }
         // The Play upload key is never in the repository: release builds read it from the
-        // environment, set from GitHub secrets by .github/workflows/release.yml (see RELEASING.md).
+        // environment (see RELEASING.md).
         // Without RELEASE_KEYSTORE_FILE, release builds come out unsigned.
         create("release") {
             System.getenv("RELEASE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let { path ->

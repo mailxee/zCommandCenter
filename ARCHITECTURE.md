@@ -783,17 +783,16 @@ Weekend schedule (days set, automatic switching off).
 The application ID is `com.xeeshan.manage_everything` for debug and release builds alike (the
 Kotlin `namespace` stays `com.example.xcommandcenter`; only the ID is the app's identity). Debug
 builds keep the public debug key (2.38). Release builds are signed with the Play upload key, read
-from environment variables that `.github/workflows/release.yml` sets from the repository secrets
-`RELEASE_KEYSTORE_BASE64` and `RELEASE_KEYSTORE_PASSWORD`; without them a release build is simply
+from environment variables set for that build (2.71); without them a release build is simply
 unsigned, so the public repository builds for anyone. `.gitignore` keeps any other keystore out.
 `RELEASING.md` has the steps.
 
-### 2.46 A separate debug app; versionCode from the workflow
+### 2.46 A separate debug app; versionCode from the build
 
 Debug builds add `applicationIdSuffix = ".debug"` and are named "Manage Everything Debug"
 (`src/debug/res/values/strings.xml`), so they install beside the Play app, which Play signs with
 its own key and nothing else can update. Release builds take `versionCode` from `VERSION_CODE`,
-which the release workflow sets to its run number; local builds use 1.
+set for each release build higher than the last upload; otherwise 1.
 
 ### 2.47 Schedule polish
 
@@ -1219,8 +1218,7 @@ reads schemas from test assets, which local unit tests don't get. The schemas ar
 input, so changing one reruns the tests. Robolectric downloads its Android jars on first run;
 `-Probolectric.deps=<dir>` uses a folder of them instead, for a machine without that access.
 
-**Tests on every push.** `.github/workflows/ci.yml` runs the unit tests and a debug build on each push
-to main (and on pull requests), with no secrets; the release workflow is unchanged.
+**Tests on every push.** Replaced by local runs in 2.71: there are no GitHub workflows now.
 
 **HomeViewModel split.** The tabs' shared sorts and filters (`TaskSort`, `PrioritySort`,
 `RepeatFilter`, `TagFilter`, `TabCount`) moved to `ui/home/HomeFilters.kt`, and the Plans tab's rows to
@@ -1323,6 +1321,15 @@ layout over the whole network.
 **Also.** A new idea under another steps down a kind but never past Idea, so it is no longer a
 Question under an idea. The box that adds an item to a list wraps and grows as you type; Enter still
 adds the item.
+
+### 2.71 Builds and tests run locally, not on GitHub
+
+The GitHub workflows (`ci.yml`, tests on each push; `release.yml`, the signed release build) are
+removed. Tests, debug builds and release builds are run locally on request with
+`bash gradlew testDebugUnitTest assembleDebug` or `bash gradlew bundleRelease assembleRelease`. A signed
+release build needs the upload keystore and its password in `RELEASE_KEYSTORE_FILE` and
+`RELEASE_KEYSTORE_PASSWORD` for that build only, and a `VERSION_CODE` above the last Play upload;
+nothing secret is ever committed (`.gitignore` keeps keystores out). `RELEASING.md` has the steps.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
