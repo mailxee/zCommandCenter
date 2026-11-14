@@ -1,22 +1,28 @@
 package com.example.xcommandcenter.domain
 
 /**
- * Where items were dragged to on the map, for viewing only: nothing about the items or their links
- * changes. Each arrangement belongs to one view (mode, layout and the item whose network is shown),
- * so moving items in one map leaves the others as laid out. Positions are in grid units, the same
- * as [GraphLayout.Point].
+ * How far items were dragged on the map, for viewing only: nothing about the items or their links
+ * changes. Each item keeps an offset in dp from where its layout puts it, and everything below it
+ * in the map's tree moves with it, so a dragged branch keeps its shape (§2.70). Each arrangement
+ * belongs to one view (mode and the item whose network is shown), so moving items in one map
+ * leaves the others as laid out.
+ *
+ * Views of the earlier format (absolute places per layout) are dropped on the next change.
  */
 object MapPositions {
-    fun viewKey(mode: AppMode, layout: String, root: ItemRef?): String =
-        "${mode.name}/$layout/" + (root?.let { "${it.type.name}:${it.id}" } ?: "all")
+    private const val PREFIX = "o:"
+
+    fun viewKey(mode: AppMode, root: ItemRef?): String =
+        "$PREFIX${mode.name}/" + (root?.let { "${it.type.name}:${it.id}" } ?: "all")
 
     /** "view|TYPE:id|x|y" entries, as stored in the settings. */
     fun encode(view: String, ref: ItemRef, point: GraphLayout.Point): String = "$view|${ref.type.name}:${ref.id}|${point.x}|${point.y}"
 
-    /** Every view's positions from the stored entries; malformed entries are skipped. */
+    /** Every view's offsets from the stored entries; malformed and old-format entries are skipped. */
     fun parse(entries: Set<String>?): Map<String, Map<ItemRef, GraphLayout.Point>> {
         val out = HashMap<String, HashMap<ItemRef, GraphLayout.Point>>()
         entries.orEmpty().forEach { entry ->
+            if (!entry.startsWith(PREFIX)) return@forEach
             val parts = entry.split('|')
             if (parts.size != 4) return@forEach
             val (type, id) = parts[1].split(':').takeIf { it.size == 2 } ?: return@forEach
@@ -29,12 +35,18 @@ object MapPositions {
         return out
     }
 
-    /** [entries] with [ref] in [view] moved to [point] (any earlier position of it there replaced). */
+    /** [entries] with [ref]'s offset in [view] set to [point] (any earlier one there replaced). */
     fun move(entries: Set<String>?, view: String, ref: ItemRef, point: GraphLayout.Point): Set<String> {
         val prefix = "$view|${ref.type.name}:${ref.id}|"
-        return entries.orEmpty().filterNot { it.startsWith(prefix) }.toSet() + encode(view, ref, point)
+        return entries.orEmpty().filter { it.startsWith(PREFIX) && !it.startsWith(prefix) }.toSet() + encode(view, ref, point)
     }
 
-    /** [entries] without any position in [view]: its map goes back to the layout's own places. */
-    fun reset(entries: Set<String>?, view: String): Set<String> = entries.orEmpty().filterNot { it.startsWith("$view|") }.toSet()
+    /** [entries] without the offsets of [refs] in [view]: those items go back to the layout's places. */
+    fun forget(entries: Set<String>?, view: String, refs: Collection<ItemRef>): Set<String> {
+        val prefixes = refs.map { "$view|${it.type.name}:${it.id}|" }
+        return entries.orEmpty().filter { e -> e.startsWith(PREFIX) && prefixes.none { e.startsWith(it) } }.toSet()
+    }
+
+    /** [entries] without any offset in [view]: its map goes back to the layout's own places. */
+    fun reset(entries: Set<String>?, view: String): Set<String> = entries.orEmpty().filter { it.startsWith(PREFIX) && !it.startsWith("$view|") }.toSet()
 }

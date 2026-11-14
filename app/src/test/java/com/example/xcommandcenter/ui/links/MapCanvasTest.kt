@@ -11,6 +11,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -24,6 +26,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LinkAnalysis
 import com.example.xcommandcenter.domain.LinkRoute
 import com.example.xcommandcenter.domain.MapFilter
+import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -59,6 +62,8 @@ class MapCanvasTest {
 
     private val root = idea("Stoicism – living in agreement with nature")
     private val paradoxes: ItemRef
+    private val virtue: ItemRef
+    private val vice: ItemRef
 
     init {
         listOf(
@@ -69,11 +74,13 @@ class MapCanvasTest {
         paradoxes = idea("Stoic paradoxes", root)
         listOf("Virtue is the only good", "Virtue is complete in itself for happiness", "All forms of vice are equal", "Everyone who is not wise is mad", "Only the wise man is free", "Only the wise man is rich")
             .forEach { idea(it, paradoxes) }
-        idea("Virtue or aretē", root).let { v -> listOf("Wisdom (sophia)", "Justice, lawfulness (dikaiosynē)", "Courage or fortitude (andreia)", "Moderation or self-control (sōphrosynē)").forEach { idea(it, v) } }
-        idea("Vice or Kakia", root).let { v -> listOf("Folly or thoughtlessness (aphrosynē)", "Wrongdoing or injustice (adikia)", "Cowardice (deilia)", "Intemperance (akolasia)").forEach { idea(it, v) } }
+        virtue = idea("Virtue or aretē", root)
+        virtue.let { v -> listOf("Wisdom (sophia)", "Justice, lawfulness (dikaiosynē)", "Courage or fortitude (andreia)", "Moderation or self-control (sōphrosynē)").forEach { idea(it, v) } }
+        vice = idea("Vice or Kakia", root)
+        vice.let { v -> listOf("Folly or thoughtlessness (aphrosynē)", "Wrongdoing or injustice (adikia)", "Cowardice (deilia)", "Intemperance (akolasia)").forEach { idea(it, v) } }
     }
 
-    private fun state(layout: MapViewModel.Layout, folded: Set<ItemRef> = emptySet()): MapState {
+    private fun state(top: MapStyle, folded: Set<ItemRef> = emptySet(), chosen: Map<ItemRef, MapStyle> = emptyMap()): MapState {
         val refs = entries.keys.toList()
         val tree = GraphLayout.tree(listOf(root), refs, under, firm = under)
         val hidden = folded.flatMap { tree.descendants(it) }.toSet()
@@ -83,7 +90,8 @@ class MapCanvasTest {
         fun depth(r: ItemRef): Int = tree.parent[r]?.let { depth(it) + 1 } ?: 0
         return MapState(
             mode = AppMode.THINK,
-            layout = layout,
+            top = top,
+            chosen = chosen,
             root = entries.getValue(root),
             nodes = refs.filter { it !in hidden }.map { MapNode(entries.getValue(it), kind = IdeaKind.IDEA) },
             edges = edges,
@@ -105,12 +113,19 @@ class MapCanvasTest {
         var current by mutableStateOf(initial)
         compose.setContent {
             AppTheme(darkTheme = true) {
-                Box(Modifier.fillMaxSize()) { MapCanvas(current, current.layout, null, null, actions) }
+                Box(Modifier.fillMaxSize()) { MapCanvas(current, null, null, actions) }
             }
         }
         compose.waitForIdle()
         return { current = it; compose.waitForIdle() }
     }
+
+    /** Boxes are measured and placed off the main thread, which the rule doesn't wait for. */
+    private fun waitFor(text: String, substring: Boolean = false) =
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun waitForDescription(text: String) =
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun shoot(name: String) {
         val dir = File("build/map-shots").takeIf { it.isDirectory } ?: return
@@ -120,44 +135,55 @@ class MapCanvasTest {
 
     @Test
     fun theMindMapOpensReadableWithFullTitles() {
-        show(state(MapViewModel.Layout.MIND_MAP))
+        show(state(MapStyle.MIND_MAP))
+        waitFor("75% · Full titles")
         compose.onNodeWithText("75% · Full titles").assertIsDisplayed()
         compose.onNodeWithText("Stoicism – living in agreement with nature").assertIsDisplayed()
         compose.onNodeWithText("Lived disciplines (Epictetus)").assertIsDisplayed()
         shoot("mind-open")
         compose.onNodeWithText("Fit all").performClick()
-        compose.waitForIdle()
+        waitFor("One-line titles", substring = true)
         compose.onNodeWithText("One-line titles", substring = true).assertIsDisplayed()
         shoot("mind-fit")
         compose.onNodeWithContentDescription("Zoom in").performClick()
         compose.onNodeWithContentDescription("Zoom in").performClick()
         compose.onNodeWithContentDescription("Zoom in").performClick()
-        compose.waitForIdle()
+        waitFor("Six claims Cicero", substring = true)
         shoot("mind-close")
     }
 
     @Test
     fun foldingAsksForTheItemAndItsBranchGoes() {
-        val update = show(state(MapViewModel.Layout.MIND_MAP))
+        val update = show(state(MapStyle.MIND_MAP))
+        waitForDescription("Fold the 6 items below")
         compose.onNodeWithContentDescription("Fold the 6 items below").performClick()
         assertEquals(paradoxes, foldAsked)
-        update(state(MapViewModel.Layout.MIND_MAP, folded = setOf(paradoxes)))
+        update(state(MapStyle.MIND_MAP, folded = setOf(paradoxes)))
+        waitForDescription("Unfold, 6 items hidden")
         compose.onNodeWithContentDescription("Unfold, 6 items hidden").assertIsDisplayed()
         compose.onNodeWithText("Virtue is the only good").assertDoesNotExist()
         shoot("mind-folded")
     }
 
     @Test
-    fun byRouteAndFreeShowEveryItem() {
-        val update = show(state(MapViewModel.Layout.BY_ROUTE))
-        compose.onNodeWithText("Stoicism – living in agreement with nature").assertExists()
+    fun everyLayoutShowsEveryItem() {
+        val update = show(state(MapStyle.BY_ROUTE))
+        waitFor("Stoicism – living in agreement with nature")
         shoot("route-open")
         compose.onNodeWithText("Fit all").performClick()
-        compose.waitForIdle()
+        waitFor("One-line titles", substring = true)
         shoot("route-fit")
-        update(state(MapViewModel.Layout.FREE))
-        compose.onNodeWithText("Fit all").performClick()
-        compose.waitForIdle()
-        shoot("free-fit")
+        // Every layout, and one map mixing them.
+        MapStyle.entries.forEach { style ->
+            update(state(style))
+            compose.onNodeWithText("Fit all").performClick()
+            compose.mainClock.advanceTimeBy(500)
+            waitFor("Logic")
+            shoot("all-" + style.name.lowercase())
+        }
+        update(state(MapStyle.MIND_MAP, chosen = mapOf(paradoxes to MapStyle.RINGS, virtue to MapStyle.OUTLINE, vice to MapStyle.TREE)))
+        compose.mainClock.advanceTimeBy(500)
+        waitFor("Logic")
+        shoot("mixed")
     }
 }

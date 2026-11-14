@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +47,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,7 +56,6 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -62,7 +64,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.xcommandcenter.R
+import com.example.xcommandcenter.domain.BranchLayout
 import com.example.xcommandcenter.domain.GraphLayout
+import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
@@ -72,6 +76,7 @@ import com.example.xcommandcenter.ui.common.tabAccent
 import com.example.xcommandcenter.ui.common.tabIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -167,43 +172,71 @@ private fun measureNode(node: MapNode, state: MapState, detail: Detail, measurer
     GraphLayout.Size(w.toDp().value, h.toDp().value)
 }
 
-/** The boxes placed for one [state] at one [detail]: centres and sizes in dp, and By route's stacked lists. */
+/** The boxes placed for one [state] at one [detail]: centres and sizes in dp, and how lines run. */
 private class Placed(
     val state: MapState,
     val detail: Detail,
-    val at: Map<ItemRef, GraphLayout.Point>,
     val sizes: Map<ItemRef, GraphLayout.Size>,
-    val stackedUnder: Map<ItemRef, ItemRef>,
-    val spine: Map<ItemRef, Float>,
+    val layout: BranchLayout.Result,
 ) {
+    val at: Map<ItemRef, GraphLayout.Point> get() = layout.at
     private val box = GraphLayout.bounds(at) { sizes.getValue(it) }
     val originX = box[0] - Margin.value
     val originY = box[1] - Margin.value
     val width = box[2] - box[0] + Margin.value * 2
     val height = box[3] - box[1] + Margin.value * 2
 
-    /** Where the lines between branches bow away from: the item in the middle, or the picture's centre. */
+    /** Where links between branches bow away from: the item in the middle, or the picture's centre. */
     val centre: GraphLayout.Point = state.root?.ref?.let(at::get) ?: GraphLayout.Point((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
 }
 
 private fun place(state: MapState, sizes: Map<ItemRef, GraphLayout.Size>, detail: Detail, bothSides: Boolean, routeWidth: Float): Placed {
-    val refs = state.nodes.map { it.ref }
-    val pairs = state.edges.map { it.link.a to it.link.b }
-    val size = { r: ItemRef -> sizes.getValue(r) }
-    fun route() = GraphLayout.byRoute(refs, pairs, { state.layers[it] ?: 0 }, size, routeWidth)
-    var route: GraphLayout.Route? = null
-    val laid = when (state.layout) {
-        MapViewModel.Layout.MIND_MAP -> GraphLayout.mindMap(state.tree.roots.filter { it in state.byRef }, state::shownChildren, size, bothSides)
-        MapViewModel.Layout.BY_ROUTE -> route().also { route = it }.at
-        MapViewModel.Layout.FREE -> GraphLayout.free(refs, pairs, size, route().at, fixed = state.root?.ref)
-    }
-    // Items dragged in this view stay where they were put; the rest keep the layout's places.
-    val moved = state.dragged.filterKeys { it in laid }.mapValues { GraphLayout.Point(it.value.x * GraphLayout.GRID_X, it.value.y * GraphLayout.GRID_Y) }
-    val under = route?.stackedUnder.orEmpty().filter { (item, parent) -> item !in moved && parent !in moved }
-    return Placed(state, detail, laid + moved, sizes, under, route?.spine.orEmpty())
+    val result = BranchLayout.place(
+        roots = state.tree.roots.filter { it in state.byRef },
+        children = state::shownChildren,
+        size = { sizes.getValue(it) },
+        chosen = state.chosen::get,
+        top = state.top,
+        bothSides = bothSides,
+        maxWidth = routeWidth,
+        layerOf = { state.layers[it] ?: 0 },
+        edges = state.edges.map { it.link.a to it.link.b },
+        offsets = state.offsets,
+    )
+    return Placed(state, detail, sizes, result)
 }
 
+/**
+ * What a box's size depends on, so a size measured once is reused: switching layouts or moving
+ * items measures nothing again.
+ */
+private data class MeasureKey(
+    val title: String,
+    val root: Boolean,
+    val otherMode: Boolean,
+    val fold: String?,
+    val explanation: String?,
+    val detail: Detail,
+)
+
+private fun measureKey(node: MapNode, state: MapState, detail: Detail) = MeasureKey(
+    node.entry.title, node.ref == state.root?.ref, node.otherMode,
+    foldable(node, state).takeIf { it > 0 }?.let { foldLabel(node.ref in state.folded, it) },
+    explanationOf(node, state, detail), detail,
+)
+
 private enum class Fit { OPEN, ALL }
+
+/** Everything shown below [ref] in the map's tree. */
+private fun below(state: MapState, ref: ItemRef): Set<ItemRef> {
+    val out = HashSet<ItemRef>()
+    val stack = ArrayDeque(state.shownChildren(ref))
+    while (stack.isNotEmpty()) {
+        val r = stack.removeLast()
+        if (out.add(r)) stack += state.shownChildren(r)
+    }
+    return out
+}
 
 /** What the map's picture does when items and lines are tapped, dragged or folded. */
 internal class MapActions(
@@ -261,72 +294,92 @@ private fun segmentDistance(p: Offset, a: Offset, b: Offset): Float {
 }
 
 /**
- * How a line runs, in the content's pixels: on the mind map the tree's lines leave a box's side
- * for the next column, and other links bow outwards; by route a stacked list hangs from a line
- * down its parent's left, lines between rows run from bottom to top, and lines within a row bow
- * over it; in free layout lines are straight.
+ * How a line runs, in the content's pixels. A line of the map's tree runs as its parent's layout
+ * says ([BranchLayout.Line]): side to side, bottom to top, down a list's line, down a channel
+ * beside a tree's rows, or straight; a link
+ * between two items of one By route branch follows its rows (bottom to top between rows, bowing
+ * over a row within one); any other link bows outwards, away from the middle. Points run from a to
+ * b, for the arrow.
  */
 private fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px: Float): EdgeShape {
     val a = edge.link.a
     val b = edge.link.b
-    val pa = centreOf(a)
-    val pb = centreOf(b)
     fun w(r: ItemRef) = p.sizes.getValue(r).w * px
     fun h(r: ItemRef) = p.sizes.getValue(r).h * px
-    fun bow(): EdgeShape {
+    fun bow(x: ItemRef, y: ItemRef): EdgeShape {
+        val pa = centreOf(x)
+        val pb = centreOf(y)
         val mid = (pa + pb) / 2f
         val dist = (pb - pa).getDistance().coerceAtLeast(1f)
         var n = Offset(-(pb.y - pa.y) / dist, (pb.x - pa.x) / dist)
         val centre = Offset((p.centre.x - p.originX) * px, (p.centre.y - p.originY) * px)
         if (n.x * (mid.x - centre.x) + n.y * (mid.y - centre.y) < 0) n = -n
-        return EdgeShape.quad(pa, mid + n * (min(140f * px, dist * 0.35f) + 40f * px), pb)
+        return EdgeShape.quad(pa, mid + n * (min(100f * px, dist * 0.3f) + 24f * px), pb)
     }
-    return when (p.state.layout) {
-        MapViewModel.Layout.MIND_MAP -> if (!p.state.tree.joins(a, b)) bow() else {
-            val (parent, child) = if (p.state.tree.parent[b] == a) a to b else b to a
-            val pp = centreOf(parent)
-            val pc = centreOf(child)
-            val s = sign(pc.x - pp.x).takeIf { it != 0f } ?: 1f
-            val x1 = pp.x + s * w(parent) / 2
-            val x2 = pc.x - s * w(child) / 2
-            val mx = (x1 + x2) / 2
-            EdgeShape.cubic(Offset(x1, pp.y), Offset(mx, pp.y), Offset(mx, pc.y), Offset(x2, pc.y))
-        }
-        MapViewModel.Layout.BY_ROUTE -> {
-            val stackedChild = when {
-                p.stackedUnder[b] == a -> b
-                p.stackedUnder[a] == b -> a
-                else -> null
-            }
-            if (stackedChild != null) {
-                val parent = if (stackedChild == a) b else a
-                val pp = centreOf(parent)
-                val pc = centreOf(stackedChild)
-                val sx = pp.x - w(parent) / 2 + GraphLayout.STACK_SPINE * px
-                val shape = EdgeShape.polyline(listOf(Offset(sx, pp.y + h(parent) / 2), Offset(sx, pc.y), Offset(pc.x - w(stackedChild) / 2, pc.y)))
-                // Points run from a to b, for the arrow.
-                if (parent == a) shape else reversed(shape)
-            } else if (abs(pa.y - pb.y) < min(h(a), h(b)) / 2) {
-                val ta = Offset(pa.x, pa.y - h(a) / 2)
-                val tb = Offset(pb.x, pb.y - h(b) / 2)
-                EdgeShape.quad(ta, Offset((ta.x + tb.x) / 2, min(ta.y, tb.y) - 40f * px), tb)
-            } else {
-                val (up, down) = if (pa.y < pb.y) a to b else b to a
-                val pu = centreOf(up)
-                val pd = centreOf(down)
-                val y1 = pu.y + h(up) / 2
-                val y2 = pd.y - h(down) / 2
-                val my = (y1 + y2) / 2
-                val shape = EdgeShape.cubic(Offset(pu.x, y1), Offset(pu.x, my), Offset(pd.x, my), Offset(pd.x, y2))
-                // Points run from a to b, for the arrow.
-                if (up == a) shape else EdgeShape.cubic(Offset(pd.x, y2), Offset(pd.x, my), Offset(pu.x, my), Offset(pu.x, y1))
-            }
-        }
-        MapViewModel.Layout.FREE -> EdgeShape.line(pa, pb)
-    }.let { shape ->
-        // Mind map lines are drawn parent to child; flip the points when that is b to a, for the arrow.
-        if (p.state.layout == MapViewModel.Layout.MIND_MAP && p.state.tree.joins(a, b) && p.state.tree.parent[a] == b) reversed(shape) else shape
+    fun down(x: ItemRef, y: ItemRef): EdgeShape {
+        val (up, low) = if (centreOf(x).y <= centreOf(y).y) x to y else y to x
+        val pu = centreOf(up)
+        val pd = centreOf(low)
+        val y1 = pu.y + h(up) / 2
+        val y2 = pd.y - h(low) / 2
+        val my = (y1 + y2) / 2
+        val shape = EdgeShape.cubic(Offset(pu.x, y1), Offset(pu.x, my), Offset(pd.x, my), Offset(pd.x, y2))
+        return if (up == x) shape else reversed(shape)
     }
+    fun route(x: ItemRef, y: ItemRef): EdgeShape {
+        val px1 = centreOf(x)
+        val py1 = centreOf(y)
+        if (abs(px1.y - py1.y) >= min(h(x), h(y)) / 2) return down(x, y)
+        // Within a row: over the top.
+        val ta = Offset(px1.x, px1.y - h(x) / 2)
+        val tb = Offset(py1.x, py1.y - h(y) / 2)
+        return EdgeShape.quad(ta, Offset((ta.x + tb.x) / 2, min(ta.y, tb.y) - 40f * px), tb)
+    }
+    val tree = p.state.tree
+    if (tree.joins(a, b)) {
+        val (parent, child) = if (tree.parent[b] == a) a to b else b to a
+        val pp = centreOf(parent)
+        val pc = centreOf(child)
+        val shape = when (p.layout.line[child]) {
+            BranchLayout.Line.SIDE -> {
+                val s = sign(pc.x - pp.x).takeIf { it != 0f } ?: 1f
+                val x1 = pp.x + s * w(parent) / 2
+                val x2 = pc.x - s * w(child) / 2
+                val mx = (x1 + x2) / 2
+                EdgeShape.cubic(Offset(x1, pp.y), Offset(mx, pp.y), Offset(mx, pc.y), Offset(x2, pc.y))
+            }
+            BranchLayout.Line.DOWN -> down(parent, child)
+            BranchLayout.Line.ELBOW -> {
+                // The list's line, as far in from the parent's left as the layout put it.
+                val left = pp.x - w(parent) / 2
+                val inset = p.layout.spine[child]?.let { it - (p.at.getValue(parent).x - p.sizes.getValue(parent).w / 2) } ?: GraphLayout.STACK_SPINE
+                val sx = left + inset * px
+                EdgeShape.polyline(listOf(Offset(sx, pp.y + h(parent) / 2), Offset(sx, pc.y), Offset(pc.x - w(child) / 2, pc.y)))
+            }
+            BranchLayout.Line.CHANNEL -> {
+                // Positions from the layout, moved with any drag of the parent's branch.
+                val c = p.layout.channel[child]
+                if (c == null) down(parent, child) else {
+                    val shift = pp - Offset((p.at.getValue(parent).x - p.originX) * px, (p.at.getValue(parent).y - p.originY) * px)
+                    val cx = (c[0] - p.originX) * px + shift.x
+                    val y0 = (c[1] - p.originY) * px + shift.y
+                    val yi = (c[2] - p.originY) * px + shift.y
+                    EdgeShape.polyline(
+                        listOf(
+                            Offset(pp.x, pp.y + h(parent) / 2), Offset(pp.x, y0), Offset(cx, y0), Offset(cx, yi),
+                            Offset(pc.x, yi), Offset(pc.x, pc.y - h(child) / 2),
+                        ),
+                    )
+                }
+            }
+            BranchLayout.Line.STRAIGHT -> EdgeShape.line(pp, pc)
+            BranchLayout.Line.ROUTE -> route(parent, child)
+            null -> bow(parent, child)
+        }
+        return if (parent == a) shape else reversed(shape)
+    }
+    val group = p.layout.routeGroup[a]
+    return if (group != null && group == p.layout.routeGroup[b]) route(a, b) else bow(a, b)
 }
 
 /** The same line with its points running the other way (the path is unchanged). */
@@ -336,19 +389,19 @@ private fun reversed(shape: EdgeShape): EdgeShape {
 }
 
 /**
- * The map's picture (§2.69): boxes sized to their text, placed by the layout, and lines between
- * them. Pinch or use the buttons to zoom, drag to move, tap an item or a line to select it; the
+ * The map's picture (§2.69, §2.70): boxes sized to their text, placed branch by branch by their
+ * layouts, and lines between them. Pinch or use the buttons to zoom, drag to move, tap an item or a line to select it; the
  * boxes show more as you zoom in. It opens at a readable size, and Fit all shows everything.
  */
 @Composable
-internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: MapSelection?, linkingFrom: ItemRef?, actions: MapActions) {
+internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: ItemRef?, actions: MapActions) {
     val density = LocalDensity.current
     val px = density.density
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    val detail = Detail.of(scale)
-    val measurer = rememberTextMeasurer()
+    // Read through derivedStateOf, so zooming recomposes only when the detail level changes.
+    val detail by remember { derivedStateOf { Detail.of(scale) } }
     val typography = MaterialTheme.typography
     val styles = remember(typography) {
         NodeStyles(
@@ -358,13 +411,22 @@ internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: 
             fold = typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
         )
     }
-    val sizes = remember(state, detail, styles, density) { state.nodes.associate { it.ref to measureNode(it, state, detail, measurer, styles, density) } }
     val widthDp = viewport.width / px
     val bothSides = widthDp >= WideScreen.value
     val routeWidth = ((widthDp - 16f) / READABLE).coerceAtLeast(320f)
-    val placed by produceState<Placed?>(null, sizes, bothSides, routeWidth) {
+    // Boxes are measured off the main thread, each once per text and detail level; then placed.
+    val fonts = LocalFontFamilyResolver.current
+    val direction = LocalLayoutDirection.current
+    val measured = remember(styles, density, fonts) { ConcurrentHashMap<MeasureKey, GraphLayout.Size>() }
+    val placed by produceState<Placed?>(null, state, detail, bothSides, routeWidth, measured) {
         if (viewport == IntSize.Zero) return@produceState
-        value = withContext(Dispatchers.Default) { place(state, sizes, detail, bothSides, routeWidth) }
+        value = withContext(Dispatchers.Default) {
+            val measurer = TextMeasurer(fonts, density, direction, cacheSize = 0)
+            val sizes = state.nodes.associate { n ->
+                n.ref to measured.getOrPut(measureKey(n, state, detail)) { measureNode(n, state, detail, measurer, styles, density) }
+            }
+            place(state, sizes, detail, bothSides, routeWidth)
+        }
     }
     // An item being dragged, and how far in content pixels; once let go it stays put (pending) until
     // the map comes back with its new place, so it doesn't jump back for a moment.
@@ -377,7 +439,7 @@ internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: 
     // item dragged), the item nearest the middle of the screen stays where it is.
     var fit by remember { mutableStateOf<Fit?>(null) }
     var shown by remember { mutableStateOf<Placed?>(null) }
-    val fitKey = listOf(viewport, state.root?.ref, layout, state.viewKey, (state.nodes.map { it.ref } + state.foldHidden).toSet(), state.moved)
+    val fitKey = listOf(viewport, state.root?.ref, state.top, state.viewKey, (state.nodes.map { it.ref } + state.foldHidden).toSet(), state.moved)
     var fitted by remember { mutableStateOf<List<Any?>?>(null) }
     LaunchedEffect(fitKey) {
         if (viewport == IntSize.Zero) return@LaunchedEffect
@@ -405,8 +467,8 @@ internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: 
                 if (p.detail != Detail.NORMAL) { scale = 1f; return@LaunchedEffect }
                 when {
                     fitScale >= READABLE -> centre(min(fitScale, 1.15f))
-                    layout == MapViewModel.Layout.FREE -> {
-                        // Free layout: the item in the middle, at a readable size.
+                    state.top == MapStyle.FREE || state.top == MapStyle.RINGS -> {
+                        // Round the item in the middle: that item, at a readable size.
                         scale = 0.9f
                         val c = p.centre
                         offset = Offset(vw / 2 - (c.x - p.originX) * px * scale, top + (vh - top) / 2 - (c.y - p.originY) * px * scale)
@@ -431,7 +493,10 @@ internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: 
                 if (old != null && old !== p) {
                     val cx = (vw / 2 - offset.x) / (px * scale) + old.originX
                     val cy = (vh / 2 - offset.y) / (px * scale) + old.originY
-                    val anchor = p.at.keys.filter { it in old.at && it != pending?.first }.minByOrNull { r ->
+                    // Not an item just dragged (or below one): the rest of the picture stays still.
+                    val dragged = p.state.nodes.map { it.ref }.filter { old.state.offsets[it] != p.state.offsets[it] }
+                    val still = p.at.keys - (dragged + dragged.flatMap { below(p.state, it) }).toSet()
+                    val anchor = still.filter { it in old.at }.minByOrNull { r ->
                         val o = old.at.getValue(r)
                         (o.x - cx) * (o.x - cx) + (o.y - cy) * (o.y - cy)
                     }
@@ -460,13 +525,16 @@ internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: 
         is MapSelection.Edge -> p.state.edges.firstOrNull { it.link.id == selection.linkId }?.let { setOf(it.link.a, it.link.b) }
         null -> null
     }
+    // An item dragged moves with everything shown below it.
+    val movingRef = (drag ?: pending)?.first
+    val moving = remember(movingRef, p) { if (movingRef == null || p == null) emptySet() else below(p.state, movingRef) + movingRef }
     fun centreOf(ref: ItemRef): Offset {
         val c = p!!.at.getValue(ref)
-        val moved = (drag ?: pending)?.takeIf { it.first == ref }?.second ?: Offset.Zero
+        val moved = if (ref in moving) (drag ?: pending)?.second ?: Offset.Zero else Offset.Zero
         return Offset((c.x - p.originX) * px, (c.y - p.originY) * px) + moved
     }
     val edges = p?.state?.edges?.filter { it.link.a in p.at && it.link.b in p.at }.orEmpty()
-    val shapes = if (p == null) emptyMap() else edges.associate { it.link.id to shapeOf(it, p, ::centreOf, px) }
+    val shapes = remember(p, drag, pending) { if (p == null) emptyMap() else edges.associate { it.link.id to shapeOf(it, p, ::centreOf, px) } }
     Box(
         Modifier
             .fillMaxSize()
@@ -592,11 +660,7 @@ internal fun MapCanvas(state: MapState, layout: MapViewModel.Layout, selection: 
                                         val moved = drag?.second ?: Offset.Zero
                                         pending = drag
                                         drag = null
-                                        val at = p.at.getValue(node.ref)
-                                        actions.moveNode(
-                                            node.ref,
-                                            GraphLayout.Point((at.x + moved.x / px) / GraphLayout.GRID_X, (at.y + moved.y / px) / GraphLayout.GRID_Y),
-                                        )
+                                        actions.moveNode(node.ref, GraphLayout.Point(moved.x / px, moved.y / px))
                                     },
                                     onDragCancel = { drag = null },
                                 )

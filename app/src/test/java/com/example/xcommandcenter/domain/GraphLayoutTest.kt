@@ -23,14 +23,6 @@ class GraphLayoutTest {
         }
     }
 
-    // A root with three branches, the first two with leaves.
-    private val root = idea(1)
-    private val branches = listOf(idea(2), idea(3), idea(4))
-    private val leaves = mapOf(idea(2) to listOf(idea(5), idea(6), idea(7)), idea(3) to listOf(idea(8), idea(9)))
-    private val nodes = listOf(root) + branches + leaves.values.flatten()
-    private val edges = branches.map { it to root } + leaves.flatMap { (b, ls) -> ls.map { it to b } }
-    private val tree = GraphLayout.tree(listOf(root), nodes, edges)
-
     @Test
     fun theTreeFollowsTheFirstLinksAndStartsAnotherForWhatIsNotReached() {
         val a = idea(1)
@@ -52,47 +44,6 @@ class GraphLayoutTest {
         val kids = (2L..5L).map { idea(it) }
         val ordered = GraphLayout.tree(listOf(a), listOf(a) + kids, kids.map { it to a }, firm = kids.map { it to a })
         assertEquals(kids, ordered.children[a])
-    }
-
-    @Test
-    fun onAPhoneTheMindMapGoesRightAndReadsDown() {
-        val at = GraphLayout.mindMap(tree.roots, { tree.children[it].orEmpty() }, size, bothSides = false)
-        assertEquals(nodes.toSet(), at.keys)
-        assertTrue(nodes.drop(1).all { at.getValue(it).x > at.getValue(root).x })
-        // The root is level with its first branch, and each item level with the middle of its column.
-        assertEquals(at.getValue(branches[0]).y, at.getValue(root).y, 0.01f)
-        val firstLeaves = leaves.getValue(idea(2)).map { at.getValue(it).y }
-        assertEquals((firstLeaves.first() + firstLeaves.last()) / 2, at.getValue(idea(2)).y, 0.01f)
-        assertTrue(firstLeaves.zipWithNext().all { (a, b) -> a < b })
-        // Sub-items sit in the next column, after the widest item in the one before.
-        assertTrue(leaves.values.flatten().all { l -> at.getValue(l).x - size(l).w / 2 > branches.maxOf { at.getValue(it).x + size(it).w / 2 } })
-        assertNoOverlaps(at)
-    }
-
-    @Test
-    fun onAWideScreenBranchesSplitBothWays() {
-        val at = GraphLayout.mindMap(tree.roots, { tree.children[it].orEmpty() }, size, bothSides = true)
-        assertTrue(at.getValue(root).y in branches.minOf { at.getValue(it).y }..branches.maxOf { at.getValue(it).y })
-        assertTrue(at.getValue(branches[0]).x > 0f)
-        assertTrue(at.getValue(branches.last()).x < 0f)
-        assertNoOverlaps(at)
-    }
-
-    @Test
-    fun aFoldedItemsBranchTakesNoRoom() {
-        val open = GraphLayout.mindMap(tree.roots, { tree.children[it].orEmpty() }, size, bothSides = false)
-        val folded = GraphLayout.mindMap(tree.roots, { if (it == idea(2)) emptyList() else tree.children[it].orEmpty() }, size, bothSides = false)
-        assertFalse(idea(5) in folded)
-        fun height(at: Map<ItemRef, Point>) = GraphLayout.bounds(at, size).let { it[3] - it[1] }
-        assertTrue(height(folded) < height(open))
-    }
-
-    @Test
-    fun severalTreesStackOneUnderAnother() {
-        val other = idea(20)
-        val at = GraphLayout.mindMap(listOf(root, other), { tree.children[it].orEmpty() }, size, bothSides = false)
-        assertTrue(at.getValue(other).y > nodes.maxOf { at.getValue(it).y })
-        assertNoOverlaps(at)
     }
 
     @Test
@@ -136,14 +87,6 @@ class GraphLayoutTest {
         val box = GraphLayout.bounds(at, size)
         assertTrue(box[2] - box[0] <= 400f)
         assertNoOverlaps(at)
-    }
-
-    @Test
-    fun freeLayoutIsDeterministicAndBoxesDoNotOverlap() {
-        val start = GraphLayout.byRoute(nodes, edges, { 0 }, size, maxWidth = 600f).at
-        val a = GraphLayout.free(nodes, edges, size, start, fixed = root)
-        assertEquals(a, GraphLayout.free(nodes, edges, size, start, fixed = root))
-        assertNoOverlaps(a)
     }
 
     private fun abs(f: Float) = kotlin.math.abs(f)

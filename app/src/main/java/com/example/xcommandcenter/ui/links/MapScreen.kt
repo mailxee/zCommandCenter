@@ -58,6 +58,7 @@ import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.domain.MapFilter
+import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.data.repository.ItemDetail
 import com.example.xcommandcenter.ui.common.LabelChoice
 import com.example.xcommandcenter.ui.common.LinkLabelDialog
@@ -152,16 +153,8 @@ fun MapScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val layouts = MapViewModel.Layout.of(s?.mode ?: AppMode.DO)
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    layouts.forEachIndexed { i, option ->
-                        SegmentedButton(
-                            selected = s?.layout == option,
-                            onClick = { viewModel.setLayout(option) },
-                            shape = SegmentedButtonDefaults.itemShape(i, layouts.size),
-                        ) { Text(if (option == MapViewModel.Layout.FREE && s?.mode != AppMode.THINK) "Free layout" else option.label, maxLines = 1) }
-                    }
-                }
+                // The whole map's layout; a branch can differ, from its item's panel.
+                if (s != null) MapStylePicker("Layout", s.top, inherited = null, onPick = { viewModel.setStyle(root, it) })
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     val networkRoot = lastRoot
                     if (networkRoot != null) {
@@ -202,7 +195,7 @@ fun MapScreen(
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                     )
                     else -> MapCanvas(
-                        s, s.layout, selection, linkingFrom,
+                        s, selection, linkingFrom,
                         remember(viewModel) { MapActions(viewModel::select, viewModel::tapNode, viewModel::moveNode, viewModel::toggleFold) },
                     )
                 }
@@ -320,6 +313,16 @@ private fun NodePanel(node: MapNode, state: MapState, detail: ItemDetail?, viewM
             FilledTonalButton(onClick = { onOpen(node.ref) }) { Text("Open") }
             if (state.root?.ref != node.ref) TextButton(onClick = { viewModel.showNetwork(node.ref) }) { Text("Its network") }
             TextButton(onClick = { viewModel.startLinking(node.ref) }) { Text("Link to…") }
+        }
+        // How this item's branch is laid out, when it has one (the map's own item uses Layout above).
+        // Not inside a By route branch, which places everything in it by its rows.
+        if (state.root?.ref != node.ref && state.belowCount(node.ref) > 0 && state.inheritedStyle(node.ref) != MapStyle.BY_ROUTE) {
+            MapStylePicker(
+                "Branch layout", state.chosen[node.ref],
+                inherited = state.inheritedStyle(node.ref),
+                onPick = { viewModel.setStyle(node.ref, it) },
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
         }
     }
 }

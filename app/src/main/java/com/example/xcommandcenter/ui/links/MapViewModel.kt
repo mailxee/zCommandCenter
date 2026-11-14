@@ -20,6 +20,7 @@ import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.MapPositions
+import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.ui.navigation.Routes
 import kotlinx.coroutines.Dispatchers
@@ -63,12 +64,16 @@ data class LinkKindInfo(val key: String, val name: String, val style: LineStyle,
 
 /**
  * What the map draws: the items and the lines between them, and what the screen needs to lay them
- * out (§2.69): the map's [tree], each item's [layers] row for By route, and where items were
- * [dragged] to (grid units, see [MapPositions]). The screen places the boxes once it knows their sizes.
+ * out (§2.69, §2.70): the map's [tree], its layout ([top]) and the layouts [chosen] for branches,
+ * each item's [layers] row for By route, and how far items were dragged ([offsets], see
+ * [MapPositions]). The screen places the boxes once it knows their sizes.
  */
 data class MapState(
     val mode: AppMode,
-    val layout: MapViewModel.Layout,
+    /** The map's own layout: its item's, or Everything's, or the mode's default. */
+    val top: MapStyle,
+    /** Layouts chosen for items in the map (the top item's included). */
+    val chosen: Map<ItemRef, MapStyle> = emptyMap(),
     val root: ItemIndexEntry?,
     val nodes: List<MapNode>,
     val edges: List<MapEdge>,
@@ -89,7 +94,7 @@ data class MapState(
     val tree: GraphLayout.Tree = GraphLayout.Tree(emptyList(), emptyMap(), emptyMap()),
     /** By route's row for each item. */
     val layers: Map<ItemRef, Int> = emptyMap(),
-    val dragged: Map<ItemRef, GraphLayout.Point> = emptyMap(),
+    val offsets: Map<ItemRef, GraphLayout.Point> = emptyMap(),
     /** Items folded in this view, and the items their folding hides. */
     val folded: Set<ItemRef> = emptySet(),
     val foldHidden: Set<ItemRef> = emptySet(),
@@ -107,6 +112,16 @@ data class MapState(
     fun shownChildren(ref: ItemRef): List<ItemRef> =
         if (ref in folded) emptyList() else tree.children[ref].orEmpty().filter { it in byRef }
 
+    /** The layout [ref]'s branch follows when none is chosen for it: the nearest one chosen above, or the map's. */
+    fun inheritedStyle(ref: ItemRef): MapStyle {
+        var at = tree.parent[ref]
+        while (at != null) {
+            chosen[at]?.let { return it }
+            at = tree.parent[at]
+        }
+        return top
+    }
+
     /** How many items are below [ref] in the tree, folded or not; 0 when none (nothing to fold). */
     fun belowCount(ref: ItemRef): Int = below.getOrPut(ref) { tree.descendants(ref).size }
 
@@ -123,22 +138,10 @@ sealed interface MapSelection {
 data class MapUndo(val message: String, val undo: suspend () -> Unit)
 
 /**
- * The map of links: one item's network, or every linked item, laid out by route (rows from the
- * suggested route) or freely. Selecting an item or a line shows what can be done with it.
+ * The map of links: one item's network, or every linked item, each branch laid out by its own
+ * layout (§2.70). Selecting an item or a line shows what can be done with it.
  */
 class MapViewModel(savedState: SavedStateHandle, private val links: LinkRepository, private val prefs: MapPrefsRepository) : ViewModel() {
-    /** [MIND_MAP] is Think mode's own: rings round the item in the middle. */
-    enum class Layout(val label: String) {
-        MIND_MAP("Mind map"),
-        BY_ROUTE("By route"),
-        FREE("Free"),
-        ;
-
-        companion object {
-            fun of(mode: AppMode): List<Layout> = if (mode == AppMode.THINK) entries else listOf(BY_ROUTE, FREE)
-        }
-    }
-
     private val startRoot = Routes.parseRef(savedState.get<String>(Routes.ARG_ROOT))
     private val focus = savedState.get<String>(Routes.ARG_FOCUS)?.takeIf { it.isNotBlank() }
 
@@ -149,8 +152,6 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     var lastRoot = MutableStateFlow(startRoot)
         private set
 
-    /** The layout picked; null shows the mode's own (mind map in Think, by route in Do). */
-    private val pickedLayout = MutableStateFlow<Layout?>(null)
     val selection = MutableStateFlow<MapSelection?>(null)
 
     /** While set, the next item tapped is linked to this one. */
@@ -164,12 +165,11 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     private val folds = MutableStateFlow<Map<String, Set<ItemRef>>>(emptyMap())
 
     val state: StateFlow<MapState?> = combine(
-        combine(links.observeGraph(), links.explanations, ::Pair), root, pickedLayout, combine(links.mode, links.tabModes, ::Pair),
+        combine(links.observeGraph(), links.explanations, ::Pair), root, prefs.styles, combine(links.mode, links.tabModes, ::Pair),
         combine(prefs.filter, prefs.positions, folds, ::Triple),
-    ) { (graph, explanations), root, picked, (mode, tabModes), (filter, positions, folds) ->
-        val layout = picked?.takeIf { it in Layout.of(mode) } ?: Layout.of(mode).first()
-        val view = MapPositions.viewKey(mode, layout.name, root)
-        build(graph, root, layout, mode, tabModes, filter, view, positions[view].orEmpty(), folds[view].orEmpty(), explanations)
+    ) { (graph, explanations), root, styles, (mode, tabModes), (filter, positions, folds) ->
+        val view = MapPositions.viewKey(mode, root)
+        build(graph, root, styles[mode].orEmpty(), mode, tabModes, filter, view, positions[view].orEmpty(), folds[view].orEmpty(), explanations)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** The selected item's explanation and list, for its panel. */
@@ -192,8 +192,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     }
 
     private fun build(
-        graph: LinkGraph, root: ItemRef?, layout: Layout, mode: AppMode, tabModes: TabModes, filter: MapFilter,
-        view: String, dragged: Map<ItemRef, GraphLayout.Point>, folded: Set<ItemRef>, explanations: Map<ItemRef, String>,
+        graph: LinkGraph, root: ItemRef?, styles: Map<ItemRef?, MapStyle>, mode: AppMode, tabModes: TabModes, filter: MapFilter,
+        view: String, offsets: Map<ItemRef, GraphLayout.Point>, folded: Set<ItemRef>, explanations: Map<ItemRef, String>,
     ): MapState {
         val think = mode == AppMode.THINK
         val shown = graph.nodes(root, mode)
@@ -274,7 +274,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         val shownEdges = edges.filter { it.link.a !in foldHidden && it.link.b !in foldHidden }
         return MapState(
             mode = mode,
-            layout = layout,
+            top = styles[root] ?: MapStyle.default(mode),
+            chosen = styles.entries.mapNotNull { (ref, st) -> ref?.takeIf { it in visible }?.let { it to st } }.toMap(),
             root = root?.let { graph.entries[it] },
             nodes = nodes.map { n ->
                 MapNode(n, otherMode = tabModes.isOtherMode(n.type, mode), kind = if (n.type == ItemType.IDEA) graph.kindOf[n.id] else null)
@@ -288,10 +289,10 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             linkKinds = linkKinds,
             hiddenCount = (shown - visible).size,
             viewKey = view,
-            moved = dragged.keys.any { it in visible },
+            moved = offsets.keys.any { it in visible },
             tree = tree,
             layers = refs.associateWith(::layer),
-            dragged = dragged.filterKeys { it in visible },
+            offsets = offsets.filterKeys { it in visible },
             folded = fold.filter { it !in foldHidden }.toSet(),
             foldHidden = foldHidden,
             explanations = explanations,
@@ -319,10 +320,24 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         viewModelScope.launch { prefs.setStyle(kind, style) }
     }
 
-    /** Puts [ref] at [point] (grid units) in the view shown; for viewing only. */
-    fun moveNode(ref: ItemRef, point: GraphLayout.Point) {
-        val view = state.value?.viewKey ?: return
-        viewModelScope.launch { prefs.move(view, ref, point) }
+    /** Moves [ref], with everything below it, [by] dp further in the view shown; for viewing only. */
+    fun moveNode(ref: ItemRef, by: GraphLayout.Point) {
+        val s = state.value ?: return
+        val was = s.offsets[ref] ?: GraphLayout.Point(0f, 0f)
+        viewModelScope.launch { prefs.move(s.viewKey, ref, GraphLayout.Point(was.x + by.x, was.y + by.y)) }
+    }
+
+    /**
+     * Lays out [ref]'s branch by [style] (null: as the item above it), or the whole map when [ref] is
+     * the map's item or null for Everything. Items dragged in that branch go back to the layout's places.
+     */
+    fun setStyle(ref: ItemRef?, style: MapStyle?) {
+        val s = state.value ?: return
+        val branch = if (ref == null || ref == s.root?.ref) s.nodes.map { it.ref } else listOf(ref) + s.tree.descendants(ref)
+        viewModelScope.launch {
+            prefs.setMapStyle(s.mode, ref, style)
+            prefs.forget(s.viewKey, branch)
+        }
     }
 
     /** Folds or unfolds what is below [ref] in the tree, in the view shown. */
@@ -345,10 +360,6 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
 
     fun showAll() {
         viewModelScope.launch { prefs.showAll() }
-    }
-
-    fun setLayout(value: Layout) {
-        pickedLayout.value = value
     }
 
     fun showEverything() {

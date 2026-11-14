@@ -7,19 +7,34 @@ import com.example.xcommandcenter.domain.GraphLayout
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.MapPositions
+import com.example.xcommandcenter.domain.AppMode
+import com.example.xcommandcenter.domain.MapStyle
+import com.example.xcommandcenter.domain.MapStyles
 import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.domain.MapFilter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** The map's Show panel (tabs and kinds of link left out, each kind of link's line style) and dragged positions. */
+/** The map's Show panel (tabs and kinds of link left out, each kind of link's line style), dragged offsets and chosen layouts. */
 class MapPrefsRepository(private val context: Context) {
     private val typesKey = stringSetPreferencesKey("map_hidden_types")
     private val linksKey = stringSetPreferencesKey("map_hidden_links")
     private val stylesKey = stringSetPreferencesKey("map_line_styles")
     private val positionsKey = stringSetPreferencesKey("map_positions")
+    private val mapStylesKey = stringSetPreferencesKey("map_layouts")
 
-    /** Where items were dragged to, per view (see [MapPositions]). */
+    /** Layouts chosen on the map, per mode (see [MapStyles]). */
+    val styles: Flow<Map<AppMode, Map<ItemRef?, MapStyle>>> = context.settingsStore.data.map { prefs -> MapStyles.parse(prefs[mapStylesKey]) }
+
+    suspend fun setMapStyle(mode: AppMode, ref: ItemRef?, style: MapStyle?) {
+        context.settingsStore.edit { prefs -> prefs[mapStylesKey] = MapStyles.set(prefs[mapStylesKey], mode, ref, style) }
+    }
+
+    suspend fun forget(view: String, refs: Collection<ItemRef>) {
+        context.settingsStore.edit { prefs -> prefs[positionsKey] = MapPositions.forget(prefs[positionsKey], view, refs) }
+    }
+
+    /** How far items were dragged, per view (see [MapPositions]). */
     val positions: Flow<Map<String, Map<ItemRef, GraphLayout.Point>>> =
         context.settingsStore.data.map { prefs -> MapPositions.parse(prefs[positionsKey]) }
 
