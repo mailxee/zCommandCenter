@@ -244,6 +244,8 @@ internal class MapActions(
     val tapNode: (ItemRef) -> Unit,
     val moveNode: (ItemRef, GraphLayout.Point) -> Unit,
     val toggleFold: (ItemRef) -> Unit,
+    /** An item dragged onto another (and how far, in dp), for putting it under or linking it. */
+    val dropOn: (ItemRef, ItemRef, GraphLayout.Point) -> Unit = { _, _, _ -> },
 )
 
 /** A line's path, and points along it for its arrow, label and taps. */
@@ -533,6 +535,19 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
         val moved = if (ref in moving) (drag ?: pending)?.second ?: Offset.Zero else Offset.Zero
         return Offset((c.x - p.originX) * px, (c.y - p.originY) * px) + moved
     }
+    // The box a dragged item is over, which it can be dropped on: none of the dragged branch.
+    fun boxUnder(placed: Placed, ref: ItemRef, moved: Offset): ItemRef? {
+        val branch = below(placed.state, ref) + ref
+        val at = placed.at.getValue(ref)
+        val c = Offset((at.x - placed.originX) * px, (at.y - placed.originY) * px) + moved
+        return placed.state.nodes.firstOrNull { n ->
+            n.ref !in branch && placed.sizes[n.ref]?.let { sz ->
+                val o = placed.at.getValue(n.ref)
+                abs((o.x - placed.originX) * px - c.x) < sz.w * px / 2 && abs((o.y - placed.originY) * px - c.y) < sz.h * px / 2
+            } == true
+        }?.ref
+    }
+    val hover = drag?.let { (ref, moved) -> p?.let { boxUnder(it, ref, moved) } }
     val edges = p?.state?.edges?.filter { it.link.a in p.at && it.link.b in p.at }.orEmpty()
     val shapes = remember(p, drag, pending) { if (p == null) emptyMap() else edges.associate { it.link.id to shapeOf(it, p, ::centreOf, px) } }
     Box(
@@ -639,7 +654,7 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                     val size = p.sizes[node.ref] ?: return@forEach
                     val c = centreOf(node.ref)
                     val dim = highlighted != null && node.ref !in highlighted
-                    val isSelected = selection == MapSelection.Node(node.ref) || node.ref == linkingFrom ||
+                    val isSelected = selection == MapSelection.Node(node.ref) || node.ref == linkingFrom || node.ref == hover ||
                         (selection is MapSelection.Edge && highlighted?.contains(node.ref) == true)
                     NodeBox(
                         node, p.state, p.detail, size, styles,
@@ -658,9 +673,14 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                                     },
                                     onDragEnd = {
                                         val moved = drag?.second ?: Offset.Zero
-                                        pending = drag
+                                        val target = boxUnder(p, node.ref, moved)
                                         drag = null
-                                        actions.moveNode(node.ref, GraphLayout.Point(moved.x / px, moved.y / px))
+                                        val by = GraphLayout.Point(moved.x / px, moved.y / px)
+                                        // Dropped on another box: ask what to do; it goes back meanwhile.
+                                        if (target != null) actions.dropOn(node.ref, target, by) else {
+                                            pending = node.ref to moved
+                                            actions.moveNode(node.ref, by)
+                                        }
                                     },
                                     onDragCancel = { drag = null },
                                 )

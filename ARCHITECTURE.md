@@ -1271,6 +1271,59 @@ keep their place. `MapCanvasTest` draws a network of ideas on Robolectric: it op
 titles, Fit all and zooming change the detail, and folding asks for the right item; with a
 `build/map-shots` folder present it also saves each layout as a picture.
 
+### 2.70 Layouts per branch, editing the tree on the map, and faster maps
+
+**Layouts per branch.** A map no longer has one layout: each item's branch can have its own
+(`domain/MapStyle`), chosen from the item's panel (**Branch layout**, "As above" by default), and the
+map's own is chosen with **Layout** above the map (replacing the Mind map / By route / Free buttons).
+A choice belongs to the item, in its mode, wherever it is shown, and Everything has its own; they are
+kept in DataStore (`MapStyles`, `MapPrefsRepository.styles`). With none, Think maps are mind maps and
+Do maps By route. There are six layouts:
+
+- **Mind map**: sub-items in a column beside each item (on a phone all to the right; on a wide
+  screen the top item's branches split both ways).
+- **Tree**: sub-items in a row below each item; a plain list stacks under its item, and a row wider
+  than the screen wraps, the lower rows reached down a channel beside them.
+- **Outline**: sub-items listed below each item, indented.
+- **Rings**: sub-items in a circle round each item, far enough out to fit their branches.
+- **Free**: branches spread round each item and pushed apart, each only as far out as it needs.
+- **By route**: the whole branch in rows by the suggested route, as before. It places everything in
+  its branch, so items inside it can't choose another layout (their panel doesn't offer it).
+
+`domain/BranchLayout` lays the tree out from the bottom up: each item's sub-items arrive as blocks
+(their branches already laid out, with their bounds) and the item's layout places the blocks round
+it. So layouts nest freely, and adding one is an entry in `MapStyle` and its case in
+`BranchLayout.arrange`; the menus list every entry. The layout also says how each line of the tree
+runs (`BranchLayout.Line`: side to side, down, down a list's line, down a channel, straight, or by
+route's rows), and the screen draws it so. Links that aren't in the tree bow outwards, except
+between two items of one By route branch, which follow its rows.
+
+**Dragging moves a branch.** A dragged item now keeps an offset from its layout's place rather than
+an absolute place (`MapPositions`, per mode and network; earlier places are dropped), and everything
+below it moves with it, keeping the branch's shape at any zoom. Choosing a branch's layout clears
+the offsets inside it.
+
+**Editing the tree and links on the map.** Drag a box onto another, which lights up, and let go: a
+panel offers **Put under it** (an idea under an idea in Think, a plan under a plan in Do), **Link
+them** (unless they are), **Just move it** or Cancel. An item's panel has **Move under…** (then tap the
+new parent) and **Make top level**; an Under line's panel has **Remove from under**. Every change has
+Undo. Loops are refused (`MapState.canPutUnder`: not under itself or anything below it), and
+`LinkRepository.setParent` writes the parent. Do mode's map now also draws plans under their parent
+plans as Under lines, and a plan's network there includes them (`LinkGraph.plansUnder`); the network
+bar is unchanged.
+
+**Faster.** Timing a 300-item map showed that switching layouts re-measured every box's text on the
+main thread (about 200 ms there each time, more on a phone), while placing them took a few ms. Boxes
+are now measured off the main thread with their own `TextMeasurer`, each once per text and zoom
+level (`MeasureKey`), so switching layouts, moving items or changing a branch's layout measures
+nothing again; the same switch now takes a few ms. Zooming recomposes only when the detail level
+changes (`derivedStateOf`), lines are remembered between frames, and Free no longer runs a force
+layout over the whole network.
+
+**Also.** A new idea under another steps down a kind but never past Idea, so it is no longer a
+Question under an idea. The box that adds an item to a list wraps and grows as you type; Enter still
+adds the item.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1443,15 +1496,17 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TaskStatusFilter.kt` | The Tasks tab's Past due and Completed chips (§2.56). |
 | `domain/LinkRoute.kt` | The suggested route of links: a layer per type (§2.57). |
 | `domain/LinkAnalysis.kt` | Tidy links: loops, skipped layers and shared end points, with fixes (§2.57). |
-| `domain/GraphLayout.kt` | The map's tree, mind map, By route and free layouts, by box size (§2.57, §2.69). |
+| `domain/GraphLayout.kt` | The map's tree, By route's rows and box geometry (§2.57, §2.69, §2.70). |
 | `data/prefs/RoutePrefsRepository.kt` | Stores the suggested route (§2.57). |
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
-| `ui/links/MapCanvas.kt` | The map's picture: boxes measured and placed, lines, zoom levels, Fit all, folding (§2.69). |
+| `ui/links/MapCanvas.kt` | The map's picture: boxes measured and placed, lines, zoom levels, Fit all, folding, dragging and dropping (§2.69, §2.70). |
+| `ui/links/MapStylePicker.kt` | Choosing the map's or a branch's layout (§2.70). |
+| `domain/MapStyle.kt`, `domain/BranchLayout.kt` | The layouts, the layouts chosen per item, and laying out the tree branch by branch (§2.70). |
 | `domain/MapFilter.kt`, `data/prefs/MapPrefsRepository.kt` | What the map hides and each kind of link's line style (§2.66). |
 | `domain/Today.kt` | Today's date, checked each minute, so day-dependent views move on at midnight (§2.68). |
 | `data/dao/ItemCleanup.kt` | The links-and-tags queries every item DAO's delete runs (§2.4, §2.68). |
-| `domain/MapPositions.kt` | Where items were dragged to on the map, per view (§2.67). |
+| `domain/MapPositions.kt` | How far items were dragged on the map, per view (§2.67, §2.70). |
 | `data/entity/IdeaListItemEntity.kt` | An idea's list (§2.65). |
 | `ui/links/TidyScreen.kt`, `TidyViewModel.kt`, `FindingText.kt` | Tidy links and the findings in words (§2.57). |
 | `domain/IdeaKind.kt`, `domain/IdeaOutline.kt`, `domain/Glossary.kt` | Idea kinds, the Ideas outline and kind chips (§2.58); the glossary's terms and starting definitions (§2.60). |
@@ -1492,11 +1547,13 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/LinkEntityTest.kt` | Link normalization in both directions, same-tab ordering, self-link rejection. |
 | `domain/ReminderTodayTest.kt`, `domain/BackupNamesTest.kt` | Reminders today; backup names and which old ones go. |
 | `domain/MapFilterTest.kt` | Hiding tabs and kinds of link on the map; line styles. |
-| `domain/MapPositionsTest.kt` | Dragged positions kept per view, replaced and reset. |
+| `domain/MapPositionsTest.kt` | Dragged offsets kept per view, replaced, forgotten and reset; layouts chosen per mode and item. |
 | `data/db/MigrationTest.kt` | Every older database version upgrades to the current schema; data and the upgrades' inserts survive (§2.68). |
 | `reminder/NotificationsTest.kt` | Task reminders have Done, habit reminders Done or Missed today, other reminders no button. |
-| `domain/GraphLayoutTest.kt` | The map's tree (Under decides, order kept), mind map on one or both sides, folding, By route's stacked lists and wrapping, free layout without overlaps. |
-| `ui/links/MapCanvasTest.kt` | The map opens readable with full titles, Fit all and zoom change the detail, folding (§2.69). |
+| `domain/GraphLayoutTest.kt` | The map's tree (Under decides, order kept), By route's order, stacked lists and wrapping. |
+| `domain/BranchLayoutTest.kt` | Every layout without overlaps, mind map on one or both sides, tree lists and channels, rings, a branch with its own layout, By route taking its branch, dragging a branch, folding (§2.70). |
+| `ui/links/MapCanvasTest.kt` | The map opens readable with full titles, Fit all and zoom change the detail, folding, dropping a box on another, every layout and a mixed one (§2.69, §2.70). |
+| `ui/links/MapStateTest.kt` | Putting an item under another (same tab, no loops), linked both ways, Do mode's plans under plans. |
 | `ui/home/PlanRowsTest.kt` | Plans tab rows: tasks under their plan, completed plans hidden, collapsing, a search keeping the plans above. |
 | `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |

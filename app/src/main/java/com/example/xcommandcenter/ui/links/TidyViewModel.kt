@@ -115,6 +115,6 @@ class TidyViewModel(savedState: SavedStateHandle, private val links: LinkReposit
     }
 
     fun runUndo(action: MapUndo) {
-        viewModelScope.launch { action.undo() }
+        viewModelScope.launch { action.undo?.invoke() }
     }
 }

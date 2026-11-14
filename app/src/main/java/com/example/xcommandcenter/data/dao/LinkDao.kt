@@ -12,6 +12,7 @@ import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.data.entity.LabelUse
 import com.example.xcommandcenter.data.entity.OwnedLink
+import com.example.xcommandcenter.data.entity.PlanParent
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ThinkAnalysis
 import kotlinx.coroutines.flow.Flow
@@ -98,6 +99,18 @@ interface LinkDao {
     /** Every idea's parent and kind: the mind map's tree and Think mode's checks. */
     @Query("SELECT id, parentId, kind FROM ideas")
     fun observeIdeas(): Flow<List<ThinkAnalysis.Idea>>
+
+    /** Every plan under another, as (plan, parent): Do mode's tree on the map. */
+    @Query("SELECT id, parentId FROM plans WHERE parentId IS NOT NULL")
+    fun observePlanParents(): Flow<List<PlanParent>>
+
+    /** Puts an idea under another, or at the top level with null; the map checks for loops first. */
+    @Query("UPDATE ideas SET parentId = :parentId WHERE id = :id")
+    suspend fun setIdeaParent(id: Long, parentId: Long?)
+
+    /** Puts a plan under another, or at the top level with null; the map checks for loops first. */
+    @Query("UPDATE plans SET parentId = :parentId WHERE id = :id")
+    suspend fun setPlanParent(id: Long, parentId: Long?)
 
     /** One item's links, as stored, for their labels. */
     @Query("SELECT * FROM links WHERE (aType = :type AND aId = :id) OR (bType = :type AND bId = :id)")

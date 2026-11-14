@@ -4,6 +4,7 @@ import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
+import com.example.xcommandcenter.data.entity.PlanParent
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.AppMode
@@ -47,10 +48,18 @@ data class LinkGraph(
     val thinkRoute: ThinkRoute = ThinkRoute(),
     /** Think mode's findings (see [ThinkAnalysis]). */
     val thinkAnalysis: LinkAnalysis.Result = LinkAnalysis.Result(emptyList(), emptyList()),
+    /** Each plan under another, as (plan, parent). */
+    val planParents: List<PlanParent> = emptyList(),
 ) {
     /** Each idea under its parent, as pairs (child, parent): the mind map's tree. */
     val under: List<Pair<ItemRef, ItemRef>> =
         ideas.mapNotNull { idea -> idea.parentId?.let { ItemRef(ItemType.IDEA, idea.id) to ItemRef(ItemType.IDEA, it) } }
+
+    /** Each plan under its parent, as pairs (child, parent): Do mode's tree on the map. */
+    val plansUnder: List<Pair<ItemRef, ItemRef>> = planParents.map { ItemRef(ItemType.PLAN, it.id) to ItemRef(ItemType.PLAN, it.parentId) }
+
+    /** What is under what on [mode]'s map: ideas in Think, plans in Do. */
+    fun under(mode: AppMode): List<Pair<ItemRef, ItemRef>> = if (mode == AppMode.THINK) under else plansUnder
 
     val kindOf: Map<Long, IdeaKind> = ideas.associate { it.id to it.kind }
 
@@ -69,8 +78,9 @@ data class LinkGraph(
                 ideaRefs + links.filter { it.a in ideaRefs || it.b in ideaRefs }.flatMap { listOf(it.a, it.b) }
             }
             mode == AppMode.THINK -> LinkNetwork.of(root!!, links.map { it.a to it.b } + under, bookOfChapter, mode)
-            root == null -> links.flatMap { listOf(it.a, it.b) }.toSet()
-            else -> LinkNetwork.of(root, links.map { it.a to it.b }, bookOfChapter)
+            root == null -> (links.map { it.a to it.b } + plansUnder).flatMap { listOf(it.first, it.second) }.toSet()
+            // On Do mode's map a plan's network also runs to the plan it is under and the ones under it.
+            else -> LinkNetwork.of(root, links.map { it.a to it.b } + plansUnder, bookOfChapter)
         }
         return all.map { if (it.type == ItemType.CHAPTER) bookOfChapter[it.id]?.let { b -> ItemRef(ItemType.BOOK, b) } ?: it else it }
             .filter { it in entries }.toSet()
@@ -223,11 +233,11 @@ class LinkRepository(
     fun observeGraph(): Flow<LinkGraph> =
         combine(
             combine(dao.observeIndex(), dao.observeAll(), dao.observeIdeas(), ::Triple),
-            dao.observeChapterBooks(),
+            combine(dao.observeChapterBooks(), dao.observePlanParents(), ::Pair),
             combine(route, thinkRoute, checkWhy, ::Triple),
             dao.observeKept(),
             labels,
-        ) { (index, stored, ideas), chapterBooks, (route, thinkRoute, checkWhy), kept, labels ->
+        ) { (index, stored, ideas), (chapterBooks, planParents), (route, thinkRoute, checkWhy), kept, labels ->
             val bookOf = chapterBooks.associate { it.chapterId to it.id }
             fun node(ref: ItemRef) = if (ref.type == ItemType.CHAPTER) bookOf[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
             val labelById = labels.associateBy { it.id }
@@ -262,10 +272,21 @@ class LinkRepository(
                 bookOfChapter = bookOf,
                 route = route,
                 analysis = doAnalysis,
+                planParents = planParents,
             )
         }.flowOn(Dispatchers.Default)
 
     suspend fun removeLink(id: Long) = dao.deleteById(id)
+
+    /** Puts an idea or a plan under [parent] (same tab), or at the top level with null. */
+    suspend fun setParent(ref: ItemRef, parent: ItemRef?) {
+        require(parent == null || parent.type == ref.type) { "Only an idea under an idea, or a plan under a plan" }
+        when (ref.type) {
+            ItemType.IDEA -> dao.setIdeaParent(ref.id, parent?.id)
+            ItemType.PLAN -> dao.setPlanParent(ref.id, parent?.id)
+            else -> error("${ref.type} has no parent")
+        }
+    }
 
     /** Puts back a link removed with [removeLink]. */
     suspend fun restore(link: LinkEntity) {

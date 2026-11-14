@@ -100,7 +100,30 @@ data class MapState(
     val foldHidden: Set<ItemRef> = emptySet(),
     /** Each item's explanation on one line, shown in its box when zoomed in. */
     val explanations: Map<ItemRef, String> = emptyMap(),
+    /** Every idea's (Think) or plan's (Do) parent, shown or not, for moving items under others. */
+    val under: Map<ItemRef, ItemRef> = emptyMap(),
 ) {
+    /** The tab whose items can be put under one another on this map: ideas in Think, plans in Do. */
+    val parentType: ItemType get() = if (mode == AppMode.THINK) ItemType.IDEA else ItemType.PLAN
+
+    /** Whether [child] can go under [parent]: same tab, not already there, and not under itself or below it. */
+    fun canPutUnder(child: ItemRef, parent: ItemRef): Boolean {
+        if (child.type != parentType || parent.type != parentType || child == parent || under[child] == parent) return false
+        var at: ItemRef? = parent
+        while (at != null) {
+            if (at == child) return false
+            at = under[at]
+        }
+        return true
+    }
+
+    /** Whether [a] and [b] are linked (not counting Under). */
+    fun linked(a: ItemRef, b: ItemRef): Boolean = stored.values.any { l ->
+        val x = ItemRef(l.aType, l.aId)
+        val y = ItemRef(l.bType, l.bId)
+        (x == a && y == b) || (x == b && y == a)
+    }
+
     val byRef: Map<ItemRef, MapNode> = nodes.associateBy { it.ref }
 
     /** How many findings suggest a change, for the Tidy links button. */
@@ -134,8 +157,16 @@ sealed interface MapSelection {
     data class Edge(val linkId: Long) : MapSelection
 }
 
+/**
+ * A box dropped on another on the map (§2.70): [item] can be put under [target] when
+ * [canPutUnder], linked to it unless already [linked], or just moved [by] dp.
+ */
+data class MapDrop(val item: ItemRef, val target: ItemRef, val by: GraphLayout.Point, val canPutUnder: Boolean, val linked: Boolean) {
+    enum class Choice { UNDER, LINK, MOVE, CANCEL }
+}
+
 /** Something just changed on the map, with a way back. */
-data class MapUndo(val message: String, val undo: suspend () -> Unit)
+data class MapUndo(val message: String, val undo: (suspend () -> Unit)?)
 
 /**
  * The map of links: one item's network, or every linked item, each branch laid out by its own
@@ -156,6 +187,12 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
 
     /** While set, the next item tapped is linked to this one. */
     val linkingFrom = MutableStateFlow<ItemRef?>(null)
+
+    /** While set, the next item tapped becomes this item's parent. */
+    val placingUnder = MutableStateFlow<ItemRef?>(null)
+
+    /** A box just dropped on another, waiting for a choice. */
+    val drop = MutableStateFlow<MapDrop?>(null)
 
     val undo = MutableStateFlow<MapUndo?>(null)
 
@@ -212,7 +249,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         val shared = findings.filter { it.kind == LinkAnalysis.Kind.SHARED_END_POINT }
             .flatMap { f -> f.sharedBy.map { setOf(it, f.endPoint!!) } }.toSet()
         // In Think mode each idea also hangs from the one it is under: the mind map's tree.
-        val allUnder = if (think) graph.under.filter { (child, parent) -> child in shown && parent in shown } else emptyList()
+        // Each idea (Think) or plan (Do) also hangs from the one it is under: the tree's own lines.
+        val allUnder = graph.under(mode).filter { (child, parent) -> child in shown && parent in shown }
         val underEdges = allUnder.map { (child, parent) ->
             MapEdge(LinkAnalysis.Link(-child.id, child, parent), EdgeStyle.UNDER, null, kind = MapFilter.UNDER, lineStyle = filter.styleOf(MapFilter.UNDER))
         }
@@ -296,6 +334,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             folded = fold.filter { it !in foldHidden }.toSet(),
             foldHidden = foldHidden,
             explanations = explanations,
+            under = graph.under(mode).toMap(),
         )
     }
 
@@ -379,26 +418,80 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
 
     fun startLinking(from: ItemRef) {
         linkingFrom.value = from
+        placingUnder.value = null
         selection.value = null
     }
 
     fun cancelLinking() {
         linkingFrom.value = null
+        placingUnder.value = null
     }
 
-    /** While linking: links the chosen item to the one linking started from. */
+    /** "Move under…": the next item tapped becomes [child]'s parent. */
+    fun startPlacingUnder(child: ItemRef) {
+        placingUnder.value = child
+        linkingFrom.value = null
+        selection.value = null
+    }
+
+    /** Selects an item; while linking or moving under, the item tapped is the other end. */
     fun tapNode(ref: ItemRef) {
         val from = linkingFrom.value
-        if (from == null) {
-            selection.value = if (selection.value == MapSelection.Node(ref)) null else MapSelection.Node(ref)
-            return
+        val child = placingUnder.value
+        when {
+            from != null -> {
+                linkingFrom.value = null
+                linkItems(from, ref)
+            }
+            child != null -> {
+                placingUnder.value = null
+                if (child == ref) return
+                if (state.value?.canPutUnder(child, ref) == true) putUnder(child, ref) else {
+                    val s = state.value
+                    undo.value = MapUndo("${s?.title(child)} can't go under ${s?.title(ref)}", null)
+                }
+            }
+            else -> selection.value = if (selection.value == MapSelection.Node(ref)) null else MapSelection.Node(ref)
         }
-        linkingFrom.value = null
-        if (from == ref) return
+    }
+
+    /** Links [a] and [b], with Undo. */
+    fun linkItems(a: ItemRef, b: ItemRef) {
+        if (a == b) return
         viewModelScope.launch {
-            links.link(from, ref)
+            links.link(a, b)
             val s = state.value
-            undo.value = MapUndo("Linked ${s?.title(from)} and ${s?.title(ref)}") { links.unlink(from, ref) }
+            undo.value = MapUndo("Linked ${s?.title(a)} and ${s?.title(b)}") { links.unlink(a, b) }
+        }
+    }
+
+    /** Puts [child] under [parent], with Undo back to where it was. */
+    fun putUnder(child: ItemRef, parent: ItemRef?) {
+        val s = state.value ?: return
+        if (parent != null && !s.canPutUnder(child, parent)) return
+        val was = s.under[child]
+        if (was == parent) return
+        viewModelScope.launch {
+            links.setParent(child, parent)
+            val message = if (parent == null) "${s.title(child)} is now at the top level" else "${s.title(child)} is now under ${s.title(parent)}"
+            undo.value = MapUndo(message) { links.setParent(child, was) }
+        }
+    }
+
+    /** [item] was dropped on [target], having been dragged [by] dp: offers what can be done. */
+    fun dropOn(item: ItemRef, target: ItemRef, by: GraphLayout.Point) {
+        val s = state.value ?: return
+        drop.value = MapDrop(item, target, by, canPutUnder = s.canPutUnder(item, target), linked = s.linked(item, target))
+    }
+
+    fun dropped(choice: MapDrop.Choice) {
+        val d = drop.value ?: return
+        drop.value = null
+        when (choice) {
+            MapDrop.Choice.UNDER -> putUnder(d.item, d.target)
+            MapDrop.Choice.LINK -> linkItems(d.item, d.target)
+            MapDrop.Choice.MOVE -> moveNode(d.item, d.by)
+            MapDrop.Choice.CANCEL -> Unit
         }
     }
 
@@ -439,6 +532,6 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
     }
 
     fun runUndo(action: MapUndo) {
-        viewModelScope.launch { action.undo() }
+        viewModelScope.launch { action.undo?.invoke() }
     }
 }

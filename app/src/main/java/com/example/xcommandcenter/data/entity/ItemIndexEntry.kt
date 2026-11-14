@@ -64,3 +64,6 @@ data class OwnedLink(
 data class ItemText(val type: ItemType, val id: Long, val text: String) {
     val ref: ItemRef get() = ItemRef(type, id)
 }
+
+/** A plan and the plan it is under, for the map. */
+data class PlanParent(val id: Long, val parentId: Long)

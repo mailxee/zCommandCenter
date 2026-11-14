@@ -103,6 +103,8 @@ fun MapScreen(
     val lastRoot by viewModel.lastRoot.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val linkingFrom by viewModel.linkingFrom.collectAsStateWithLifecycle()
+    val placingUnder by viewModel.placingUnder.collectAsStateWithLifecycle()
+    val drop by viewModel.drop.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     var showing by rememberSaveable { mutableStateOf(false) }
@@ -110,7 +112,7 @@ fun MapScreen(
     LaunchedEffect(undo) {
         val action = undo ?: return@LaunchedEffect
         viewModel.undoShown()
-        val result = snackbar.showSnackbar(action.message, actionLabel = "Undo", duration = SnackbarDuration.Short)
+        val result = snackbar.showSnackbar(action.message, actionLabel = if (action.undo != null) "Undo" else null, duration = SnackbarDuration.Short)
         if (result == SnackbarResult.ActionPerformed) viewModel.runUndo(action)
     }
     val s = state
@@ -174,6 +176,7 @@ fun MapScreen(
                         Legend(outline, LineStyle.SOLID, "Link")
                         if (s.nodes.any { it.otherMode }) Legend(OtherModeColor, LineStyle.SOLID, "⇄ Do")
                     } else {
+                        if (s?.edges?.any { it.style == EdgeStyle.UNDER } == true) Legend(outline, s.filter.styleOf(MapFilter.UNDER), "Under", thick = true)
                         Legend(outline, LineStyle.SOLID, "On route")
                         Legend(OffRouteColor, LineStyle.SOLID, "Off route")
                         Legend(RemoveColor, LineStyle.DASHED, "Suggest removing")
@@ -196,13 +199,19 @@ fun MapScreen(
                     )
                     else -> MapCanvas(
                         s, selection, linkingFrom,
-                        remember(viewModel) { MapActions(viewModel::select, viewModel::tapNode, viewModel::moveNode, viewModel::toggleFold) },
+                        remember(viewModel) { MapActions(viewModel::select, viewModel::tapNode, viewModel::moveNode, viewModel::toggleFold, viewModel::dropOn) },
                     )
                 }
                 Column(Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
                     val from = linkingFrom
-                    if (from != null && s != null) {
-                        LinkingBanner(s.title(from), viewModel::cancelLinking)
+                    val child = placingUnder
+                    val dropped = drop
+                    if (dropped != null && s != null) {
+                        DropPanel(dropped, s, viewModel::dropped)
+                    } else if (from != null && s != null) {
+                        LinkingBanner("Tap the item to link to ${s.title(from)}", viewModel::cancelLinking)
+                    } else if (child != null && s != null) {
+                        LinkingBanner("Tap the item to put ${s.title(child)} under", viewModel::cancelLinking)
                     } else if (s != null) {
                         when (val sel = selection) {
                             is MapSelection.Node -> s.byRef[sel.ref]?.let { NodePanel(it, s, detail?.takeIf { d -> d.first == sel.ref }?.second, viewModel, onOpen) }
@@ -309,10 +318,15 @@ private fun NodePanel(node: MapNode, state: MapState, detail: ItemDetail?, viewM
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             FilledTonalButton(onClick = { onOpen(node.ref) }) { Text("Open") }
             if (state.root?.ref != node.ref) TextButton(onClick = { viewModel.showNetwork(node.ref) }) { Text("Its network") }
             TextButton(onClick = { viewModel.startLinking(node.ref) }) { Text("Link to…") }
+            // Ideas (Think) and plans (Do) can change what they are under, right here.
+            if (node.ref.type == state.parentType) {
+                TextButton(onClick = { viewModel.startPlacingUnder(node.ref) }) { Text("Move under…") }
+                if (state.under[node.ref] != null) TextButton(onClick = { viewModel.putUnder(node.ref, null) }) { Text("Make top level") }
+            }
         }
         // How this item's branch is laid out, when it has one (the map's own item uses Layout above).
         // Not inside a By route branch, which places everything in it by its rows.
@@ -333,11 +347,14 @@ private fun EdgePanel(edge: MapEdge, state: MapState, viewModel: MapViewModel) {
         Panel {
             PanelHeader("Under", "${state.title(edge.link.a)} is under ${state.title(edge.link.b)}") { viewModel.select(null) }
             Text(
-                "Change it with Under on the idea's page.",
+                "To move it under another, drag it onto that item, or select it and use Move under….",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 10.dp, bottom = 8.dp),
+                modifier = Modifier.padding(end = 10.dp),
             )
+            Row(Modifier.padding(bottom = 4.dp)) {
+                TextButton(onClick = { viewModel.select(null); viewModel.putUnder(edge.link.a, null) }) { Text("Remove from under") }
+            }
         }
         return
     }
@@ -391,11 +408,25 @@ private fun EdgePanel(edge: MapEdge, state: MapState, viewModel: MapViewModel) {
 }
 
 @Composable
-private fun LinkingBanner(title: String, onCancel: () -> Unit) {
+private fun LinkingBanner(text: String, onCancel: () -> Unit) {
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Tap the item to link to $title", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
+            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
             TextButton(onClick = onCancel) { Text("Cancel") }
+        }
+    }
+}
+
+/** A box dropped on another: put it under that item, link the two, or just leave it there. */
+@Composable
+private fun DropPanel(drop: MapDrop, state: MapState, onChoose: (MapDrop.Choice) -> Unit) {
+    Panel {
+        PanelHeader("Dropped on ${state.title(drop.target)}", state.title(drop.item)) { onChoose(MapDrop.Choice.CANCEL) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(bottom = 4.dp)) {
+            if (drop.canPutUnder) FilledTonalButton(onClick = { onChoose(MapDrop.Choice.UNDER) }) { Text("Put under it") }
+            if (!drop.linked) TextButton(onClick = { onChoose(MapDrop.Choice.LINK) }) { Text("Link them") }
+            TextButton(onClick = { onChoose(MapDrop.Choice.MOVE) }) { Text("Just move it") }
+            TextButton(onClick = { onChoose(MapDrop.Choice.CANCEL) }) { Text("Cancel") }
         }
     }
 }

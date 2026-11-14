@@ -17,6 +17,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.domain.AppMode
 import com.example.xcommandcenter.domain.GraphLayout
@@ -107,7 +109,12 @@ class MapCanvasTest {
     }
 
     private var foldAsked: ItemRef? = null
-    private val actions = MapActions(select = {}, tapNode = {}, moveNode = { _, _ -> }, toggleFold = { foldAsked = it })
+    private var droppedOn: Pair<ItemRef, ItemRef>? = null
+    private var movedBy: Pair<ItemRef, GraphLayout.Point>? = null
+    private val actions = MapActions(
+        select = {}, tapNode = {}, moveNode = { r, by -> movedBy = r to by }, toggleFold = { foldAsked = it },
+        dropOn = { item, target, _ -> droppedOn = item to target },
+    )
 
     private fun show(initial: MapState): (MapState) -> Unit {
         var current by mutableStateOf(initial)
@@ -163,6 +170,35 @@ class MapCanvasTest {
         compose.onNodeWithContentDescription("Unfold, 6 items hidden").assertIsDisplayed()
         compose.onNodeWithText("Virtue is the only good").assertDoesNotExist()
         shoot("mind-folded")
+    }
+
+    @Test
+    fun draggingABoxOntoAnotherOffersToPutItUnderOrLinkIt() {
+        show(state(MapStyle.MIND_MAP))
+        waitFor("Logic")
+        val logic = compose.onNodeWithText("Logic").fetchSemanticsNode().boundsInRoot
+        val ethics = compose.onNodeWithText("Ethics").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Logic").performTouchInput {
+            down(center)
+            val to = Offset(ethics.center.x - logic.center.x, ethics.center.y - logic.center.y)
+            moveBy(to / 2f)
+            moveBy(to / 2f)
+            // The drag starts counting after the touch slop.
+            moveBy(Offset(0f, viewConfiguration.touchSlop))
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals(entries.entries.first { it.value.title == "Logic" }.key to entries.entries.first { it.value.title == "Ethics" }.key, droppedOn)
+        assertEquals(null, movedBy)
+        // Dropped on empty space, it just moves (with anything below it).
+        compose.onNodeWithText("Logic").performTouchInput {
+            down(center)
+            moveBy(Offset(-200f, 0f))
+            moveBy(Offset(-200f, 0f))
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals("Logic", movedBy?.first?.let { entries.getValue(it).title })
     }
 
     @Test
