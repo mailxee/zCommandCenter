@@ -154,9 +154,16 @@ fun ListEditor(
     if (!moving) Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = newItem,
-            onValueChange = { newItem = it },
+            // Wraps and grows as it fills; Enter (a line break) adds the item rather than breaking it.
+            onValueChange = { text ->
+                val cut = text.indexOf('\n')
+                if (cut < 0) newItem = text else {
+                    newItem = text.substring(0, cut)
+                    add()
+                }
+            },
             label = { Text(addLabel) },
-            singleLine = true,
+            maxLines = 6,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { add() }),
             modifier = Modifier.weight(1f),
