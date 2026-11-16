@@ -27,6 +27,35 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Hand-off requests from apps the user allows in Settings, Data sharing (see handoff/Handoff.kt):
+            started with startActivityForResult, they open over the asking app and write only on confirmation.
+        -->
+        <activity
+            android:name=".handoff.AddHabitActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.XCommandCenter.Handoff"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="com.xeeshan.manage_everything.action.ADD_HABIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".handoff.MarkHabitActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.XCommandCenter.Handoff">
+            <intent-filter>
+                <action android:name="com.xeeshan.manage_everything.action.MARK_HABIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".reminder.ReminderReceiver"
             android:exported="false" />

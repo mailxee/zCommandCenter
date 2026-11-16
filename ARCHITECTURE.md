@@ -1377,6 +1377,42 @@ reached. `LinkDao.observeIdeaTree`/`observePlanTree` give each item's parent and
 `TreePickerStep` in `ui/common/LinkedItems.kt` lays it out with `IdeaOutline.rows`. In link mode
 only the network shows, and an item whose parent is outside it shows at the top level.
 
+### 2.74 Hand-off requests: adding or marking a habit for another app
+
+zNotifMonitor (§2.72) can ask this app to add a habit or mark one; it never writes the data itself.
+Two exported activities in `handoff/` answer fixed actions (`Handoff.kt` holds the contract), both
+started with `startActivityForResult`:
+
+- **`com.xeeshan.manage_everything.action.ADD_HABIT`** (`AddHabitActivity`): extras `name` (String,
+  required), `notes` (String), `start_date` (Long epoch day, default today). Opens the ordinary habit
+  editor (`HabitDetailScreen`) as a new habit, filled in by `HabitDetailViewModel.prefill` (Daily,
+  Positive, Medium are the defaults). The filled-in form counts as unchanged, so backing out doesn't
+  ask; nothing is written until Save. Result: `RESULT_OK` with `habit_id` once saved (also if the user
+  then goes back), else `RESULT_CANCELED` (also after deleting it there). The `id` extra the editor
+  would read is removed first, so a request can never open an existing habit.
+- **`com.xeeshan.manage_everything.action.MARK_HABIT`** (`MarkHabitActivity`, `MarkHabitViewModel`):
+  extras `habit_id` (Long) and `date` (Long epoch day). `HabitHandoff.markDecision` decides: a
+  missing extra, a missing habit, a future day or a day the habit isn't due on (`HabitStats.isDue`,
+  so the calendar's rules, including "every N days" catching up) are explained and nothing is
+  written; a day already marked is reported and counts as success; otherwise it asks "Mark 'Run' as
+  done on Mon 16 Nov?" ("missed" for a negative habit). Confirm calls `HabitRepository.mark`
+  (`markedAt` = now, reminders resynced). Result: `RESULT_OK` with `habit_id` and `date` if the day is
+  marked when the screen closes, else `RESULT_CANCELED`.
+
+**Who may ask.** `share/HandoffGate.kt` applies `ShareProvider`'s rule: the caller (the system's
+`callingPackage`, set only by `startActivityForResult`) must be on the Data sharing allowed list
+with the same certificate (`share/CallerIdentity.kt`, shared with the provider). The app itself is
+let in. Otherwise the screen says "Not allowed: <package>. Allow it under Settings > Data sharing."
+and the app is listed there as a request, as a refused read would be; a caller that can't be
+identified is refused too.
+
+**Over the caller.** Both activities use `Theme.XCommandCenter.Handoff` (a see-through window, so
+the confirmation shows over the asking app), `excludeFromRecents` and an empty `taskAffinity`. They
+run in the caller's task, so the main screen never comes up, and they work from a cold start since
+the container is made in `Application.onCreate`. A linked item tapped in the editor opens in the app's
+own task. The action strings don't follow the application id, so a debug build answers them too;
+callers set the package.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1408,7 +1444,7 @@ file changed; template files left as they were (backup rules, Gradle wrapper,
 | `build.gradle.kts` (modified) | Declares the Compose compiler, KSP and Room Gradle plugins. |
 | `gradle/libs.versions.toml` (modified) | Version catalog: Compose BOM, Room, Navigation, Lifecycle, DataStore, KSP, Reorderable. |
 | `app/build.gradle.kts` (modified) | minSdk 26, Compose, warnings-as-errors, opt-ins, Room schema dir, dependencies. |
-| `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, reminder receivers, notification / exact-alarm / boot permissions. |
+| `app/src/main/AndroidManifest.xml` (modified) | Application class, launcher activity, hand-off activities, sharing provider, reminder receivers, notification / exact-alarm / boot permissions. |
 | `app/src/main/res/values/themes.xml` (modified) | Plain platform window theme; real theming is in Compose. |
 | `app/schemas/.../AppDatabase/1.json` … `5.json` (created, generated) | Exported Room schemas: version 1 since the reset in §2.17; v2 adds the columns and table of §2.23, v3 the priorities of §2.25, v4 and v5 the reminders table of §2.30, all via auto-migration. |
 | `.gitignore` (modified) | Also ignores `/ignore_this/`. |
@@ -1439,6 +1475,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
 | `domain/CompletionTime.kt` | When `tasks.completedAt` is set, kept and cleared (§2.72). |
 | `domain/DataSharing.kt` | Who may read the shared data: matching by package and certificate, requests, fingerprints (§2.72). |
+| `domain/HabitHandoff.kt` | A hand-off's new habit, and whether a habit's day may be marked, with the wording (§2.74). |
 
 ### data/entity/ (Room tables and view)
 | File | Purpose |
@@ -1513,8 +1550,16 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | File | Purpose |
 |---|---|
 | `share/ShareProvider.kt` | Read-only exported provider for apps the user allowed; checks the caller, answers `/meta` (§2.72). |
+| `share/CallerIdentity.kt` | Another app's package, label and certificate fingerprint (§2.72, §2.74). |
+| `share/HandoffGate.kt` | Whether the app starting a hand-off screen may ask: allowed, not allowed (now a request) or unknown (§2.74). |
 | `share/SharePath.kt` | The provider's paths and the table each one reads. |
 | `reminder/Notifications.kt` | Notification channel, permission check, reminder notification that opens the task. |
+
+### handoff/
+| File | Purpose |
+|---|---|
+| `handoff/Handoff.kt` | The hand-off actions and extras (§2.74). |
+| `handoff/AddHabitActivity.kt`, `MarkHabitActivity.kt`, `HandoffViewModels.kt`, `HandoffDialog.kt` | The ADD_HABIT and MARK_HABIT screens over the asking app (§2.74). |
 
 ### ui/
 | File | Purpose |

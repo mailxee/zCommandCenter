@@ -161,6 +161,10 @@ abstract class ItemDetailViewModel(
     var closed by mutableStateOf(false)
         protected set
 
+    /** Set once the item has been deleted from this screen. */
+    var deleted by mutableStateOf(false)
+        private set
+
     fun messageShown() {
         message = null
     }
@@ -257,6 +261,7 @@ abstract class ItemDetailViewModel(
         val id = itemId.value
         viewModelScope.launch {
             if (id != 0L) block(id)
+            deleted = id != 0L
             closed = true
         }
     }

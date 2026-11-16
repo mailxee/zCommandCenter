@@ -10,6 +10,7 @@ import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.ReminderRepository
 import com.example.xcommandcenter.data.repository.TagRepository
+import com.example.xcommandcenter.domain.HabitHandoff
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.common.ItemCardSource
 import com.example.xcommandcenter.ui.common.ItemDetailViewModel
@@ -68,6 +69,20 @@ class HabitDetailViewModel(
             load(loaded)
             markClean()
         }
+        markClean()
+    }
+
+    private var prefilled = false
+
+    /**
+     * Fills in a new habit from another app's request (Daily, Positive and Medium are already the
+     * defaults). Once per screen, so a rotation keeps the user's edits; the prefilled form counts as
+     * unchanged, so leaving it doesn't ask first, and nothing is saved until the user saves.
+     */
+    fun prefill(draft: HabitHandoff.NewHabit) {
+        if (prefilled || itemId.value != 0L) return
+        prefilled = true
+        habit = habit.copy(name = draft.name, notes = draft.notes, startDate = draft.startDate)
         markClean()
     }
 

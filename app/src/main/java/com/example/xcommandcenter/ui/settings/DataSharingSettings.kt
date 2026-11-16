@@ -32,14 +32,15 @@ fun DataSharingSettings(viewModel: SettingsViewModel) {
     Text(
         "Apps you allow here can read your tasks, habits and their history, goals, plans, schedules, tags, quotes and books, " +
             "but not change them. Notes, people, ideas, links and reminders are never shared. " +
-            "An app that tries to read before you allow it is listed here.",
+            "They can also ask to add a habit or mark one, which happens only once you confirm it on the screen that opens. " +
+            "An app that tries either before you allow it is listed here.",
         style = MaterialTheme.typography.bodyMedium,
     )
     if (pending.isEmpty() && allowed.isEmpty()) {
         Text("No app has asked yet, so nothing is shared.", style = MaterialTheme.typography.bodyMedium)
     }
     if (pending.isNotEmpty()) {
-        Text("Asking to read", style = MaterialTheme.typography.titleSmall)
+        Text("Asking for access", style = MaterialTheme.typography.titleSmall)
         Card(Modifier.fillMaxWidth()) {
             pending.forEach { app ->
                 key(app.packageName, app.certSha256) {

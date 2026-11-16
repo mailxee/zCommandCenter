@@ -24,6 +24,9 @@ class HabitRepository(
 
     suspend fun get(id: Long): HabitEntity? = dao.get(id)
 
+    /** The days [habitId] is marked, read once. */
+    suspend fun markDates(habitId: Long): Set<LocalDate> = dao.markDates(habitId).toSet()
+
     /** A new habit gets a place in the list; an edited one keeps its place. Its reminders are saved by the caller. */
     suspend fun save(habit: HabitEntity): Long {
         val id = if (habit.id == 0L) {

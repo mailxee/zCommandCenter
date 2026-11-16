@@ -3,17 +3,14 @@ package com.example.xcommandcenter.share
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
-import android.content.pm.PackageManager
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Binder
-import android.os.Build
 import android.os.Process
 import androidx.core.content.pm.PackageInfoCompat
 import com.example.xcommandcenter.XCommandCenterApp
 import com.example.xcommandcenter.data.db.AppDatabase
-import com.example.xcommandcenter.domain.DataSharing
 import com.example.xcommandcenter.domain.ShareApp
 import kotlinx.coroutines.runBlocking
 
@@ -56,31 +53,8 @@ class ShareProvider : ContentProvider() {
         val packageName = callingPackage ?: return null
         val pm = context.packageManager
         if (pm.getPackagesForUid(Binder.getCallingUid())?.contains(packageName) != true) return null
-        val certificates = try {
-            signingCertificates(pm, packageName)
-        } catch (e: PackageManager.NameNotFoundException) {
-            return null
-        }
-        if (certificates.isEmpty()) return null
-        val label = try {
-            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
-        } catch (e: PackageManager.NameNotFoundException) {
-            packageName
-        }
-        // An app signed by several keys (rare) is identified by all of them together.
-        val fingerprint = certificates.map { DataSharing.fingerprint(it) }.sorted().joinToString(";")
-        return ShareApp(packageName, label, fingerprint, System.currentTimeMillis())
+        return CallerIdentity.of(pm, packageName)
     }
-
-    /** The certificates the installed APK is signed with now (not earlier ones it rotated from). */
-    private fun signingCertificates(pm: PackageManager, packageName: String): List<ByteArray> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val info = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
-            info?.apkContentsSigners.orEmpty().map { it.toByteArray() }
-        } else {
-            @Suppress("DEPRECATION")
-            pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures.orEmpty().map { it.toByteArray() }
-        }
 
     private fun meta(context: Context): Cursor {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)

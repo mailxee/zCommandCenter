@@ -15,6 +15,8 @@ import com.example.xcommandcenter.ui.book.BookDetailViewModel
 import com.example.xcommandcenter.ui.book.ChapterDetailViewModel
 import com.example.xcommandcenter.ui.goal.GoalDetailViewModel
 import com.example.xcommandcenter.ui.habit.HabitDetailViewModel
+import com.example.xcommandcenter.handoff.AddHabitHandoffViewModel
+import com.example.xcommandcenter.handoff.MarkHabitViewModel
 import com.example.xcommandcenter.ui.home.HomeViewModel
 import com.example.xcommandcenter.ui.links.MapViewModel
 import com.example.xcommandcenter.ui.links.TidyViewModel
@@ -42,6 +44,8 @@ object AppViewModelProvider {
         initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { PersonDetailViewModel(createSavedStateHandle(), personRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { QuoteDetailViewModel(createSavedStateHandle(), quoteRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
+        initializer { with(container()) { AddHabitHandoffViewModel(handoffGate) } }
+        initializer { with(container()) { MarkHabitViewModel(handoffGate, habitRepository) } }
         initializer { with(container()) { BlockDetailViewModel(createSavedStateHandle(), blockRepository, scheduleRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
     }
 
