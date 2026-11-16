@@ -5,6 +5,7 @@ import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.KeptFindingEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.PlanParent
+import com.example.xcommandcenter.data.entity.TreeNode
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.AppMode
@@ -308,6 +309,13 @@ class LinkRepository(
 
     /** A book's chapters in order, for the picker's second step. In link mode, only the network. */
     fun chapters(bookId: Long): Flow<List<ItemIndexEntry>> = inNetwork(dao.observeChapters(bookId))
+
+    /** Where each idea or plan sits in its tree; other tabs have no tree. */
+    fun tree(tab: ItemType): Flow<List<TreeNode>> = when (tab) {
+        ItemType.IDEA -> dao.observeIdeaTree()
+        ItemType.PLAN -> dao.observePlanTree()
+        else -> flowOf(emptyList())
+    }
 
     private fun inNetwork(entries: Flow<List<ItemIndexEntry>>): Flow<List<ItemIndexEntry>> =
         combine(entries, network) { found, network -> if (network == null) found else found.filter { it.ref in network } }

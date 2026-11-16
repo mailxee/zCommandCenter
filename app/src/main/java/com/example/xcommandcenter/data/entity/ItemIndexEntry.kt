@@ -65,5 +65,8 @@ data class ItemText(val type: ItemType, val id: Long, val text: String) {
     val ref: ItemRef get() = ItemRef(type, id)
 }
 
+/** An idea or plan's place in its tree, for the link picker's outline. */
+data class TreeNode(val id: Long, val parentId: Long?, val sortOrder: Int)
+
 /** A plan and the plan it is under, for the map. */
 data class PlanParent(val id: Long, val parentId: Long)

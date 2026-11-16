@@ -13,6 +13,7 @@ import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.data.entity.LabelUse
 import com.example.xcommandcenter.data.entity.OwnedLink
 import com.example.xcommandcenter.data.entity.PlanParent
+import com.example.xcommandcenter.data.entity.TreeNode
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ThinkAnalysis
 import kotlinx.coroutines.flow.Flow
@@ -103,6 +104,14 @@ interface LinkDao {
     /** Every plan under another, as (plan, parent): Do mode's tree on the map. */
     @Query("SELECT id, parentId FROM plans WHERE parentId IS NOT NULL")
     fun observePlanParents(): Flow<List<PlanParent>>
+
+    /** Every idea's parent and order among its siblings, for the link picker's outline. */
+    @Query("SELECT id, parentId, sortOrder FROM ideas")
+    fun observeIdeaTree(): Flow<List<TreeNode>>
+
+    /** Every plan's parent and order among its siblings, for the link picker's outline. */
+    @Query("SELECT id, parentId, sortOrder FROM plans")
+    fun observePlanTree(): Flow<List<TreeNode>>
 
     /** Puts an idea under another, or at the top level with null; the map checks for loops first. */
     @Query("UPDATE ideas SET parentId = :parentId WHERE id = :id")

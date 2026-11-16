@@ -7,6 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.TreeNode
 import com.example.xcommandcenter.data.entity.PlanEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.data.repository.LabelReading
@@ -165,6 +166,8 @@ abstract class ItemDetailViewModel(
     }
 
     fun searchLinkTargets(tab: ItemType, query: String): Flow<List<ItemIndexEntry>> = links.search(tab, query)
+
+    fun treeOf(tab: ItemType): Flow<List<TreeNode>> = links.tree(tab)
 
     fun chaptersOf(bookId: Long): Flow<List<ItemIndexEntry>> = links.chapters(bookId)
 

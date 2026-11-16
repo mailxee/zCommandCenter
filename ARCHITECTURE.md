@@ -1366,6 +1366,17 @@ key) reads some of this app's data to correlate it with mood, sleep and phone us
   ("4A:AE:08:8B…8E:7D"). Deny drops the request; the app is listed again if it asks again.
   "Delete everything" clears the settings file, so it also empties both lists.
 
+### 2.73 Linking an idea or plan: the tree in the picker
+
+In the link picker, the Ideas and Plans tabs show their tree instead of a flat list: only top-level
+items at first, each with an arrow that opens the items directly below it, ordered as in their tab
+(`sortOrder`, then title). Typing in the search box looks through every idea or plan and shows the
+hits with the items above them, all open, the way the Ideas tab narrows its outline. The page's own
+item stays in the tree (marked "This one", not choosable) so the items below it can still be
+reached. `LinkDao.observeIdeaTree`/`observePlanTree` give each item's parent and order;
+`TreePickerStep` in `ui/common/LinkedItems.kt` lays it out with `IdeaOutline.rows`. In link mode
+only the network shows, and an item whose parent is outside it shows at the top level.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.

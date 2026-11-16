@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
+import com.example.xcommandcenter.data.entity.TreeNode
+import com.example.xcommandcenter.domain.IdeaOutline
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LinkLabels
@@ -113,6 +115,7 @@ fun LinkedItemsSection(viewModel: ItemDetailViewModel, onOpen: (ItemRef) -> Unit
             alreadyLinked = cards.map { it.ref }.toSet(),
             search = viewModel::searchLinkTargets,
             chapters = viewModel::chaptersOf,
+            tree = viewModel::treeOf,
             onPick = { picking = false; labelling = it; labellingNew = true },
             onDismiss = { picking = false },
         )
@@ -221,13 +224,18 @@ private fun HintText(text: String) {
     )
 }
 
-/** Two steps: choose a tab, then search and choose an item from it. */
+/**
+ * Two steps: choose a tab, then search and choose an item from it. Ideas and plans show as their
+ * tree, top level first, each opening on demand; a search looks through all of them and shows the
+ * hits with the items above them.
+ */
 @Composable
 fun LinkPickerDialog(
     self: ItemRef,
     alreadyLinked: Set<ItemRef>,
     search: (ItemType, String) -> Flow<List<ItemIndexEntry>>,
     chapters: (bookId: Long) -> Flow<List<ItemIndexEntry>>,
+    tree: (ItemType) -> Flow<List<TreeNode>>,
     onPick: (ItemIndexEntry) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -286,6 +294,8 @@ fun LinkPickerDialog(
                         }
                     }
                 }
+            } else if (selected == ItemType.IDEA || selected == ItemType.PLAN) {
+                TreePickerStep(selected, self, alreadyLinked, query, { query = it }, search, tree, onPick)
             } else {
                 val results by remember(selected, query) { search(selected, query) }.collectAsState(initial = emptyList())
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -327,9 +337,90 @@ fun LinkPickerDialog(
     )
 }
 
-/** One choice in the link picker; [more] marks a book, which opens its chapters instead of linking. */
+/** The ideas or plans as an outline: top level first, each node opened with its arrow. */
 @Composable
-private fun PickerRow(title: String, detail: String?, linked: Boolean, type: ItemType, more: Boolean = false, onClick: () -> Unit) {
+private fun TreePickerStep(
+    tab: ItemType,
+    self: ItemRef,
+    alreadyLinked: Set<ItemRef>,
+    query: String,
+    onQuery: (String) -> Unit,
+    search: (ItemType, String) -> Flow<List<ItemIndexEntry>>,
+    tree: (ItemType) -> Flow<List<TreeNode>>,
+    onPick: (ItemIndexEntry) -> Unit,
+) {
+    // Everything in the tab, so a search can show the items above each hit; filtered here.
+    val entries by remember(tab) { search(tab, "") }.collectAsState(initial = emptyList())
+    val nodes by remember(tab) { tree(tab) }.collectAsState(initial = emptyList())
+    var expanded by rememberSaveable(tab) { mutableStateOf(emptyList<Long>()) }
+    val words = query.trim()
+    val place = nodes.associateBy { it.id }
+    val ordered = entries.sortedWith(compareBy({ place[it.id]?.sortOrder ?: 0 }, { it.title.lowercase() }))
+    val rows = IdeaOutline.rows(
+        nodes = ordered,
+        id = { it.id },
+        parentId = { place[it.id]?.parentId },
+        // While searching every branch with a hit stays open.
+        collapsed = if (words.isEmpty()) ordered.map { it.id }.toSet() - expanded.toSet() else emptySet(),
+        narrowed = words.isNotEmpty(),
+        hit = { it.title.contains(words, ignoreCase = true) },
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            label = { Text("Search all ${tab.tabLabel.lowercase()}") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (rows.isEmpty()) Text(if (words.isEmpty()) "Nothing here yet." else "No matches.")
+        LazyColumn(Modifier.heightIn(max = 360.dp)) {
+            items(rows, key = { it.node.id }) { row ->
+                val entry = row.node
+                val isSelf = entry.ref == self
+                val open = !row.collapsed && row.childCount > 0
+                PickerRow(
+                    title = entry.title,
+                    detail = listOfNotNull(
+                        entry.describe().takeIf { tab == ItemType.IDEA },
+                        "This one".takeIf { isSelf },
+                    ).joinToString(" · ").ifEmpty { null },
+                    linked = entry.ref in alreadyLinked,
+                    type = entry.type,
+                    enabled = !isSelf,
+                    indent = row.depth,
+                    toggle = if (row.childCount == 0 || words.isNotEmpty()) null else {
+                        {
+                            expanded = if (open) expanded - entry.id else expanded + entry.id
+                        }
+                    },
+                    open = open,
+                    childCount = row.childCount,
+                ) { onPick(entry) }
+                HorizontalDivider()
+            }
+        }
+    }
+}
+
+/**
+ * One choice in the link picker; [more] marks a book, which opens its chapters instead of linking.
+ * In a tree, [indent] is the depth and [toggle] opens or closes the item's [childCount] children.
+ */
+@Composable
+private fun PickerRow(
+    title: String,
+    detail: String?,
+    linked: Boolean,
+    type: ItemType,
+    more: Boolean = false,
+    enabled: Boolean = true,
+    indent: Int = 0,
+    toggle: (() -> Unit)? = null,
+    open: Boolean = false,
+    childCount: Int = 0,
+    onClick: () -> Unit,
+) {
     ListItem(
         colors = clearListItemColors(),
         headlineContent = {
@@ -339,9 +430,24 @@ private fun PickerRow(title: String, detail: String?, linked: Boolean, type: Ite
             val lines = listOfNotNull(detail, if (linked) "Already linked" else null)
             if (lines.isNotEmpty()) Text(lines.joinToString(" · "))
         },
-        trailingContent = if (more) {
-            { Icon(painterResource(R.drawable.ic_expand_more), contentDescription = "Show chapters", Modifier.rotate(-90f)) }
-        } else null,
-        modifier = Modifier.clickable(enabled = !linked, onClickLabel = if (more) "Show chapters" else "Link") { onClick() },
+        trailingContent = when {
+            more -> {
+                { Icon(painterResource(R.drawable.ic_expand_more), contentDescription = "Show chapters", Modifier.rotate(-90f)) }
+            }
+            toggle != null -> {
+                {
+                    IconButton(onClick = toggle) {
+                        Icon(
+                            painterResource(if (open) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
+                            contentDescription = if (open) "Hide $childCount below" else "Show $childCount below",
+                        )
+                    }
+                }
+            }
+            else -> null
+        },
+        modifier = Modifier
+            .padding(start = (indent * 16).dp)
+            .clickable(enabled = enabled && !linked, onClickLabel = if (more) "Show chapters" else "Link") { onClick() },
     )
 }
