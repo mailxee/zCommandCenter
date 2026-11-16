@@ -60,7 +60,7 @@ class BackupFormatTest {
         tasks = listOf(
             TaskEntity(1, "Water plants", "Balcony", LocalDate.of(2026, 10, 31), Priority.LOW, false, created,
                 RecurrenceType.WEEKLY, Recurrence.maskFromDays(setOf(DayOfWeek.SATURDAY)), 1, 2, false, sortOrder = 3),
-            TaskEntity(2, "File taxes", priority = Priority.CRITICAL, completed = true, createdAt = created),
+            TaskEntity(2, "File taxes", priority = Priority.CRITICAL, completed = true, createdAt = created, completedAt = created + 90_061_000),
             TaskEntity(3, "Service the car", dueDate = LocalDate.of(2026, 11, 15), createdAt = created,
                 recurrenceType = RecurrenceType.EVERY_N_MONTHS, dayOfMonth = 15, intervalDays = 6),
             TaskEntity(4, "Clean filters", dueDate = LocalDate.of(2026, 11, 2), createdAt = created,
@@ -68,7 +68,7 @@ class BackupFormatTest {
         ),
         goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created, priority = Priority.CRITICAL)),
         habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created, priority = Priority.LOW)),
-        habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1))),
+        habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1)), HabitMarkEntity(1, LocalDate.of(2026, 10, 2), markedAt = created + 5_000)),
         plans = listOf(
             PlanEntity(2, "Child", parentId = 1, completed = true, createdAt = created, priority = Priority.HIGH),
             PlanEntity(1, "Parent", completed = true, createdAt = created),
@@ -124,6 +124,38 @@ class BackupFormatTest {
             IdeaEntity(5, "Attention is scarce", kind = IdeaKind.BELIEF, createdAt = created, priority = Priority.HIGH),
         ),
     )
+
+    @Test
+    fun `completion and mark times are kept to the second, and are empty in a workbook from before them`() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone)
+        val tasks = sheets.first { it.name == "Tasks" }
+        assertEquals("2026-10-21 09:31:01", tasks.rows[2][tasks.rows[0].indexOf("Completed at")])
+        val history = sheets.first { it.name == "Habit history" }
+        assertEquals(listOf("", "2026-10-20 08:30:05"), history.rows.drop(1).map { it[3] })
+
+        // Drops the new columns, as a workbook exported before them has none.
+        fun Sheet.without(column: String): Sheet {
+            val i = rows[0].indexOf(column)
+            return copy(rows = rows.map { it.filterIndexed { j, _ -> j != i } })
+        }
+        val old = sheets.map {
+            when (it.name) {
+                "Tasks" -> it.without("Completed at")
+                "Habit history" -> it.without("Marked at")
+                else -> it
+            }
+        }
+        val back = BackupFormat.fromSheets(old, zone).data
+        assertEquals(listOf(null, null, null, null), back.tasks.map { it.completedAt })
+        assertEquals(listOf(null, null), back.habitMarks.map { it.markedAt })
+    }
+
+    @Test
+    fun `an open task's completion time is ignored on import`() {
+        val reopened = data.copy(tasks = data.tasks.map { if (it.id == 2L) it.copy(completed = false) else it })
+        val back = BackupFormat.fromSheets(BackupFormat.toSheets(reopened, TabOrder.default, zone), zone).data
+        assertEquals(null, back.tasks.first { it.id == 2L }.completedAt)
+    }
 
     @Test
     fun `export then import gives the same data`() {

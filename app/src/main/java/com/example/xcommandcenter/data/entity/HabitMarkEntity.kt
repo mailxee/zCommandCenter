@@ -22,4 +22,6 @@ import java.time.LocalDate
 data class HabitMarkEntity(
     val habitId: Long,
     val date: LocalDate,
+    /** When the mark was made (epoch millis); null for marks made before version 15. */
+    val markedAt: Long? = null,
 )

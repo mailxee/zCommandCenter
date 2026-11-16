@@ -16,6 +16,7 @@ import com.example.xcommandcenter.data.prefs.RoutePrefsRepository
 import com.example.xcommandcenter.data.prefs.ScheduleChoiceRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
 import com.example.xcommandcenter.data.prefs.TaskSortRepository
+import com.example.xcommandcenter.data.prefs.ShareAccessRepository
 import com.example.xcommandcenter.data.repository.BlockRepository
 import com.example.xcommandcenter.data.repository.BookRepository
 import com.example.xcommandcenter.data.repository.GoalRepository
@@ -83,4 +84,7 @@ class AppContainer(context: Context) {
         context, database.backupDao(), reminderRepository, tabOrderRepository, itemStyleRepository, scheduleChoiceRepository, modeRepository,
     )
     val autoBackupRepository = AutoBackupRepository(context, backupRepository)
+    val shareAccessRepository = ShareAccessRepository(context)
+    /** Read by `ShareProvider` for apps the user allowed. */
+    val shareDao = database.shareDao()
 }

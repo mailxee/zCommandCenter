@@ -108,6 +108,8 @@ object BackupFormat {
     const val SCHEDULES = "Schedules"
 
     private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    /** For moments other apps may correlate with (a task completed, a habit marked), to the second. */
+    private val dateTimeSeconds = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     private val clock = DateTimeFormatter.ofPattern("HH:mm")
     private val excelEpoch = LocalDate.of(1899, 12, 30)
 
@@ -122,6 +124,7 @@ object BackupFormat {
         scheduleChoice: BackupScheduleChoice = BackupScheduleChoice(),
     ): List<Sheet> {
         fun time(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTime) }.orEmpty()
+        fun moment(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTimeSeconds) }.orEmpty()
         fun bool(b: Boolean) = if (b) "TRUE" else "FALSE"
         fun days(mask: Int) = Recurrence.daysFromMask(mask).sorted().joinToString(", ") { it.shortName() }
         val titles = titlesByRef(data)
@@ -130,7 +133,7 @@ object BackupFormat {
         val tabSheets = mapOf(
             ItemType.TASK to Sheet(
                 ItemType.TASK.tabLabel,
-                listOf(listOf("ID", "Title", "Description", "Due date", "Priority", "Completed", "Repeat", "Weekdays", "Day of month", "Every N days", "Next created", "Created", "Order", "Every N months", "Every N weeks")) +
+                listOf(listOf("ID", "Title", "Description", "Due date", "Priority", "Completed", "Repeat", "Weekdays", "Day of month", "Every N days", "Next created", "Created", "Order", "Every N months", "Every N weeks", "Completed at")) +
                     data.tasks.map {
                         listOf(
                             it.id.toString(), it.title, it.description, it.dueDate?.toString().orEmpty(),
@@ -141,6 +144,7 @@ object BackupFormat {
                             bool(it.nextCreated), time(it.createdAt), it.sortOrder.toString(),
                             if (it.recurrenceType == RecurrenceType.EVERY_N_MONTHS) it.intervalDays.toString() else "",
                             if (it.recurrenceType == RecurrenceType.EVERY_N_WEEKS) it.intervalDays.toString() else "",
+                            moment(it.completedAt),
                         )
                     },
             ),
@@ -270,9 +274,9 @@ object BackupFormat {
         )
         val history = Sheet(
             HABIT_HISTORY,
-            listOf(listOf("Habit ID", "Habit", "Date")) +
+            listOf(listOf("Habit ID", "Habit", "Date", "Marked at")) +
                 data.habitMarks.sortedWith(compareBy({ it.habitId }, { it.date })).map {
-                    listOf(it.habitId.toString(), title(ItemRef(ItemType.HABIT, it.habitId)), it.date.toString())
+                    listOf(it.habitId.toString(), title(ItemRef(ItemType.HABIT, it.habitId)), it.date.toString(), moment(it.markedAt))
                 },
         )
         val links = Sheet(
@@ -377,6 +381,7 @@ object BackupFormat {
                 id = r.id(), title = r.required("Title"), description = r.text("Description"), dueDate = r.date("Due date"),
                 priority = r.enum("Priority", Priority.entries) { it.label } ?: Priority.MEDIUM,
                 completed = r.bool("Completed"), createdAt = r.dateTime("Created") ?: now,
+                completedAt = if (r.bool("Completed")) r.dateTime("Completed at") else null,
                 recurrenceType = type, weekdays = r.weekdays("Weekdays"), dayOfMonth = r.int("Day of month", 1, 1..31),
                 intervalDays = r.interval(type), nextCreated = r.bool("Next created"), sortOrder = r.order(),
             ).also { if (type != null && it.dueDate == null) r.fail("A repeating task needs a due date") }
@@ -536,8 +541,8 @@ object BackupFormat {
         val marks = sheet(HABIT_HISTORY, false)?.rows("Date").orEmpty().mapNotNull { r ->
             val habitId = r.long("Habit ID") ?: r.fail("Habit ID is required")
             val date = r.date("Date") ?: r.fail("Date is required")
-            if (habitId in habitIds) HabitMarkEntity(habitId, date) else null.also { skipped++ }
-        }.distinct()
+            if (habitId in habitIds) HabitMarkEntity(habitId, date, r.dateTime("Marked at")) else null.also { skipped++ }
+        }.distinctBy { it.habitId to it.date }
 
         val existing: Set<ItemRef> = buildSet {
             tasks.forEach { add(ItemRef(ItemType.TASK, it.id)) }
@@ -801,6 +806,7 @@ object BackupFormat {
         fun dateTime(column: String): Long? {
             val t = text(column).ifEmpty { return null }
             val local = runCatching { LocalDateTime.parse(t, dateTime) }.getOrNull()
+                ?: runCatching { LocalDateTime.parse(t, dateTimeSeconds) }.getOrNull()
                 ?: runCatching { LocalDateTime.parse(t) }.getOrNull()
                 ?: runCatching { LocalDate.parse(t).atStartOfDay() }.getOrNull()
                 ?: t.toDoubleOrNull()?.let { serial ->

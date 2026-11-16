@@ -11,6 +11,7 @@ import com.example.xcommandcenter.data.entity.ChecklistItemEntity
 import com.example.xcommandcenter.data.entity.LinkEntity
 import com.example.xcommandcenter.data.entity.ReminderEntity
 import com.example.xcommandcenter.data.entity.TaskEntity
+import com.example.xcommandcenter.domain.CompletionTime
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import kotlinx.coroutines.flow.Flow
@@ -49,8 +50,11 @@ interface TaskDao : ItemCleanup {
     @Update
     suspend fun update(task: TaskEntity)
 
-    @Query("UPDATE tasks SET completed = :completed WHERE id = :id")
-    suspend fun setCompleted(id: Long, completed: Boolean)
+    @Query("UPDATE tasks SET completed = :completed, completedAt = :completedAt WHERE id = :id")
+    suspend fun setCompleted(id: Long, completed: Boolean, completedAt: Long?)
+
+    /** Unticks the task, which forgets when it was completed. */
+    suspend fun reopen(id: Long) = setCompleted(id, false, null)
 
     @Query("UPDATE tasks SET nextCreated = 1 WHERE id = :id")
     suspend fun markNextCreated(id: Long)
@@ -97,7 +101,7 @@ interface TaskDao : ItemCleanup {
     }
 
     /**
-     * Marks the task completed. A repeating task also gets its next occurrence, once: a copy due
+     * Marks the task completed, noting when (kept if it already was). A repeating task also gets its next occurrence, once: a copy due
      * on the next scheduled date after this one's due date (today if it has none), skipping dates
      * that have already passed, with each reminder moved by the same number of days (so it keeps
      * its time and its distance from the due date), the same links and tags, and the same checklist
@@ -106,7 +110,7 @@ interface TaskDao : ItemCleanup {
     @Transaction
     suspend fun complete(id: Long): Long? {
         val task = get(id) ?: return null
-        setCompleted(id, true)
+        setCompleted(id, true, CompletionTime.after(task.completed, true, task.completedAt, System.currentTimeMillis()))
         val recurrence = task.recurrence ?: return null
         if (task.nextCreated) return null
         val today = LocalDate.now()
@@ -114,7 +118,7 @@ interface TaskDao : ItemCleanup {
         val next = recurrence.nextFrom(from, today) ?: return null
         val days = ChronoUnit.DAYS.between(from, next)
         val newId = insert(
-            task.copy(id = 0, dueDate = next, completed = false, nextCreated = false, createdAt = System.currentTimeMillis()),
+            task.copy(id = 0, dueDate = next, completed = false, completedAt = null, nextCreated = false, createdAt = System.currentTimeMillis()),
         )
         markNextCreated(id)
         val self = ItemRef(ItemType.TASK, id)

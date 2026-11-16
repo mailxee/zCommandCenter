@@ -12,6 +12,8 @@ import com.example.xcommandcenter.data.entity.TagUsage
 import com.example.xcommandcenter.data.backup.AutoBackupRepository
 import com.example.xcommandcenter.data.backup.AutoBackupSettings
 import com.example.xcommandcenter.data.prefs.ModeRepository
+import com.example.xcommandcenter.data.prefs.ShareAccessRepository
+import com.example.xcommandcenter.domain.ShareApp
 import com.example.xcommandcenter.domain.TabMode
 import com.example.xcommandcenter.domain.TabModes
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
@@ -46,7 +48,28 @@ class SettingsViewModel(
     private val links: LinkRepository,
     private val modes: ModeRepository,
     private val autoBackup: AutoBackupRepository,
+    private val shareAccess: ShareAccessRepository,
 ) : ViewModel() {
+
+    /** Apps that asked to read the shared data, newest first. */
+    val sharePending: StateFlow<List<ShareApp>> = shareAccess.pending
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Apps allowed to read the shared data. */
+    val shareAllowed: StateFlow<List<ShareApp>> = shareAccess.allowed
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun allowShare(app: ShareApp) {
+        viewModelScope.launch { shareAccess.allow(app) }
+    }
+
+    fun denyShare(app: ShareApp) {
+        viewModelScope.launch { shareAccess.deny(app) }
+    }
+
+    fun revokeShare(app: ShareApp) {
+        viewModelScope.launch { shareAccess.revoke(app) }
+    }
 
     /** The daily backup's settings and how the last one went. */
     val autoBackupSettings: StateFlow<AutoBackupSettings> = autoBackup.settings

@@ -1331,6 +1331,41 @@ release build needs the upload keystore and its password in `RELEASE_KEYSTORE_FI
 `RELEASE_KEYSTORE_PASSWORD` for that build only, and a `VERSION_CODE` above the last Play upload;
 nothing secret is ever committed (`.gitignore` keeps keystores out). `RELEASING.md` has the steps.
 
+### 2.72 Sharing data with other apps, read-only
+
+Another app of the user's (zNotifMonitor, a lifestyle tracker, sideloaded and signed with its own
+key) reads some of this app's data to correlate it with mood, sleep and phone use.
+
+- **Two new times (database version 15, an AutoMigration adding nullable columns).**
+  `tasks.completedAt` is when a task was ticked (epoch millis), cleared when it is unticked
+  (`domain/CompletionTime.kt`): it is kept while the task stays ticked, so saving the form or a
+  notification's Done pressed twice doesn't move it, and a repeating task's next occurrence starts
+  with null. `habit_marks.markedAt` is when a mark was made; marking an already-marked day keeps it.
+  Both are null for rows from before version 15. The Excel backup carries them as "Completed at"
+  (Tasks sheet) and "Marked at" (Habit history), to the second; a workbook without the columns
+  imports with nulls, and an open task's "Completed at" is ignored.
+- **`ShareProvider`** (`share/`), authority `${applicationId}.share`, so the debug build has its
+  own. Only `query()`: insert, update and delete throw `UnsupportedOperationException`. Each path
+  in `SharePath` returns the whole table with Room's column names, through `ShareDao`: `/tasks`,
+  `/habits`, `/habit_marks`, `/goals`, `/plans`, `/schedules`, `/blocks`, `/tags`, `/item_tags`,
+  `/quotes`, `/books`, `/chapters`. `/item_tags` leaves out tags on items that aren't shared.
+  `/meta` is one row: `contract_version` (`ShareProvider.CONTRACT_VERSION`, raised when a shared
+  table or column is renamed or removed; added ones don't need it), `db_version`, `app_version`
+  and `app_version_code`. Projection, selection and sort order are ignored. Notes, people, ideas,
+  links, reminders, checklists and lists are not shared.
+- **Access by the user's approval.** A signature permission can't work, since Play re-signs this
+  app with Google's key. The provider identifies the caller by its package (checked against the
+  calling uid) and the SHA-256 of its current signing certificate, and asks
+  `ShareAccessRepository` (two JSON lists in the settings file) whether it is allowed
+  (`domain/DataSharing.kt`). An entry matches only the same package with the same certificate. A
+  caller not on the list gets a `SecurityException` and is kept as a request (package, label,
+  fingerprint, time; newest first, at most 5, one per package and certificate). The list starts
+  empty, so nothing is shared until the user allows an app. The app itself is always let in.
+- **Settings, Data sharing** (`ui/settings/DataSharingSettings.kt`): requests with Allow and Deny,
+  allowed apps with Revoke, each showing the label, package and a short fingerprint
+  ("4A:AE:08:8B…8E:7D"). Deny drops the request; the app is listed again if it asks again.
+  "Delete everything" clears the settings file, so it also empties both lists.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1391,6 +1426,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/ManualOrder.kt` | Applying a new order to the visible rows of a list while hidden rows keep their slots, one-step moves, and moving a plan with the rows under it (§2.18, §2.20). |
 | `domain/PlanTree.kt` | Flatten a plan tree with depths, skipping below collapsed nodes; compute a subtree (cycle prevention) and ancestors (completion). |
 | `domain/TabOrder.kt` | Parse/serialize/move the tab order, tolerant of unknown or missing tabs. |
+| `domain/CompletionTime.kt` | When `tasks.completedAt` is set, kept and cleared (§2.72). |
+| `domain/DataSharing.kt` | Who may read the shared data: matching by package and certificate, requests, fingerprints (§2.72). |
 
 ### data/entity/ (Room tables and view)
 | File | Purpose |
@@ -1422,6 +1459,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/dao/NoteDao.kt` | Note CRUD, transactional delete with links and tags. |
 | `data/dao/BookDao.kt` | Books with progress, chapters (add, rename, read count, internalized, reorder, delete + renumber), chapter and book deletes with their links and tags. |
 | `data/dao/QuoteDao.kt` | Quote CRUD, transactional delete with links and tags. |
+| `data/dao/ShareDao.kt` | The shared tables as cursors for `ShareProvider` (§2.72). |
 
 ### data/db/ and data/prefs/
 | File | Purpose |
@@ -1438,6 +1476,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/prefs/ItemStyleRepository.kt` | Each tab's item style (§2.21). |
 | `data/prefs/TaskSortRepository.kt` | The Tasks tab's chosen sort (§2.18) and whether it shows completed tasks (§2.24). |
 | `data/prefs/ReminderPrefsRepository.kt` | Days until a reminder is carried over (§2.55). |
+| `data/prefs/ShareAccessRepository.kt` | Apps allowed to read the shared data and pending requests (§2.72). |
 
 ### data/repository/
 | File | Purpose |
@@ -1458,6 +1497,12 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `reminder/ReminderScheduler.kt` | Registers/cancels one `AlarmManager` alarm per task; exact when permitted, otherwise allow-while-idle. |
 | `reminder/ReminderReceiver.kt` | Alarm target; posts the notification with the app closed. Also takes the notifications' Done and Missed today buttons (§2.68). |
 | `reminder/RescheduleReceiver.kt` | Re-registers reminders after boot, app update, or exact-alarm permission grant. |
+
+### share/
+| File | Purpose |
+|---|---|
+| `share/ShareProvider.kt` | Read-only exported provider for apps the user allowed; checks the caller, answers `/meta` (§2.72). |
+| `share/SharePath.kt` | The provider's paths and the table each one reads. |
 | `reminder/Notifications.kt` | Notification channel, permission check, reminder notification that opens the task. |
 
 ### ui/
@@ -1566,6 +1611,9 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |
 | `domain/IdeaOutlineTest.kt` | The Ideas outline (depths, collapsing, filtering keeps ancestors) and the kind chips. |
+| `domain/DataSharingTest.kt`, `domain/CompletionTimeTest.kt` | Allow-list matching (package and certificate), requests capped at five, fingerprints; the completion-time rule (§2.72). |
+| `data/db/TimestampsTest.kt` | `completedAt` set, kept and cleared, none on a next occurrence; `markedAt` set and kept (§2.72). |
+| `share/ShareProviderTest.kt` | Every path's columns, `/meta`, writes and unknown paths refused (§2.72). |
 
 Run them with `./gradlew testDebugUnitTest`.
 

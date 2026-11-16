@@ -60,12 +60,16 @@ interface HabitDao : ItemCleanup {
     /** Marks [date] if it isn't already; for a notification's button, which may be pressed twice. */
     @Transaction
     suspend fun setMark(habitId: Long, date: LocalDate) {
-        if (markCount(habitId, date) == 0) insertMark(HabitMarkEntity(habitId, date))
+        if (markCount(habitId, date) == 0) insertMark(HabitMarkEntity(habitId, date, markedAt = System.currentTimeMillis()))
     }
 
     @Transaction
     suspend fun toggleMark(habitId: Long, date: LocalDate) {
-        if (markCount(habitId, date) > 0) deleteMark(habitId, date) else insertMark(HabitMarkEntity(habitId, date))
+        if (markCount(habitId, date) > 0) {
+            deleteMark(habitId, date)
+        } else {
+            insertMark(HabitMarkEntity(habitId, date, markedAt = System.currentTimeMillis()))
+        }
     }
 
     /** Marks go with the habit through the foreign key's ON DELETE CASCADE. */

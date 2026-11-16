@@ -33,6 +33,11 @@ data class TaskEntity(
     @ColumnInfo(defaultValue = "0") val nextCreated: Boolean = false,
     /** Position in the tab's list, lowest first; ties keep the tab's default order. Set by reordering. */
     @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
+    /**
+     * When the task was last marked completed (epoch millis), cleared when it is unticked; see
+     * [com.example.xcommandcenter.domain.CompletionTime]. Null for tasks completed before version 15.
+     */
+    val completedAt: Long? = null,
 ) {
     val recurrence: Recurrence?
         get() = recurrenceType?.let { Recurrence.of(it, weekdays, dayOfMonth, intervalDays) }

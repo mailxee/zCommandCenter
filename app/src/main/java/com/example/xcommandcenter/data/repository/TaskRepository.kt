@@ -42,6 +42,7 @@ class TaskRepository(
         val wasCompleted = stored?.completed ?: false
         val toWrite = task.copy(
             completed = wasCompleted,
+            completedAt = stored?.completedAt,
             nextCreated = stored?.nextCreated ?: false,
             sortOrder = stored?.sortOrder ?: dao.newSortOrder(),
         )
@@ -57,7 +58,7 @@ class TaskRepository(
         val nextId = if (completed) {
             dao.complete(id)
         } else {
-            dao.setCompleted(id, false)
+            dao.reopen(id)
             null
         }
         nextId?.let { reminders.sync(ItemRef(ItemType.TASK, it)) }

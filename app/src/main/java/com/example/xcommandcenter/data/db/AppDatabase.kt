@@ -29,6 +29,7 @@ import com.example.xcommandcenter.data.dao.ReminderDao
 import com.example.xcommandcenter.data.dao.ScheduleDao
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
+import com.example.xcommandcenter.data.dao.ShareDao
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
@@ -96,7 +97,8 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 12: link labels, with the starting set.
     // 13: definitions rewritten in the glossary.
     // 14: ideas have lists, like notes.
-    version = 14,
+    // 15: when a task was completed and when a habit mark was made, for apps that read the shared data.
+    version = AppDatabase.VERSION,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -111,6 +113,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
         AutoMigration(from = 11, to = 12, spec = AppDatabase.AddLinkLabels::class),
         AutoMigration(from = 12, to = 13),
         AutoMigration(from = 13, to = 14),
+        AutoMigration(from = 14, to = 15),
     ],
 )
 @TypeConverters(Converters::class)
@@ -131,6 +134,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun personDao(): PersonDao
     abstract fun ideaDao(): IdeaDao
     abstract fun glossaryDao(): GlossaryDao
+    abstract fun shareDao(): ShareDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {
@@ -155,6 +159,9 @@ abstract class AppDatabase : RoomDatabase() {
     class DropSingleReminders : AutoMigrationSpec
 
     companion object {
+        /** The schema version; also reported to apps that read the shared data (see `ShareProvider`). */
+        const val VERSION = 15
+
         /** There is always a schedule; blocks default to this one. */
         fun insertFirstSchedule(db: SupportSQLiteDatabase) {
             db.execSQL("INSERT OR IGNORE INTO schedules (id, name, sortOrder, days) VALUES (1, '$FIRST_SCHEDULE', 0, 0)")

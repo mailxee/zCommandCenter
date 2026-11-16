@@ -274,6 +274,8 @@ fun SettingsScreen(
                 }
             }
 
+            DataSharingSettings(viewModel)
+
             SectionTitle("Data")
             Text(
                 "Export saves everything to an Excel workbook: one sheet per tab, plus chapters, habit history, links, tags, reminders " +

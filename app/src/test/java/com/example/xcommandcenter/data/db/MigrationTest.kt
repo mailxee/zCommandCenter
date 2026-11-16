@@ -60,6 +60,23 @@ class MigrationTest {
     }
 
     @Test
+    fun existingTasksAndMarksHaveNoTimesAfterUpgradingTo15() {
+        createDatabase(DB, 14).use { db ->
+            db.execSQL("INSERT INTO tasks (id, title, description, priority, completed, createdAt) VALUES (1, 'Done before', '', 'HIGH', 1, 0)")
+            db.execSQL(
+                "INSERT INTO habits (id, name, category, recurrenceType, weekdays, dayOfMonth, intervalDays, startDate, notes, createdAt) " +
+                    "VALUES (1, 'Walk', 'POSITIVE', 'DAILY', 0, 1, 2, 0, '', 0)",
+            )
+            db.execSQL("INSERT INTO habit_marks (habitId, date) VALUES (1, 20000)")
+        }
+        upgrade(DB).let { db ->
+            assertEquals("1", db.text("SELECT completed FROM tasks WHERE id = 1"))
+            assertEquals("1", db.text("SELECT COUNT(*) FROM tasks WHERE id = 1 AND completedAt IS NULL"))
+            assertEquals("1", db.text("SELECT COUNT(*) FROM habit_marks WHERE habitId = 1 AND date = 20000 AND markedAt IS NULL"))
+        }
+    }
+
+    @Test
     fun singleRemindersMoveIntoTheRemindersTable() {
         createDatabase(DB, 3).use { db ->
             db.execSQL("INSERT INTO tasks (id, title, description, reminderAt, priority, completed, createdAt) VALUES (1, 'Call', '', 1234, 'MEDIUM', 0, 0)")
@@ -116,7 +133,7 @@ class MigrationTest {
     private fun SupportSQLiteDatabase.text(sql: String): String? = query(sql).use { c -> if (c.moveToFirst()) c.getString(0) else null }
 
     private companion object {
-        const val LATEST = 14
+        const val LATEST = 15
         const val DB = "migration-test"
     }
 }

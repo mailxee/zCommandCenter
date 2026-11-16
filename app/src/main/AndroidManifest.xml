@@ -40,6 +40,12 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- Read-only data for apps the user allows in Settings, Data sharing (see ShareProvider). -->
+        <provider
+            android:name=".share.ShareProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="true" />
     </application>
 
 </manifest>
