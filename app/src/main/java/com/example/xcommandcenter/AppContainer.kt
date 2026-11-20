@@ -1,6 +1,7 @@
 package com.example.xcommandcenter
 
 import com.example.xcommandcenter.share.HandoffGate
+import com.example.xcommandcenter.data.repository.SimplifyRepository
 import com.example.xcommandcenter.data.repository.PersonRepository
 import com.example.xcommandcenter.data.repository.IdeaRepository
 import com.example.xcommandcenter.data.prefs.ModeRepository
@@ -86,6 +87,7 @@ class AppContainer(context: Context) {
     )
     val autoBackupRepository = AutoBackupRepository(context, backupRepository)
     val shareAccessRepository = ShareAccessRepository(context)
+    val simplifyRepository = SimplifyRepository(database.simplifyDao(), reminderRepository, tabOrderRepository)
     val handoffGate = HandoffGate(context.packageManager, context.packageName, shareAccessRepository)
     /** Read by `ShareProvider` for apps the user allowed. */
     val shareDao = database.shareDao()

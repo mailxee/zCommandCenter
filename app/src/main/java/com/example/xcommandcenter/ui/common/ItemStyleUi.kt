@@ -24,6 +24,9 @@ val LocalItemStyles = compositionLocalOf { ItemStyles() }
 /** The user's tab order, provided at the root; cards list linked items tab by tab in it. */
 val LocalTabOrder = compositionLocalOf { TabOrder.default }
 
+/** Tabs hidden in Settings: left out of the link picker as they are of the main screen. */
+val LocalHiddenTabs = compositionLocalOf { emptySet<ItemType>() }
+
 /** True when the theme's surface is dark, so styles pick their light shades. */
 @Composable
 fun isDarkSurface(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f

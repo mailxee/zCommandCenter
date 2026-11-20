@@ -1445,6 +1445,24 @@ all of these with the collapsed plans and ideas (`forgetIds`, formerly `clearCol
 choice made for one label or item can't land on another. Whole-map layouts, Under and No label
 choices stay. A map hiding something says so (§2.66).
 
+### 2.76 Hiding tabs, and Simplify: goals into Ideas
+
+**Hiding tabs.** Settings › Tabs has a checkbox on each tab (where its number was). An unticked tab
+leaves the main screen and the link picker's list of tabs; its items stay, show where they are
+linked, and can be opened. The last tab shown can't be hidden (`TabOrder.withHidden`). Stored as
+`tab_hidden` by `TabOrderRepository.hidden`; `HomeViewModel.shownTabs` leaves hidden tabs out before
+the mode's filter; `LocalHiddenTabs` carries them to the link picker. The workbook's Settings sheet
+has a Hidden column; an older workbook (without it) leaves hiding as it is.
+
+**Simplify** (one-time, Settings, shown while goals remain; `ui/settings/SimplifySettings.kt`):
+goals were mostly identities ("Writer", "Teacher") that read as visions, so "Move goals to Ideas"
+turns each into a top-level Vision (`SimplifyDao.goalsToVisions`, one transaction): title,
+strategy as the explanation, priority and creation time kept; its links re-made between the new
+ends (normalized again, the label still read from the same item, `SimplifyDao.remap`); its tags
+and reminders moved; the goals deleted. `SimplifyRepository` then sets the moved reminders'
+alarms again and hides the Goals tab. No schema change. Once used, Simplify and the Goals tab are
+to be removed from the code.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1641,6 +1659,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
 | `ui/links/LineControls.kt` | Line patterns and widths: the samples and choices shared by the Show panel and Settings (§2.66). |
+| `data/dao/SimplifyDao.kt`, `data/repository/SimplifyRepository.kt`, `ui/settings/SimplifySettings.kt` | Simplify: goals into Ideas as visions (§2.76). |
 | `ui/settings/MapLinesSettings.kt` | Settings, Map lines: each kind of link's pattern and width (§2.66). |
 | `ui/links/MapCanvas.kt` | The map's picture: boxes measured and placed, lines, zoom levels, Fit all, folding, dragging and dropping (§2.69, §2.70). |
 | `ui/links/MapStylePicker.kt` | Choosing the map's or a branch's layout (§2.70). |

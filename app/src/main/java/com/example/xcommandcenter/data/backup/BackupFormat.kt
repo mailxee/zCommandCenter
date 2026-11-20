@@ -122,6 +122,7 @@ object BackupFormat {
         styles: ItemStyles = ItemStyles(),
         tabModes: TabModes = TabModes(),
         scheduleChoice: BackupScheduleChoice = BackupScheduleChoice(),
+        hiddenTabs: Set<ItemType> = emptySet(),
     ): List<Sheet> {
         fun time(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTime) }.orEmpty()
         fun moment(millis: Long?) = millis?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().format(dateTimeSeconds) }.orEmpty()
@@ -320,12 +321,12 @@ object BackupFormat {
         )
         val settings = Sheet(
             SETTINGS,
-            listOf(listOf("Tab", "Position", "Color", "Bold", "Italic", "Underline", "Font", "Mode")) +
+            listOf(listOf("Tab", "Position", "Color", "Bold", "Italic", "Underline", "Font", "Mode", "Hidden")) +
                 tabOrder.mapIndexed { index, tab ->
                     val style = styles[tab]
                     listOf(
                         tab.tabLabel, (index + 1).toString(), style.color.label, bool(style.bold), bool(style.italic), bool(style.underline),
-                        style.font.label, tabModes.of(tab).label,
+                        style.font.label, tabModes.of(tab).label, bool(tab in hiddenTabs),
                     )
                 },
         )
@@ -618,6 +619,7 @@ object BackupFormat {
         }
 
         var modesRead: Map<ItemType, TabMode> = emptyMap()
+        var hiddenRead: Set<ItemType>? = null
         val settings = sheet(SETTINGS, false)?.let { table ->
             val rows = table.rows("Tab").map { r ->
                 val tab = r.itemType("Tab").takeIf { it.isTab } ?: r.fail("Tab \"${r.text("Tab")}\" isn't one of the tabs")
@@ -629,6 +631,10 @@ object BackupFormat {
                     underline = if (r.text("Underline").isEmpty()) default.underline else r.bool("Underline"),
                     font = r.enum("Font", StyleFont.entries) { it.label } ?: default.font,
                 )
+                // An older workbook has no Hidden column: then nothing about hiding is restored.
+                if (r.text("Hidden").isNotEmpty()) {
+                    hiddenRead = hiddenRead.orEmpty() + (if (r.bool("Hidden")) setOf(tab) else emptySet())
+                }
                 Triple(tab, r.int("Position", Int.MAX_VALUE, 1..Int.MAX_VALUE), style) to r.enum("Mode", TabMode.entries) { it.label }
             }.let { pairs ->
                 modesRead = pairs.mapNotNull { (row, mode) -> mode?.let { row.first to it } }.toMap()
@@ -643,6 +649,7 @@ object BackupFormat {
                 tabOrder = TabOrder.parse(TabOrder.serialize(listed)),
                 styles = ItemType.tabs.associateWith { tab -> rows.firstOrNull { it.first == tab }?.third ?: ItemStyle.default(tab) },
                 tabModes = modesRead.takeIf { it.isNotEmpty() }?.let(::TabModes),
+                hiddenTabs = hiddenRead?.takeIf { hidden -> ItemType.tabs.any { it !in hidden } },
             )
         }
 
@@ -833,7 +840,13 @@ data class BackupScheduleChoice(val selectedId: Long? = null, val automatic: Boo
 
 /** The Settings sheet: the tab order and every tab's item style. */
 /** [tabModes] is null for a workbook from before the Do/Think modes. */
-data class BackupSettings(val tabOrder: List<ItemType>, val styles: Map<ItemType, ItemStyle>, val tabModes: TabModes? = null)
+data class BackupSettings(
+    val tabOrder: List<ItemType>,
+    val styles: Map<ItemType, ItemStyle>,
+    val tabModes: TabModes? = null,
+    /** Null for a workbook made before tabs could be hidden. */
+    val hiddenTabs: Set<ItemType>? = null,
+)
 
 private fun RecurrenceType?.usesDayOfMonth() = this == RecurrenceType.MONTHLY || this == RecurrenceType.EVERY_N_MONTHS
 

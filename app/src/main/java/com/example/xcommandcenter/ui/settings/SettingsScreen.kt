@@ -29,6 +29,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -92,6 +93,7 @@ fun SettingsScreen(
 ) {
     val order by viewModel.order.collectAsStateWithLifecycle()
     val tabModes by viewModel.tabModes.collectAsStateWithLifecycle()
+    val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val tagUsage by viewModel.tagUsage.collectAsStateWithLifecycle()
     var deletingTag by remember { mutableStateOf<TagUsage?>(null) }
     val context = LocalContext.current
@@ -142,11 +144,13 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            SimplifySettings(viewModel)
             SectionTitle("Tabs")
             Text(
                 "Drag tabs by their handle to change their order on the main screen. Tap a tab to give its items their own look; " +
                     "it is used wherever an item is shown, including where other tabs list it as linked. " +
-                    "Do, Both or Think chooses which side of the app shows the tab.",
+                    "Do, Both or Think chooses which side of the app shows the tab. Untick a tab to hide it: its items stay, " +
+                    "and still show where they are linked, but the tab leaves the main screen and the link picker.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             val styles = LocalItemStyles.current
@@ -182,7 +186,16 @@ fun SettingsScreen(
                                         }
                                     }
                                 },
-                                leadingContent = { Text("${index + 1}") },
+                                leadingContent = {
+                                    val shown = tab !in hiddenTabs
+                                    Checkbox(
+                                        checked = shown,
+                                        onCheckedChange = { checked -> viewModel.setTabHidden(tab, !checked) },
+                                        // The last tab shown stays: the main screen needs one.
+                                        enabled = !shown || ItemType.tabs.any { it != tab && it !in hiddenTabs },
+                                        modifier = Modifier.semantics { contentDescription = if (shown) "Hide ${tab.tabLabel}" else "Show ${tab.tabLabel}" },
+                                    )
+                                },
                                 trailingContent = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         TextButton(onClick = { editingStyle = tab.name }) { Text("Style") }

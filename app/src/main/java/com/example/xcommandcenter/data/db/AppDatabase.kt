@@ -30,6 +30,7 @@ import com.example.xcommandcenter.data.dao.ScheduleDao
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
 import com.example.xcommandcenter.data.dao.ShareDao
+import com.example.xcommandcenter.data.dao.SimplifyDao
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
@@ -135,6 +136,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun ideaDao(): IdeaDao
     abstract fun glossaryDao(): GlossaryDao
     abstract fun shareDao(): ShareDao
+    abstract fun simplifyDao(): SimplifyDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {

@@ -389,4 +389,13 @@ class BackupFormatTest {
         val sheets = listOf(Sheet("Goals", listOf(listOf("ID", "Title"), listOf("1", "A"), listOf("1", "B"))))
         BackupFormat.fromSheets(BackupFormat.toSheets(BackupData(), TabOrder.default, zone).filterNot { it.name == "Goals" } + sheets, zone)
     }
+
+    @Test
+    fun hiddenTabsRoundTripAndOlderWorkbooksLeaveThemAlone() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone, hiddenTabs = setOf(ItemType.GOAL))
+        assertEquals(setOf(ItemType.GOAL), BackupFormat.fromSheets(sheets, zone).settings?.hiddenTabs)
+        // A workbook from before the Hidden column says nothing about hiding.
+        val older = sheets.map { sheet -> if (sheet.name == "Settings") sheet.copy(rows = sheet.rows.map { it.dropLast(1) }) else sheet }
+        assertEquals(null, BackupFormat.fromSheets(older, zone).settings?.hiddenTabs)
+    }
 }

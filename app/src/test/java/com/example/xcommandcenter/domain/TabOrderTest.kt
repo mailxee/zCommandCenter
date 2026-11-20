@@ -45,4 +45,13 @@ class TabOrderTest {
         val moved = TabOrder.move(TabOrder.default, from = 0, to = 2)
         assertEquals(listOf(ItemType.GOAL, ItemType.PLAN, ItemType.BLOCK), moved.take(3))
     }
+
+    @Test
+    fun `hidden tabs round trip and the last shown tab stays`() {
+        assertEquals(setOf(ItemType.GOAL, ItemType.PLAN), TabOrder.parseHidden("GOAL,PLAN,NOPE"))
+        assertEquals(setOf(ItemType.GOAL), TabOrder.withHidden(emptySet(), ItemType.GOAL, hide = true))
+        assertEquals(emptySet<ItemType>(), TabOrder.withHidden(setOf(ItemType.GOAL), ItemType.GOAL, hide = false))
+        val allButTasks = ItemType.tabs.toSet() - ItemType.TASK
+        assertEquals(allButTasks, TabOrder.withHidden(allButTasks, ItemType.TASK, hide = true))
+    }
 }

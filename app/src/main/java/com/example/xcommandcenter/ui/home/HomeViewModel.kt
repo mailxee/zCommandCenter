@@ -76,9 +76,13 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     /** Which mode shows each tab. */
     val tabModes: StateFlow<TabModes> = container.modeRepository.tabModes.stateIn(TabModes())
 
-    /** The tabs the current mode shows, in the user's order (never none: then every tab). */
-    val shownTabs: StateFlow<List<ItemType>> = combine(tabOrder, tabModes, mode) { order, modes, mode ->
-        modes.tabs(order, mode).ifEmpty { order }
+    /**
+     * The tabs the current mode shows, in the user's order, leaving out hidden ones (never none: then
+     * every tab not hidden).
+     */
+    val shownTabs: StateFlow<List<ItemType>> = combine(tabOrder, tabModes, mode, container.tabOrderRepository.hidden) { order, modes, mode, hidden ->
+        val visible = order.filter { it !in hidden }.ifEmpty { order }
+        modes.tabs(visible, mode).ifEmpty { visible }
     }.stateIn(TabOrder.default)
 
     /** Switching mode leaves link mode, as its network ran through the other mode's items. */

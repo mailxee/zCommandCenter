@@ -255,7 +255,8 @@ fun LinkPickerDialog(
             val selected = tab
             if (selected == null) {
                 Column {
-                    ItemType.tabs.forEach { option ->
+                    val hidden = LocalHiddenTabs.current
+                    ItemType.tabs.filter { it !in hidden }.forEach { option ->
                         ListItem(
                             colors = clearListItemColors(),
                             headlineContent = { Text(option.tabLabel, style = itemTextStyle(option, LocalTextStyle.current)) },

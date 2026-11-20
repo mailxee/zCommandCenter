@@ -21,6 +21,20 @@ object TabOrder {
 
     fun serialize(order: List<ItemType>): String = order.joinToString(",") { it.name }
 
+    /** Hidden tabs, stored as "GOAL,PLAN"; unknown names are dropped. */
+    fun parseHidden(stored: String?): Set<ItemType> =
+        stored.orEmpty().split(',').mapNotNull { name -> ItemType.tabs.firstOrNull { it.name == name } }.toSet()
+
+    /**
+     * [hidden] with [tab] hidden or shown again; the last tab still shown can't be hidden, so the
+     * main screen always has one.
+     */
+    fun withHidden(hidden: Set<ItemType>, tab: ItemType, hide: Boolean): Set<ItemType> = when {
+        !hide -> hidden - tab
+        ItemType.tabs.all { it == tab || it in hidden } -> hidden
+        else -> hidden + tab
+    }
+
     fun move(order: List<ItemType>, from: Int, to: Int): List<ItemType> {
         if (from !in order.indices || to !in order.indices) return order
         return order.toMutableList().apply { add(to, removeAt(from)) }

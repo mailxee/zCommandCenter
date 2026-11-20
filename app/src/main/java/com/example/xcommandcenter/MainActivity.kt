@@ -24,6 +24,7 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.reminder.Notifications
 import com.example.xcommandcenter.ui.common.LocalItemStyles
 import com.example.xcommandcenter.ui.common.LocalTabOrder
+import com.example.xcommandcenter.ui.common.LocalHiddenTabs
 import com.example.xcommandcenter.ui.navigation.AppNavHost
 import com.example.xcommandcenter.ui.theme.AppTheme
 
@@ -53,8 +54,10 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = ItemStyles())
             val tabOrder by (application as XCommandCenterApp).container.tabOrderRepository.order
                 .collectAsStateWithLifecycle(initialValue = TabOrder.default)
+            val hiddenTabs by (application as XCommandCenterApp).container.tabOrderRepository.hidden
+                .collectAsStateWithLifecycle(initialValue = emptySet())
             AppTheme {
-                CompositionLocalProvider(LocalItemStyles provides styles, LocalTabOrder provides tabOrder) {
+                CompositionLocalProvider(LocalItemStyles provides styles, LocalTabOrder provides tabOrder, LocalHiddenTabs provides hiddenTabs) {
                     RequestNotificationPermission()
                     AppNavHost(
                         openItem = openItem, onItemOpened = { openItem = null },

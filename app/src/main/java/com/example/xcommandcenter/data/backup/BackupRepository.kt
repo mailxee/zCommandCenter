@@ -34,6 +34,7 @@ class BackupRepository(
         val sheets = BackupFormat.toSheets(
             data, tabOrder.order.first(), styles = itemStyles.styles.first(), tabModes = modes.tabModes.first(),
             scheduleChoice = BackupScheduleChoice(choice.selectedId, choice.automatic),
+            hiddenTabs = tabOrder.hidden.first(),
         )
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Can't write to the chosen file")
         out.use { Xlsx.write(sheets, it) }
@@ -62,6 +63,7 @@ class BackupRepository(
             tabOrder.setOrder(settings.tabOrder)
             settings.styles.forEach { (tab, style) -> itemStyles.setStyle(tab, style) }
             settings.tabModes?.let { modes.setTabModes(it) }
+            settings.hiddenTabs?.let { tabOrder.setAllHidden(it) }
         }
         result.scheduleChoice?.let { scheduleChoice.restore(it.selectedId, it.automatic) }
         result
