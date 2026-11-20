@@ -8,6 +8,7 @@ import com.example.xcommandcenter.domain.GraphLayout
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
+import com.example.xcommandcenter.domain.LineWidth
 import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.MapStyle
 import kotlinx.coroutines.flow.first
@@ -39,6 +40,8 @@ class MapPrefsForgetTest {
         prefs.setLinkShown(MapFilter.UNDER, false)
         prefs.setStyle(MapFilter.label(3), LineStyle.DASHED)
         prefs.setStyle(MapFilter.PLAIN, LineStyle.DOTTED)
+        prefs.setWidth(MapFilter.label(3), LineWidth.THICK)
+        prefs.setWidth(MapFilter.UNDER, LineWidth.THIN)
         prefs.setMapStyle(AppMode.THINK, null, MapStyle.TREE)
         prefs.setMapStyle(AppMode.THINK, idea, MapStyle.RINGS)
         prefs.move("view", idea, GraphLayout.Point(10f, 10f))
@@ -50,6 +53,15 @@ class MapPrefsForgetTest {
         val filter = prefs.filter.first()
         assertEquals(setOf(MapFilter.label(4), MapFilter.UNDER), filter.hiddenLinks)
         assertEquals(mapOf(MapFilter.PLAIN to LineStyle.DOTTED), filter.styles)
+        assertEquals(mapOf(MapFilter.UNDER to LineWidth.THIN), filter.widths)
+    }
+
+    @Test
+    fun resettingLinesKeepsWhatIsHidden() = runBlocking {
+        prefs.resetLines()
+        val filter = prefs.filter.first()
+        assertTrue(filter.styles.isEmpty() && filter.widths.isEmpty())
+        assertEquals(setOf(MapFilter.label(3), MapFilter.label(4), MapFilter.UNDER), filter.hiddenLinks)
     }
 
     @Test
@@ -58,6 +70,7 @@ class MapPrefsForgetTest {
         val filter = prefs.filter.first()
         assertEquals(setOf(MapFilter.UNDER), filter.hiddenLinks)
         assertEquals(mapOf(MapFilter.PLAIN to LineStyle.DOTTED), filter.styles)
+        assertEquals(mapOf(MapFilter.UNDER to LineWidth.THIN), filter.widths)
         assertTrue(prefs.positions.first().isEmpty())
         assertEquals(mapOf(AppMode.THINK to mapOf<ItemRef?, MapStyle>(null to MapStyle.TREE)), prefs.styles.first())
     }

@@ -42,7 +42,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -418,6 +420,50 @@ private fun crossesTree(edge: MapEdge, p: Placed): Boolean {
     return group == null || group != p.layout.routeGroup[b]
 }
 
+/** One line of the map: its colour and width by what it is, its kind's pattern, a halo when selected, and an arrow for a one-way label. */
+private fun DrawScope.drawEdge(edge: MapEdge, shape: EdgeShape, highlighted: Set<ItemRef>?, selection: MapSelection?, outline: Color) {
+    val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
+    val selected = selection == MapSelection.Edge(edge.link.id)
+    val color = when (edge.style) {
+        EdgeStyle.ROUTE, EdgeStyle.SHARED, EdgeStyle.UNDER -> outline
+        EdgeStyle.OFF_ROUTE -> OffRouteColor
+        EdgeStyle.SUGGEST_REMOVE -> RemoveColor
+        EdgeStyle.CONTRADICTS -> ContradictColor
+    }.copy(alpha = if (dim) 0.15f else 1f)
+    val usual = when (edge.style) {
+        EdgeStyle.ROUTE, EdgeStyle.SHARED -> 1.5.dp.toPx()
+        EdgeStyle.CONTRADICTS -> 2.dp.toPx()
+        EdgeStyle.UNDER -> 3.dp.toPx()
+        else -> 2.5.dp.toPx()
+    }
+    // The kind's chosen width; a line Tidy links suggests removing keeps its usual one.
+    val width = if (edge.style == EdgeStyle.SUGGEST_REMOVE) usual else usual * edge.lineWidth.factor
+    // A line Tidy links suggests removing is always dashed; otherwise its kind's style decides.
+    val lineStyle = if (edge.style == EdgeStyle.SUGGEST_REMOVE) LineStyle.DASHED else edge.lineStyle
+    if (selected) drawPath(shape.path, color.copy(alpha = 0.2f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
+    drawPath(
+        shape.path, color,
+        style = Stroke(width, cap = capOf(lineStyle), pathEffect = dashEffect(lineStyle, 1.dp.toPx(), width / usual)),
+    )
+    // A label that reads one way gets an arrow from its subject, past the middle of the line.
+    if (edge.directed) {
+        val forward = edge.subject == edge.link.a
+        val t = if (forward) 0.68f else 0.32f
+        val at = shape.pointAt(t)
+        val ahead = shape.pointAt(if (forward) t + 0.02f else t - 0.02f)
+        val dir = (ahead - at).let { d -> val len = d.getDistance(); if (len == 0f) d else d / len }
+        val size = 6.dp.toPx()
+        val side = Offset(-dir.y, dir.x)
+        val arrow = Path().apply {
+            moveTo(at.x + dir.x * size, at.y + dir.y * size)
+            lineTo(at.x - dir.x * size + side.x * size * 0.7f, at.y - dir.y * size + side.y * size * 0.7f)
+            lineTo(at.x - dir.x * size - side.x * size * 0.7f, at.y - dir.y * size - side.y * size * 0.7f)
+            close()
+        }
+        drawPath(arrow, color)
+    }
+}
+
 /** The same line with its points running the other way (the path is unchanged). */
 private fun reversed(shape: EdgeShape): EdgeShape {
     val pts = (0..16).map { shape.pointAt(1f - it / 16f) }
@@ -621,47 +667,7 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                     .size(p.width.dp, p.height.dp),
             ) {
                 Canvas(Modifier.fillMaxSize()) {
-                    edges.filter { it.link.id !in overBoxes }.forEach { edge ->
-                        val shape = shapes.getValue(edge.link.id)
-                        val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
-                        val selected = selection == MapSelection.Edge(edge.link.id)
-                        val color = when (edge.style) {
-                            EdgeStyle.ROUTE, EdgeStyle.SHARED, EdgeStyle.UNDER -> outline
-                            EdgeStyle.OFF_ROUTE -> OffRouteColor
-                            EdgeStyle.SUGGEST_REMOVE -> RemoveColor
-                            EdgeStyle.CONTRADICTS -> ContradictColor
-                        }.copy(alpha = if (dim) 0.15f else 1f)
-                        val width = when (edge.style) {
-                            EdgeStyle.ROUTE, EdgeStyle.SHARED -> 1.5.dp.toPx()
-                            EdgeStyle.CONTRADICTS -> 2.dp.toPx()
-                            EdgeStyle.UNDER -> 3.dp.toPx()
-                            else -> 2.5.dp.toPx()
-                        }
-                        // A line Tidy links suggests removing is always dashed; otherwise its kind's style decides.
-                        val lineStyle = if (edge.style == EdgeStyle.SUGGEST_REMOVE) LineStyle.DASHED else edge.lineStyle
-                        if (selected) drawPath(shape.path, color.copy(alpha = 0.2f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-                        drawPath(
-                            shape.path, color,
-                            style = Stroke(width, cap = if (lineStyle == LineStyle.DOTTED) StrokeCap.Round else StrokeCap.Butt, pathEffect = dashEffect(lineStyle, 1.dp.toPx())),
-                        )
-                        // A label that reads one way gets an arrow from its subject, past the middle of the line.
-                        if (edge.directed) {
-                            val forward = edge.subject == edge.link.a
-                            val t = if (forward) 0.68f else 0.32f
-                            val at = shape.pointAt(t)
-                            val ahead = shape.pointAt(if (forward) t + 0.02f else t - 0.02f)
-                            val dir = (ahead - at).let { d -> val len = d.getDistance(); if (len == 0f) d else d / len }
-                            val size = 6.dp.toPx()
-                            val side = Offset(-dir.y, dir.x)
-                            val arrow = Path().apply {
-                                moveTo(at.x + dir.x * size, at.y + dir.y * size)
-                                lineTo(at.x - dir.x * size + side.x * size * 0.7f, at.y - dir.y * size + side.y * size * 0.7f)
-                                lineTo(at.x - dir.x * size - side.x * size * 0.7f, at.y - dir.y * size - side.y * size * 0.7f)
-                                close()
-                            }
-                            drawPath(arrow, color)
-                        }
-                    }
+                    edges.filter { it.link.id !in overBoxes }.forEach { edge -> drawEdge(edge, shapes.getValue(edge.link.id), highlighted, selection, outline) }
                 }
                 p.state.nodes.forEach { node ->
                     val size = p.sizes[node.ref] ?: return@forEach
@@ -704,47 +710,7 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                 }
                 // Links that aren't lines of the tree cross it, so they go over the boxes, or the boxes would hide them.
                 Canvas(Modifier.fillMaxSize()) {
-                    edges.filter { it.link.id in overBoxes }.forEach { edge ->
-                        val shape = shapes.getValue(edge.link.id)
-                        val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
-                        val selected = selection == MapSelection.Edge(edge.link.id)
-                        val color = when (edge.style) {
-                            EdgeStyle.ROUTE, EdgeStyle.SHARED, EdgeStyle.UNDER -> outline
-                            EdgeStyle.OFF_ROUTE -> OffRouteColor
-                            EdgeStyle.SUGGEST_REMOVE -> RemoveColor
-                            EdgeStyle.CONTRADICTS -> ContradictColor
-                        }.copy(alpha = if (dim) 0.15f else 1f)
-                        val width = when (edge.style) {
-                            EdgeStyle.ROUTE, EdgeStyle.SHARED -> 1.5.dp.toPx()
-                            EdgeStyle.CONTRADICTS -> 2.dp.toPx()
-                            EdgeStyle.UNDER -> 3.dp.toPx()
-                            else -> 2.5.dp.toPx()
-                        }
-                        // A line Tidy links suggests removing is always dashed; otherwise its kind's style decides.
-                        val lineStyle = if (edge.style == EdgeStyle.SUGGEST_REMOVE) LineStyle.DASHED else edge.lineStyle
-                        if (selected) drawPath(shape.path, color.copy(alpha = 0.2f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-                        drawPath(
-                            shape.path, color,
-                            style = Stroke(width, cap = if (lineStyle == LineStyle.DOTTED) StrokeCap.Round else StrokeCap.Butt, pathEffect = dashEffect(lineStyle, 1.dp.toPx())),
-                        )
-                        // A label that reads one way gets an arrow from its subject, past the middle of the line.
-                        if (edge.directed) {
-                            val forward = edge.subject == edge.link.a
-                            val t = if (forward) 0.68f else 0.32f
-                            val at = shape.pointAt(t)
-                            val ahead = shape.pointAt(if (forward) t + 0.02f else t - 0.02f)
-                            val dir = (ahead - at).let { d -> val len = d.getDistance(); if (len == 0f) d else d / len }
-                            val size = 6.dp.toPx()
-                            val side = Offset(-dir.y, dir.x)
-                            val arrow = Path().apply {
-                                moveTo(at.x + dir.x * size, at.y + dir.y * size)
-                                lineTo(at.x - dir.x * size + side.x * size * 0.7f, at.y - dir.y * size + side.y * size * 0.7f)
-                                lineTo(at.x - dir.x * size - side.x * size * 0.7f, at.y - dir.y * size - side.y * size * 0.7f)
-                                close()
-                            }
-                            drawPath(arrow, color)
-                        }
-                    }
+                    edges.filter { it.link.id in overBoxes }.forEach { edge -> drawEdge(edge, shapes.getValue(edge.link.id), highlighted, selection, outline) }
                 }
                 // Labels sit on the middle of their lines, over everything, so a box never covers one.
                 edges.filter { it.label != null }.forEach { edge ->

@@ -17,6 +17,7 @@ import com.example.xcommandcenter.domain.AppMode
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
+import com.example.xcommandcenter.domain.LineWidth
 import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.MapPositions
@@ -57,10 +58,14 @@ data class MapEdge(
     /** The kind of link, as [MapFilter] names it, and how that kind is drawn. */
     val kind: String = MapFilter.PLAIN,
     val lineStyle: LineStyle = LineStyle.SOLID,
+    val lineWidth: LineWidth = LineWidth.NORMAL,
 )
 
 /** A kind of link in the Show panel: [count] lines of it in the network, whether hidden or not. */
-data class LinkKindInfo(val key: String, val name: String, val style: LineStyle, val shown: Boolean, val count: Int, val contradicts: Boolean = false)
+data class LinkKindInfo(
+    val key: String, val name: String, val style: LineStyle, val shown: Boolean, val count: Int,
+    val contradicts: Boolean = false, val width: LineWidth = LineWidth.NORMAL,
+)
 
 /**
  * What the map draws: the items and the lines between them, and what the screen needs to lay them
@@ -252,7 +257,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         // Each idea (Think) or plan (Do) also hangs from the one it is under: the tree's own lines.
         val allUnder = graph.under(mode).filter { (child, parent) -> child in shown && parent in shown }
         val underEdges = allUnder.map { (child, parent) ->
-            MapEdge(LinkAnalysis.Link(-child.id, child, parent), EdgeStyle.UNDER, null, kind = MapFilter.UNDER, lineStyle = filter.styleOf(MapFilter.UNDER))
+            MapEdge(LinkAnalysis.Link(-child.id, child, parent), EdgeStyle.UNDER, null, kind = MapFilter.UNDER, lineStyle = filter.styleOf(MapFilter.UNDER), lineWidth = filter.widthOf(MapFilter.UNDER))
         }
         val linkEdges = inside.groupBy { setOf(it.a, it.b) }
             .map { (pair, group) ->
@@ -276,6 +281,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
                     directed = label != null && !label.symmetric,
                     kind = kind,
                     lineStyle = filter.styleOf(kind, label?.key),
+                    lineWidth = filter.widthOf(kind),
                 )
             }
         val allEdges = underEdges + linkEdges
@@ -284,13 +290,13 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         val sorted = visible.mapNotNull { graph.entries[it] }.sortedWith(compareBy({ layer(it.ref) }, { it.title.lowercase() }))
         val counts = allEdges.groupingBy { it.kind }.eachCount()
         val linkKinds = buildList {
-            counts[MapFilter.UNDER]?.let { add(LinkKindInfo(MapFilter.UNDER, "Under", filter.styleOf(MapFilter.UNDER), filter.shows(MapFilter.UNDER), it)) }
-            counts[MapFilter.PLAIN]?.let { add(LinkKindInfo(MapFilter.PLAIN, "No label", filter.styleOf(MapFilter.PLAIN), filter.shows(MapFilter.PLAIN), it)) }
+            counts[MapFilter.UNDER]?.let { add(LinkKindInfo(MapFilter.UNDER, "Under", filter.styleOf(MapFilter.UNDER), filter.shows(MapFilter.UNDER), it, width = filter.widthOf(MapFilter.UNDER))) }
+            counts[MapFilter.PLAIN]?.let { add(LinkKindInfo(MapFilter.PLAIN, "No label", filter.styleOf(MapFilter.PLAIN), filter.shows(MapFilter.PLAIN), it, width = filter.widthOf(MapFilter.PLAIN))) }
             graph.labels.values.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { label ->
                 val key = MapFilter.label(label.id)
                 counts[key]?.let {
                     val name = label.forward + (label.backward?.let { b -> " / $b" } ?: "")
-                    add(LinkKindInfo(key, name, filter.styleOf(key, label.key), filter.shows(key), it, contradicts = label.key == LinkLabels.CONTRADICTS))
+                    add(LinkKindInfo(key, name, filter.styleOf(key, label.key), filter.shows(key), it, contradicts = label.key == LinkLabels.CONTRADICTS, width = filter.widthOf(key)))
                 }
             }
         }
@@ -357,6 +363,10 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
 
     fun setLineStyle(kind: String, style: LineStyle) {
         viewModelScope.launch { prefs.setStyle(kind, style) }
+    }
+
+    fun setLineWidth(kind: String, width: LineWidth) {
+        viewModelScope.launch { prefs.setWidth(kind, width) }
     }
 
     /** Moves [ref], with everything below it, [by] dp further in the view shown; for viewing only. */

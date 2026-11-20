@@ -29,6 +29,10 @@ import com.example.xcommandcenter.domain.LinkAnalysis
 import com.example.xcommandcenter.domain.LinkRoute
 import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.MapStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import com.example.xcommandcenter.domain.LineWidth
+import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -139,6 +143,45 @@ class MapCanvasTest {
         val dir = File("build/map-shots").takeIf { it.isDirectory } ?: return
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w400dp-h1600dp-mdpi")
+    fun chosenPatternsAndWidthsAreDrawn() {
+        val folly = entries.values.first { it.title.startsWith("Folly") }.ref
+        val wisdom = entries.values.first { it.title.startsWith("Wisdom") }.ref
+        val base = state(MapStyle.MIND_MAP)
+        val under = base.edges.map { it.copy(lineStyle = LineStyle.LONG_DASH, lineWidth = LineWidth.THIN) }
+        val link = MapEdge(
+            LinkAnalysis.Link(500, folly, wisdom), EdgeStyle.ROUTE, null, label = "opposes", subject = folly,
+            kind = "label:9", lineStyle = LineStyle.DASH_DOT, lineWidth = LineWidth.THICK,
+        )
+        show(base.copy(edges = under + link))
+        waitFor("opposes")
+        compose.onNodeWithText("Fit all").performClick()
+        compose.waitForIdle()
+        shoot("styled-lines")
+    }
+
+    @Test
+    fun lineChoicesOfferEveryPatternAndWidth() {
+        var picked: Pair<LineStyle, LineWidth> = LineStyle.SOLID to LineWidth.NORMAL
+        compose.setContent {
+            AppTheme(darkTheme = true) {
+                androidx.compose.material3.Surface {
+                    androidx.compose.foundation.layout.Column(Modifier.padding(16.dp)) {
+                        LineChoices(
+                            "opposes", androidx.compose.ui.graphics.Color.Gray, thick = false, picked.first, picked.second,
+                            onStyle = { picked = it to picked.second }, onWidth = { picked = picked.first to it },
+                        )
+                    }
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("opposes: Dash-dot").performClick()
+        compose.onNodeWithContentDescription("opposes: Thick").performClick()
+        assertEquals(LineStyle.DASH_DOT to LineWidth.THICK, picked)
+        shoot("line-choices")
     }
 
     @Test

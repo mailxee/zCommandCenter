@@ -257,6 +257,7 @@ fun SettingsScreen(
 
             LinksSettings(viewModel, onTidy)
             LinkLabelsSettings(viewModel)
+            MapLinesSettings(viewModel)
             SectionTitle("Glossary")
             Card(Modifier.fillMaxWidth().clickable(onClick = onGlossary)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {

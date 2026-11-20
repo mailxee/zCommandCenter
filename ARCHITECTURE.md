@@ -1168,7 +1168,12 @@ its list. `LinkDao.observeExplanation` / `observeList` read these with one union
 
 The filter button opens the **Show** panel (`MapFilter`, stored by `MapPrefsRepository` in DataStore): a chip per tab
 in the network to show or hide its items, and a row per kind of link (Under, No label, each label) to show or hide its
-lines and to pick its line style (solid, dashed, dotted). Contradicts defaults to dotted, the rest to solid. While
+lines and to pick its line style (solid, dashed, long dashes, dotted, dash-dot) and width (thin, normal, thick:
+`LineWidth`, a share of the line's usual width, stored apart as `map_line_widths`). Contradicts defaults to dotted, the
+rest to solid and normal. **Settings, Map lines** (`ui/settings/MapLinesSettings.kt`, folded until opened) offers the
+same choices for every kind (Under, No label, each label), not only those on the map in view, and "Reset all lines";
+both use `ui/links/LineControls.kt` (`LineChoices`, `LineSample`, `dashEffect`, which spreads a thick line's pattern).
+A line Tidy links suggests removing keeps its dashes and width. While
 anything is hidden, items left with no line go too, except the item whose network is shown. Choices apply to every
 map until changed; "Show all" clears what is hidden and keeps the styles. Because they carry over, a map hiding any of
 its own tabs or kinds of link says so in a "Hidden: …" chip above the picture, which opens the panel (§2.75). A line Tidy links suggests removing is always
@@ -1629,6 +1634,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/prefs/RoutePrefsRepository.kt` | Stores the suggested route (§2.57). |
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
+| `ui/links/LineControls.kt` | Line patterns and widths: the samples and choices shared by the Show panel and Settings (§2.66). |
+| `ui/settings/MapLinesSettings.kt` | Settings, Map lines: each kind of link's pattern and width (§2.66). |
 | `ui/links/MapCanvas.kt` | The map's picture: boxes measured and placed, lines, zoom levels, Fit all, folding, dragging and dropping (§2.69, §2.70). |
 | `ui/links/MapStylePicker.kt` | Choosing the map's or a branch's layout (§2.70). |
 | `domain/MapStyle.kt`, `domain/BranchLayout.kt` | The layouts, the layouts chosen per item, and laying out the tree branch by branch (§2.70). |

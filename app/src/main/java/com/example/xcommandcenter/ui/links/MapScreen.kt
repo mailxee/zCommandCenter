@@ -57,6 +57,7 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.LineStyle
+import com.example.xcommandcenter.domain.LineWidth
 import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.data.repository.ItemDetail
@@ -183,19 +184,21 @@ fun MapScreen(
                     }
                     val outline = MaterialTheme.colorScheme.outline
                     if (s?.mode == AppMode.THINK) {
-                        if (s.edges.any { it.style == EdgeStyle.UNDER }) Legend(outline, s.filter.styleOf(MapFilter.UNDER), "Under", thick = true)
+                        if (s.edges.any { it.style == EdgeStyle.UNDER }) Legend(outline, s.filter.styleOf(MapFilter.UNDER), "Under", thick = true, width = s.filter.widthOf(MapFilter.UNDER))
                         Legend(outline, LineStyle.SOLID, "Link")
                         if (s.nodes.any { it.otherMode }) Legend(OtherModeColor, LineStyle.SOLID, "⇄ Do")
                     } else {
-                        if (s?.edges?.any { it.style == EdgeStyle.UNDER } == true) Legend(outline, s.filter.styleOf(MapFilter.UNDER), "Under", thick = true)
+                        if (s?.edges?.any { it.style == EdgeStyle.UNDER } == true) Legend(outline, s.filter.styleOf(MapFilter.UNDER), "Under", thick = true, width = s.filter.widthOf(MapFilter.UNDER))
                         Legend(outline, LineStyle.SOLID, "On route")
                         Legend(OffRouteColor, LineStyle.SOLID, "Off route")
                         Legend(RemoveColor, LineStyle.DASHED, "Suggest removing")
                         if (s?.nodes?.any { it.otherMode } == true) Legend(OtherModeColor, LineStyle.SOLID, "⇄ Think")
                     }
                     // Kinds of link drawn other than solid, so their lines can be told apart.
-                    s?.linkKinds?.filter { k -> k.shown && k.key != MapFilter.UNDER && k.style != LineStyle.SOLID && s.edges.any { it.kind == k.key } }?.forEach { k ->
-                        Legend(if (k.contradicts) ContradictColor else outline, k.style, k.name.substringBefore(" / "))
+                    s?.linkKinds?.filter { k ->
+                        k.shown && k.key != MapFilter.UNDER && (k.style != LineStyle.SOLID || k.width != LineWidth.NORMAL) && s.edges.any { it.kind == k.key }
+                    }?.forEach { k ->
+                        Legend(if (k.contradicts) ContradictColor else outline, k.style, k.name.substringBefore(" / "), width = k.width)
                     }
                 }
             }
@@ -238,31 +241,12 @@ fun MapScreen(
 }
 
 @Composable
-private fun Legend(color: Color, style: LineStyle, label: String, thick: Boolean = false) {
+private fun Legend(color: Color, style: LineStyle, label: String, thick: Boolean = false, width: LineWidth = LineWidth.NORMAL) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        LineSample(color, style, thick, Modifier.width(20.dp).height(10.dp))
+        LineSample(color, style, thick, Modifier.width(20.dp).height(10.dp), width)
         Spacer(Modifier.width(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-}
-
-/** A short line drawn in [style], for legends and the Show panel. */
-@Composable
-private fun LineSample(color: Color, style: LineStyle, thick: Boolean, modifier: Modifier) {
-    Canvas(modifier) {
-        drawLine(
-            color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), (if (thick) 4.dp else 2.5.dp).toPx(),
-            cap = if (style == LineStyle.DOTTED) StrokeCap.Round else StrokeCap.Butt,
-            pathEffect = dashEffect(style, 1.dp.toPx()),
-        )
-    }
-}
-
-/** The dash pattern for [style] at [px] pixels per dp; null for a solid line. */
-internal fun dashEffect(style: LineStyle, px: Float): PathEffect? = when (style) {
-    LineStyle.SOLID -> null
-    LineStyle.DASHED -> PathEffect.dashPathEffect(floatArrayOf(8f * px, 5f * px))
-    LineStyle.DOTTED -> PathEffect.dashPathEffect(floatArrayOf(0.1f * px, 6f * px))
 }
 
 @Composable
@@ -511,18 +495,10 @@ private fun LinkKindRow(kind: LinkKindInfo, viewModel: MapViewModel) {
                 Text(if (kind.count == 1) "1 line" else "${kind.count} lines", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 4.dp)) {
-            LineStyle.entries.forEachIndexed { i, style ->
-                SegmentedButton(
-                    selected = kind.style == style,
-                    onClick = { viewModel.setLineStyle(kind.key, style) },
-                    shape = SegmentedButtonDefaults.itemShape(i, LineStyle.entries.size),
-                    icon = {},
-                    modifier = Modifier.semantics { contentDescription = "${kind.name}: ${style.label}" },
-                ) {
-                    LineSample(color, style, thick = kind.key == MapFilter.UNDER, Modifier.width(32.dp).height(12.dp))
-                }
-            }
-        }
+        LineChoices(
+            name = kind.name, color = color, thick = kind.key == MapFilter.UNDER, style = kind.style, width = kind.width,
+            onStyle = { viewModel.setLineStyle(kind.key, it) }, onWidth = { viewModel.setLineWidth(kind.key, it) },
+            modifier = Modifier.padding(start = 48.dp, bottom = 4.dp),
+        )
     }
 }

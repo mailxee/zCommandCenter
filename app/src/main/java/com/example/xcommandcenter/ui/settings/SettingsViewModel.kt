@@ -14,6 +14,9 @@ import com.example.xcommandcenter.data.backup.AutoBackupSettings
 import com.example.xcommandcenter.data.prefs.ModeRepository
 import com.example.xcommandcenter.data.prefs.ShareAccessRepository
 import com.example.xcommandcenter.data.prefs.MapPrefsRepository
+import com.example.xcommandcenter.domain.LineStyle
+import com.example.xcommandcenter.domain.LineWidth
+import com.example.xcommandcenter.domain.MapFilter
 import com.example.xcommandcenter.domain.ShareApp
 import com.example.xcommandcenter.domain.TabMode
 import com.example.xcommandcenter.domain.TabModes
@@ -120,6 +123,25 @@ class SettingsViewModel(
 
     val labelUses: StateFlow<Map<Long, Int>> = links.labelUses
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** The map's choices, for how each kind of link is drawn. */
+    val mapFilter: StateFlow<MapFilter> = mapPrefs.filter
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MapFilter())
+
+    fun setLineStyle(kind: String, style: LineStyle) {
+        viewModelScope.launch { mapPrefs.setStyle(kind, style) }
+    }
+
+    fun setLineWidth(kind: String, width: LineWidth) {
+        viewModelScope.launch { mapPrefs.setWidth(kind, width) }
+    }
+
+    fun resetLines() {
+        viewModelScope.launch {
+            mapPrefs.resetLines()
+            message = "Every kind of line is back to how it was drawn at first."
+        }
+    }
 
     /** Adds a label, or renames [id]'s; a blank [backward] makes it read the same both ways. */
     fun saveLabel(id: Long?, forward: String, backward: String) {

@@ -4,18 +4,28 @@ package com.example.xcommandcenter.domain
 enum class LineStyle(val label: String) {
     SOLID("Solid"),
     DASHED("Dashed"),
+    LONG_DASH("Long dashes"),
     DOTTED("Dotted"),
+    DASH_DOT("Dash-dot"),
+}
+
+/** How thick a kind of link is drawn, as a share of the line's usual width. */
+enum class LineWidth(val label: String, val factor: Float) {
+    THIN("Thin", 0.6f),
+    NORMAL("Normal", 1f),
+    THICK("Thick", 1.8f),
 }
 
 /**
  * What the map leaves out and how it draws each kind of link (the map's Show panel). A kind of
  * link is named by a key: [PLAIN] for links without a label, [UNDER] for an idea's line to the
- * idea it is under, and [label] for each link label.
+ * idea it is under, and [label] for each link label. Each kind has a line style and a width.
  */
 data class MapFilter(
     val hiddenTypes: Set<ItemType> = emptySet(),
     val hiddenLinks: Set<String> = emptySet(),
     val styles: Map<String, LineStyle> = emptyMap(),
+    val widths: Map<String, LineWidth> = emptyMap(),
 ) {
     val active: Boolean get() = hiddenTypes.isNotEmpty() || hiddenLinks.isNotEmpty()
 
@@ -26,6 +36,8 @@ data class MapFilter(
     /** The style picked for [kind], or its default: dotted for Contradicts, solid for the rest. */
     fun styleOf(kind: String, labelKey: String? = null): LineStyle =
         styles[kind] ?: if (labelKey == LinkLabels.CONTRADICTS) LineStyle.DOTTED else LineStyle.SOLID
+
+    fun widthOf(kind: String): LineWidth = widths[kind] ?: LineWidth.NORMAL
 
     /**
      * What is left to draw of [nodes] and [edges] (pairs of items with their kind of link): items
@@ -59,6 +71,16 @@ data class MapFilter(
             if (at <= 0) return@mapNotNull null
             val style = LineStyle.entries.firstOrNull { it.name == entry.substring(at + 1) } ?: return@mapNotNull null
             entry.substring(0, at) to style
+        }.toMap()
+
+        /** "under=THICK" entries, as stored in the settings. */
+        fun encodeWidths(widths: Map<String, LineWidth>): Set<String> = widths.map { (k, v) -> "$k=${v.name}" }.toSet()
+
+        fun parseWidths(entries: Set<String>?): Map<String, LineWidth> = entries.orEmpty().mapNotNull { entry ->
+            val at = entry.lastIndexOf('=')
+            if (at <= 0) return@mapNotNull null
+            val width = LineWidth.entries.firstOrNull { it.name == entry.substring(at + 1) } ?: return@mapNotNull null
+            entry.substring(0, at) to width
         }.toMap()
 
         fun parseTypes(names: Set<String>?): Set<ItemType> = names.orEmpty().mapNotNull { n -> ItemType.entries.firstOrNull { it.name == n } }.toSet()

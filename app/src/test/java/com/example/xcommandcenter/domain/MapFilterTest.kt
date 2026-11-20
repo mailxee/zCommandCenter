@@ -61,4 +61,16 @@ class MapFilterTest {
         assertEquals(LineStyle.DASHED, MapFilter(styles = styles).styleOf(MapFilter.UNDER))
         assertEquals(setOf(ItemType.BOOK), MapFilter.parseTypes(setOf("BOOK", "NOPE")))
     }
+
+    @Test
+    fun widthsRoundTripAndDefaultToNormal() {
+        val widths = mapOf(MapFilter.UNDER to LineWidth.THICK, MapFilter.label(2) to LineWidth.THIN)
+        assertEquals(widths, MapFilter.parseWidths(MapFilter.encodeWidths(widths) + "junk" + "x=HUGE"))
+        val filter = MapFilter(widths = widths)
+        assertEquals(LineWidth.THICK, filter.widthOf(MapFilter.UNDER))
+        assertEquals(LineWidth.NORMAL, filter.widthOf(MapFilter.PLAIN))
+        // The newer patterns are stored like the first three.
+        val styles = mapOf(MapFilter.PLAIN to LineStyle.DASH_DOT, MapFilter.UNDER to LineStyle.LONG_DASH)
+        assertEquals(styles, MapFilter.parseStyles(MapFilter.encodeStyles(styles)))
+    }
 }

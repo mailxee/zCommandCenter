@@ -12,15 +12,17 @@ import com.example.xcommandcenter.domain.AppMode
 import com.example.xcommandcenter.domain.MapStyle
 import com.example.xcommandcenter.domain.MapStyles
 import com.example.xcommandcenter.domain.LineStyle
+import com.example.xcommandcenter.domain.LineWidth
 import com.example.xcommandcenter.domain.MapFilter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** The map's Show panel (tabs and kinds of link left out, each kind of link's line style), dragged offsets and chosen layouts. */
+/** The map's Show panel (tabs and kinds of link left out, each kind of link's line style and width), dragged offsets and chosen layouts. */
 class MapPrefsRepository(private val context: Context) {
     private val typesKey = TYPES_KEY
     private val linksKey = LINKS_KEY
     private val stylesKey = STYLES_KEY
+    private val widthsKey = WIDTHS_KEY
     private val positionsKey = POSITIONS_KEY
     private val mapStylesKey = LAYOUTS_KEY
 
@@ -30,6 +32,7 @@ class MapPrefsRepository(private val context: Context) {
             val key = MapFilter.label(id)
             prefs[linksKey] = prefs[linksKey].orEmpty() - key
             prefs[stylesKey] = MapFilter.encodeStyles(MapFilter.parseStyles(prefs[stylesKey]) - key)
+            prefs[widthsKey] = MapFilter.encodeWidths(MapFilter.parseWidths(prefs[widthsKey]) - key)
         }
     }
 
@@ -61,6 +64,7 @@ class MapPrefsRepository(private val context: Context) {
             hiddenTypes = MapFilter.parseTypes(prefs[typesKey]),
             hiddenLinks = prefs[linksKey].orEmpty(),
             styles = MapFilter.parseStyles(prefs[stylesKey]),
+            widths = MapFilter.parseWidths(prefs[widthsKey]),
         )
     }
 
@@ -84,6 +88,20 @@ class MapPrefsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setWidth(kind: String, width: LineWidth) {
+        context.settingsStore.edit { prefs ->
+            prefs[widthsKey] = MapFilter.encodeWidths(MapFilter.parseWidths(prefs[widthsKey]) + (kind to width))
+        }
+    }
+
+    /** Every kind of link back to its usual style and width; what is hidden stays. */
+    suspend fun resetLines() {
+        context.settingsStore.edit { prefs ->
+            prefs.remove(stylesKey)
+            prefs.remove(widthsKey)
+        }
+    }
+
     /** Shows everything again; line styles stay. */
     suspend fun showAll() {
         context.settingsStore.edit { prefs ->
@@ -96,6 +114,7 @@ class MapPrefsRepository(private val context: Context) {
         private val TYPES_KEY = stringSetPreferencesKey("map_hidden_types")
         private val LINKS_KEY = stringSetPreferencesKey("map_hidden_links")
         private val STYLES_KEY = stringSetPreferencesKey("map_line_styles")
+        private val WIDTHS_KEY = stringSetPreferencesKey("map_line_widths")
         private val POSITIONS_KEY = stringSetPreferencesKey("map_positions")
         private val LAYOUTS_KEY = stringSetPreferencesKey("map_layouts")
 
@@ -103,6 +122,7 @@ class MapPrefsRepository(private val context: Context) {
         fun forgetIds(prefs: MutablePreferences) {
             prefs[LINKS_KEY] = MapFilter.withoutLabels(prefs[LINKS_KEY].orEmpty())
             prefs[STYLES_KEY] = MapFilter.encodeStyles(MapFilter.parseStyles(prefs[STYLES_KEY]).filterKeys { !MapFilter.isLabel(it) })
+            prefs[WIDTHS_KEY] = MapFilter.encodeWidths(MapFilter.parseWidths(prefs[WIDTHS_KEY]).filterKeys { !MapFilter.isLabel(it) })
             prefs.remove(POSITIONS_KEY)
             prefs[LAYOUTS_KEY] = MapStyles.wholeMapsOnly(prefs[LAYOUTS_KEY])
         }
