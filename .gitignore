@@ -22,3 +22,6 @@ local.properties
 *.keystore
 !app/signing/debug.keystore
 keystore.properties
+
+# Kotlin compiler session data (local, regenerated)
+.kotlin/
