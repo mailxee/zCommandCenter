@@ -48,6 +48,9 @@ object MapStyles {
         return out
     }
 
+    /** Only the layouts chosen for whole maps; those chosen for an item name it by id. */
+    fun wholeMapsOnly(entries: Set<String>?): Set<String> = entries.orEmpty().filter { it.split('|').getOrNull(1) == "all" }.toSet()
+
     /** [entries] with [ref]'s layout in [mode] set to [style], or back to its default when null. */
     fun set(entries: Set<String>?, mode: AppMode, ref: ItemRef?, style: MapStyle?): Set<String> {
         val prefix = key(mode, ref) + "|"

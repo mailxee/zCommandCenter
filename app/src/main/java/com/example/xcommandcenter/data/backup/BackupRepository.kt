@@ -7,7 +7,7 @@ import com.example.xcommandcenter.data.dao.BackupDao
 import com.example.xcommandcenter.data.prefs.ItemStyleRepository
 import com.example.xcommandcenter.data.prefs.ScheduleChoiceRepository
 import com.example.xcommandcenter.data.prefs.TabOrderRepository
-import com.example.xcommandcenter.data.prefs.clearCollapsedPlans
+import com.example.xcommandcenter.data.prefs.forgetIds
 import com.example.xcommandcenter.data.prefs.clearSettings
 import com.example.xcommandcenter.data.repository.ReminderRepository
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +56,7 @@ class BackupRepository(
         val result = BackupFormat.fromSheets(sheets)
         reminders.cancelAll()
         dao.replaceAll(result.data)
-        clearCollapsedPlans(context)
+        forgetIds(context)
         reminders.rescheduleAll()
         result.settings?.let { settings ->
             tabOrder.setOrder(settings.tabOrder)

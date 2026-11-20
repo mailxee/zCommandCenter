@@ -142,6 +142,22 @@ class MapCanvasTest {
     }
 
     @Test
+    @Config(sdk = [35], qualifiers = "w400dp-h1600dp-mdpi")
+    fun aLinkAcrossBranchesGoesRoundThemWithItsLabel() {
+        val folly = entries.values.first { it.title.startsWith("Folly") }.ref
+        val wisdom = entries.values.first { it.title.startsWith("Wisdom") }.ref
+        val base = state(MapStyle.MIND_MAP)
+        val link = MapEdge(LinkAnalysis.Link(500, folly, wisdom), EdgeStyle.ROUTE, null, label = "opposes", subject = folly, directed = true, kind = "label:9")
+        show(base.copy(edges = base.edges + link))
+        waitFor("opposes")
+        compose.onNodeWithText("Fit all").performClick()
+        compose.waitForIdle()
+        // Fitting everything keeps the label, which sits on the line beside the branch, in view.
+        compose.onNodeWithText("opposes").assertIsDisplayed()
+        shoot("mind-cross-link")
+    }
+
+    @Test
     fun theMindMapOpensReadableWithFullTitles() {
         show(state(MapStyle.MIND_MAP))
         // Readable: full titles at 75% or more (the exact zoom depends on the fonts' widths).

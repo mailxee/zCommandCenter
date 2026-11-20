@@ -1170,7 +1170,8 @@ The filter button opens the **Show** panel (`MapFilter`, stored by `MapPrefsRepo
 in the network to show or hide its items, and a row per kind of link (Under, No label, each label) to show or hide its
 lines and to pick its line style (solid, dashed, dotted). Contradicts defaults to dotted, the rest to solid. While
 anything is hidden, items left with no line go too, except the item whose network is shown. Choices apply to every
-map until changed; "Show all" clears what is hidden and keeps the styles. A line Tidy links suggests removing is always
+map until changed; "Show all" clears what is hidden and keeps the styles. Because they carry over, a map hiding any of
+its own tabs or kinds of link says so in a "Hidden: …" chip above the picture, which opens the panel (§2.75). A line Tidy links suggests removing is always
 dashed red. A line's panel also has **Label…**, which opens the usual label dialog.
 
 ### 2.67 Moving items on the map, and labels from either end
@@ -1294,7 +1295,7 @@ it. So layouts nest freely, and adding one is an entry in `MapStyle` and its cas
 `BranchLayout.arrange`; the menus list every entry. The layout also says how each line of the tree
 runs (`BranchLayout.Line`: side to side, down, down a list's line, down a channel, straight, or by
 route's rows), and the screen draws it so. Links that aren't in the tree bow outwards, except
-between two items of one By route branch, which follow its rows.
+between two items of one By route branch, which follow its rows; they are drawn over the boxes (§2.75).
 
 **Dragging moves a branch.** A dragged item now keeps an offset from its layout's place rather than
 an absolute place (`MapPositions`, per mode and network; earlier places are dropped), and everything
@@ -1412,6 +1413,26 @@ run in the caller's task, so the main screen never comes up, and they work from 
 the container is made in `Application.onCreate`. A linked item tapped in the editor opens in the app's
 own task. The action strings don't follow the application id, so a debug build answers them too;
 callers set the package.
+
+### 2.75 Links across the tree stay visible
+
+A link between items in different branches (Folly, under Vice, *opposes* Wisdom, under Virtue) used
+to run centre to centre beneath the boxes, which are opaque, so on a mind map it and its label were
+hidden behind the boxes in between and the link seemed missing. Now, in `MapCanvas`:
+
+- Lines of the tree (and links a By route branch draws along its rows) are drawn under the boxes as
+  before; every other link (`crossesTree`) is drawn over them, and all labels go on top.
+- Such a link starts and ends at its boxes' edges, not their centres. Between two items one above
+  the other it leaves both from their outer sides (away from the middle) and goes round, clear of
+  the boxes between; otherwise it bows outwards as before. `Placed` leaves room at the sides for it
+  and its label, so Fit all shows them.
+
+**Choices kept by id.** The Show panel keeps hidden kinds of link and line styles by label id, and
+the map keeps dragged positions and per-item layouts by item id. Deleting a label now forgets its
+choices (`MapPrefsRepository.forgetLabel`), and an import, which brings the workbook's ids, forgets
+all of these with the collapsed plans and ideas (`forgetIds`, formerly `clearCollapsedPlans`), so a
+choice made for one label or item can't land on another. Whole-map layouts, Under and No label
+choices stay. A map hiding something says so (§2.66).
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

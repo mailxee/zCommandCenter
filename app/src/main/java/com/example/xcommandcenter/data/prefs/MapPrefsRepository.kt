@@ -1,6 +1,7 @@
 package com.example.xcommandcenter.data.prefs
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.example.xcommandcenter.domain.GraphLayout
@@ -17,11 +18,20 @@ import kotlinx.coroutines.flow.map
 
 /** The map's Show panel (tabs and kinds of link left out, each kind of link's line style), dragged offsets and chosen layouts. */
 class MapPrefsRepository(private val context: Context) {
-    private val typesKey = stringSetPreferencesKey("map_hidden_types")
-    private val linksKey = stringSetPreferencesKey("map_hidden_links")
-    private val stylesKey = stringSetPreferencesKey("map_line_styles")
-    private val positionsKey = stringSetPreferencesKey("map_positions")
-    private val mapStylesKey = stringSetPreferencesKey("map_layouts")
+    private val typesKey = TYPES_KEY
+    private val linksKey = LINKS_KEY
+    private val stylesKey = STYLES_KEY
+    private val positionsKey = POSITIONS_KEY
+    private val mapStylesKey = LAYOUTS_KEY
+
+    /** Forgets what is kept for a deleted label, so it can't carry over to another. */
+    suspend fun forgetLabel(id: Long) {
+        context.settingsStore.edit { prefs ->
+            val key = MapFilter.label(id)
+            prefs[linksKey] = prefs[linksKey].orEmpty() - key
+            prefs[stylesKey] = MapFilter.encodeStyles(MapFilter.parseStyles(prefs[stylesKey]) - key)
+        }
+    }
 
     /** Layouts chosen on the map, per mode (see [MapStyles]). */
     val styles: Flow<Map<AppMode, Map<ItemRef?, MapStyle>>> = context.settingsStore.data.map { prefs -> MapStyles.parse(prefs[mapStylesKey]) }
@@ -79,6 +89,22 @@ class MapPrefsRepository(private val context: Context) {
         context.settingsStore.edit { prefs ->
             prefs.remove(typesKey)
             prefs.remove(linksKey)
+        }
+    }
+
+    companion object {
+        private val TYPES_KEY = stringSetPreferencesKey("map_hidden_types")
+        private val LINKS_KEY = stringSetPreferencesKey("map_hidden_links")
+        private val STYLES_KEY = stringSetPreferencesKey("map_line_styles")
+        private val POSITIONS_KEY = stringSetPreferencesKey("map_positions")
+        private val LAYOUTS_KEY = stringSetPreferencesKey("map_layouts")
+
+        /** See [forgetIds][com.example.xcommandcenter.data.prefs.forgetIds]: what names labels or items goes. */
+        fun forgetIds(prefs: MutablePreferences) {
+            prefs[LINKS_KEY] = MapFilter.withoutLabels(prefs[LINKS_KEY].orEmpty())
+            prefs[STYLES_KEY] = MapFilter.encodeStyles(MapFilter.parseStyles(prefs[STYLES_KEY]).filterKeys { !MapFilter.isLabel(it) })
+            prefs.remove(POSITIONS_KEY)
+            prefs[LAYOUTS_KEY] = MapStyles.wholeMapsOnly(prefs[LAYOUTS_KEY])
         }
     }
 }

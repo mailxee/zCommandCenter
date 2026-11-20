@@ -13,10 +13,15 @@ suspend fun clearSettings(context: Context) {
     context.settingsStore.edit { it.clear() }
 }
 
-/** Forgets which plans and ideas are collapsed; ids from before an import may now name other items. */
-suspend fun clearCollapsedPlans(context: Context) {
+/**
+ * Forgets settings that name items or link labels by id, which after an import may name others:
+ * which plans and ideas are collapsed, and on the map the kinds of link hidden or restyled by label,
+ * dragged positions and each item's own layout. The map's other choices stay.
+ */
+suspend fun forgetIds(context: Context) {
     context.settingsStore.edit {
         it.remove(stringSetPreferencesKey(CollapsedPlansRepository.KEY))
         it.remove(stringSetPreferencesKey(CollapsedPlansRepository.IDEAS_KEY))
+        MapPrefsRepository.forgetIds(it)
     }
 }

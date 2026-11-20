@@ -46,6 +46,11 @@ data class MapFilter(
 
         fun label(id: Long): String = "label:$id"
 
+        fun isLabel(kind: String): Boolean = kind.startsWith("label:")
+
+        /** [kinds] without the labels', which name labels by id. */
+        fun withoutLabels(kinds: Set<String>): Set<String> = kinds.filterNot(::isLabel).toSet()
+
         /** "under=SOLID" entries, as stored in the settings. */
         fun encodeStyles(styles: Map<String, LineStyle>): Set<String> = styles.map { (k, v) -> "$k=${v.name}" }.toSet()
 

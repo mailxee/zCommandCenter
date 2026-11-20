@@ -181,9 +181,12 @@ private class Placed(
 ) {
     val at: Map<ItemRef, GraphLayout.Point> get() = layout.at
     private val box = GraphLayout.bounds(at) { sizes.getValue(it) }
-    val originX = box[0] - Margin.value
+
+    /** Room at the sides for links that go round a branch (see [shapeOf]) and their labels. */
+    private val sideRoom = if (state.edges.any { crossesTree(it, this) }) CrossRoom else 0f
+    val originX = box[0] - Margin.value - sideRoom
     val originY = box[1] - Margin.value
-    val width = box[2] - box[0] + Margin.value * 2
+    val width = box[2] - box[0] + Margin.value * 2 + sideRoom * 2
     val height = box[3] - box[1] + Margin.value * 2
 
     /** Where links between branches bow away from: the item in the middle, or the picture's centre. */
@@ -308,6 +311,14 @@ private fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px:
     val b = edge.link.b
     fun w(r: ItemRef) = p.sizes.getValue(r).w * px
     fun h(r: ItemRef) = p.sizes.getValue(r).h * px
+    /** Where a line from [r]'s centre towards [toward] leaves its box. */
+    fun rim(r: ItemRef, toward: Offset): Offset {
+        val c = centreOf(r)
+        val d = toward - c
+        if (d.x == 0f && d.y == 0f) return c
+        val t = min(if (d.x == 0f) Float.MAX_VALUE else w(r) / 2 / abs(d.x), if (d.y == 0f) Float.MAX_VALUE else h(r) / 2 / abs(d.y))
+        return c + d * min(t, 1f)
+    }
     fun bow(x: ItemRef, y: ItemRef): EdgeShape {
         val pa = centreOf(x)
         val pb = centreOf(y)
@@ -316,7 +327,19 @@ private fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px:
         var n = Offset(-(pb.y - pa.y) / dist, (pb.x - pa.x) / dist)
         val centre = Offset((p.centre.x - p.originX) * px, (p.centre.y - p.originY) * px)
         if (n.x * (mid.x - centre.x) + n.y * (mid.y - centre.y) < 0) n = -n
-        return EdgeShape.quad(pa, mid + n * (min(100f * px, dist * 0.3f) + 24f * px), pb)
+        val dx = pb.x - pa.x
+        val dy = pb.y - pa.y
+        if (abs(dx) < abs(dy)) {
+            // One above the other: out of the outer sides (away from the middle) and round, clear of the boxes between.
+            val side = if (mid.x >= centre.x) 1f else -1f
+            val xa = pa.x + side * w(x) / 2
+            val xb = pb.x + side * w(y) / 2
+            val out = (if (side > 0) max(xa, xb) else min(xa, xb)) + side * (min(60f * px, abs(dy) * 0.25f) + 24f * px)
+            return EdgeShape.cubic(Offset(xa, pa.y), Offset(out, pa.y), Offset(out, pb.y), Offset(xb, pb.y))
+        }
+        val control = mid + n * (min(100f * px, dist * 0.3f) + 24f * px)
+        // From box edge to box edge: the line's ends would otherwise be hidden under the boxes.
+        return EdgeShape.quad(rim(x, control), control, rim(y, control))
     }
     fun down(x: ItemRef, y: ItemRef): EdgeShape {
         val (up, low) = if (centreOf(x).y <= centreOf(y).y) x to y else y to x
@@ -382,6 +405,17 @@ private fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px:
     }
     val group = p.layout.routeGroup[a]
     return if (group != null && group == p.layout.routeGroup[b]) route(a, b) else bow(a, b)
+}
+
+/**
+ * Whether [edge] is a link across the tree rather than one of its lines (or a link a By route
+ * branch draws along its rows): such a line runs past other boxes, so it is drawn over them.
+ */
+private fun crossesTree(edge: MapEdge, p: Placed): Boolean {
+    val (a, b) = edge.link.a to edge.link.b
+    if (p.state.tree.joins(a, b)) return false
+    val group = p.layout.routeGroup[a]
+    return group == null || group != p.layout.routeGroup[b]
 }
 
 /** The same line with its points running the other way (the path is unchanged). */
@@ -550,6 +584,7 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
     val hover = drag?.let { (ref, moved) -> p?.let { boxUnder(it, ref, moved) } }
     val edges = p?.state?.edges?.filter { it.link.a in p.at && it.link.b in p.at }.orEmpty()
     val shapes = remember(p, drag, pending) { if (p == null) emptyMap() else edges.associate { it.link.id to shapeOf(it, p, ::centreOf, px) } }
+    val overBoxes = remember(p) { if (p == null) emptySet() else edges.filter { crossesTree(it, p) }.map { it.link.id }.toSet() }
     Box(
         Modifier
             .fillMaxSize()
@@ -586,7 +621,7 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                     .size(p.width.dp, p.height.dp),
             ) {
                 Canvas(Modifier.fillMaxSize()) {
-                    edges.forEach { edge ->
+                    edges.filter { it.link.id !in overBoxes }.forEach { edge ->
                         val shape = shapes.getValue(edge.link.id)
                         val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
                         val selected = selection == MapSelection.Edge(edge.link.id)
@@ -628,28 +663,6 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                         }
                     }
                 }
-                // Labels sit on the middle of their lines.
-                edges.filter { it.label != null }.forEach { edge ->
-                    val mid = shapes.getValue(edge.link.id).pointAt(0.5f)
-                    val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
-                    Box(
-                        Modifier
-                            .offset((mid.x / px).dp - LabelWidth / 2, (mid.y / px).dp - 8.dp)
-                            .width(LabelWidth)
-                            .alpha(if (dim) 0.2f else 1f),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            edge.label.orEmpty(),
-                            fontSize = 10.sp,
-                            fontStyle = FontStyle.Italic,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (edge.style == EdgeStyle.CONTRADICTS) ContradictColor else colors.onSurfaceVariant,
-                            modifier = Modifier.background(colors.surfaceContainerLowest, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
-                        )
-                    }
-                }
                 p.state.nodes.forEach { node ->
                     val size = p.sizes[node.ref] ?: return@forEach
                     val c = centreOf(node.ref)
@@ -689,6 +702,72 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
                         onFold = { actions.toggleFold(node.ref) },
                     )
                 }
+                // Links that aren't lines of the tree cross it, so they go over the boxes, or the boxes would hide them.
+                Canvas(Modifier.fillMaxSize()) {
+                    edges.filter { it.link.id in overBoxes }.forEach { edge ->
+                        val shape = shapes.getValue(edge.link.id)
+                        val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
+                        val selected = selection == MapSelection.Edge(edge.link.id)
+                        val color = when (edge.style) {
+                            EdgeStyle.ROUTE, EdgeStyle.SHARED, EdgeStyle.UNDER -> outline
+                            EdgeStyle.OFF_ROUTE -> OffRouteColor
+                            EdgeStyle.SUGGEST_REMOVE -> RemoveColor
+                            EdgeStyle.CONTRADICTS -> ContradictColor
+                        }.copy(alpha = if (dim) 0.15f else 1f)
+                        val width = when (edge.style) {
+                            EdgeStyle.ROUTE, EdgeStyle.SHARED -> 1.5.dp.toPx()
+                            EdgeStyle.CONTRADICTS -> 2.dp.toPx()
+                            EdgeStyle.UNDER -> 3.dp.toPx()
+                            else -> 2.5.dp.toPx()
+                        }
+                        // A line Tidy links suggests removing is always dashed; otherwise its kind's style decides.
+                        val lineStyle = if (edge.style == EdgeStyle.SUGGEST_REMOVE) LineStyle.DASHED else edge.lineStyle
+                        if (selected) drawPath(shape.path, color.copy(alpha = 0.2f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
+                        drawPath(
+                            shape.path, color,
+                            style = Stroke(width, cap = if (lineStyle == LineStyle.DOTTED) StrokeCap.Round else StrokeCap.Butt, pathEffect = dashEffect(lineStyle, 1.dp.toPx())),
+                        )
+                        // A label that reads one way gets an arrow from its subject, past the middle of the line.
+                        if (edge.directed) {
+                            val forward = edge.subject == edge.link.a
+                            val t = if (forward) 0.68f else 0.32f
+                            val at = shape.pointAt(t)
+                            val ahead = shape.pointAt(if (forward) t + 0.02f else t - 0.02f)
+                            val dir = (ahead - at).let { d -> val len = d.getDistance(); if (len == 0f) d else d / len }
+                            val size = 6.dp.toPx()
+                            val side = Offset(-dir.y, dir.x)
+                            val arrow = Path().apply {
+                                moveTo(at.x + dir.x * size, at.y + dir.y * size)
+                                lineTo(at.x - dir.x * size + side.x * size * 0.7f, at.y - dir.y * size + side.y * size * 0.7f)
+                                lineTo(at.x - dir.x * size - side.x * size * 0.7f, at.y - dir.y * size - side.y * size * 0.7f)
+                                close()
+                            }
+                            drawPath(arrow, color)
+                        }
+                    }
+                }
+                // Labels sit on the middle of their lines, over everything, so a box never covers one.
+                edges.filter { it.label != null }.forEach { edge ->
+                    val mid = shapes.getValue(edge.link.id).pointAt(0.5f)
+                    val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
+                    Box(
+                        Modifier
+                            .offset((mid.x / px).dp - LabelWidth / 2, (mid.y / px).dp - 8.dp)
+                            .width(LabelWidth)
+                            .alpha(if (dim) 0.2f else 1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            edge.label.orEmpty(),
+                            fontSize = 10.sp,
+                            fontStyle = FontStyle.Italic,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (edge.style == EdgeStyle.CONTRADICTS) ContradictColor else colors.onSurfaceVariant,
+                            modifier = Modifier.background(colors.surfaceContainerLowest, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
+                        )
+                    }
+                }
             }
         }
         // How much the boxes show at this zoom, and the zoom buttons.
@@ -714,6 +793,9 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
 }
 
 private val LabelWidth = 96.dp
+
+/** How far a link round a branch can go out from the boxes, plus half a label, in dp. */
+private const val CrossRoom = 84f + 48f
 
 @Composable
 private fun MapButton(label: String, description: String?, onClick: () -> Unit) {

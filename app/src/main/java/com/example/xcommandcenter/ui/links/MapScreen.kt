@@ -167,6 +167,17 @@ fun MapScreen(
                         )
                     }
                     FilterChip(selected = root == null, onClick = viewModel::showEverything, label = { Text("Everything") })
+                    // What the Show panel leaves out here (it applies to every map, so it's easy to forget).
+                    val hiddenHere = s?.let { st ->
+                        st.linkKinds.filter { !it.shown }.map { it.name } + st.typesPresent.filter { !st.filter.shows(it) }.map { it.tabLabel }
+                    }.orEmpty()
+                    if (hiddenHere.isNotEmpty()) {
+                        androidx.compose.material3.AssistChip(
+                            onClick = { showing = true },
+                            label = { Text("Hidden: " + hiddenHere.joinToString(limit = 2, truncated = "+${hiddenHere.size - 2}"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_filter), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
+                        )
+                    }
                     if (s?.moved == true) {
                         androidx.compose.material3.AssistChip(onClick = viewModel::resetPositions, label = { Text("Reset positions") })
                     }
