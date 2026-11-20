@@ -70,6 +70,8 @@ class AutoBackupRepository(private val context: Context, private val backup: Bac
         }
         context.settingsStore.edit { it[folderKey] = folder.toString() }
         setEnabled(true)
+        // Back up straight away, so a folder chosen again after a failure is proven at once.
+        runCatching { runNow() }
     }
 
     suspend fun setEnabled(on: Boolean) {
@@ -101,6 +103,16 @@ class AutoBackupRepository(private val context: Context, private val backup: Bac
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<AutoBackupWorker>().build())
     }
 
+    /**
+     * Whether Android still lets this app write to [folder]. Access can be withdrawn: when the app is
+     * uninstalled and installed again, or by the folder's app (Google Drive does, at times).
+     */
+    fun hasAccess(folder: String?): Boolean {
+        if (folder == null) return false
+        val uri = Uri.parse(folder)
+        return context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
+    }
+
     /** The folder's name, as the file picker shows it; null when it can't be read (moved or access lost). */
     suspend fun folderName(folder: String): String? = withContext(Dispatchers.IO) {
         runCatching {
@@ -120,6 +132,7 @@ class AutoBackupRepository(private val context: Context, private val backup: Bac
         val s = settings.first()
         val result = runCatching {
             val folder = s.folder ?: error("No folder chosen")
+            if (!hasAccess(folder)) error(ACCESS_LOST)
             val tree = Uri.parse(folder)
             val resolver = context.contentResolver
             val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
@@ -144,7 +157,9 @@ class AutoBackupRepository(private val context: Context, private val backup: Bac
         context.settingsStore.edit { p ->
             p[lastRunKey] = System.currentTimeMillis()
             val error = result.exceptionOrNull()
-            if (error == null) p.remove(lastErrorKey) else p[lastErrorKey] = error.message ?: error.javaClass.simpleName
+            // The folder's app refusing (a SecurityException) means access went too; say so plainly.
+            val message = if (error is SecurityException) ACCESS_LOST else error?.message ?: error?.javaClass?.simpleName
+            if (message == null) p.remove(lastErrorKey) else p[lastErrorKey] = message
         }
         result.isSuccess
     }
@@ -152,6 +167,8 @@ class AutoBackupRepository(private val context: Context, private val backup: Bac
     companion object {
         private const val DAILY = "daily-backup"
         private const val NOW = "backup-now"
+        const val ACCESS_LOST = "Access to the backup folder was withdrawn (this happens when the app is reinstalled, " +
+            "and Google Drive sometimes does it). Tap Change folder and choose it again."
         const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }
 }

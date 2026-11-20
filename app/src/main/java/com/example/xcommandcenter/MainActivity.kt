@@ -31,6 +31,9 @@ class MainActivity : ComponentActivity() {
     /** Set when launched from a reminder notification; the nav host opens that task or habit. */
     private var openItem by mutableStateOf<ItemRef?>(null)
 
+    /** Set when launched from a backup notification; the nav host opens Settings. */
+    private var openSettings by mutableStateOf(false)
+
     /**
      * Token of the last open-task intent acted on. A notification tap can recreate the activity
      * from saved state (after process death), so "first launch" is not enough to tell a new
@@ -53,7 +56,10 @@ class MainActivity : ComponentActivity() {
             AppTheme {
                 CompositionLocalProvider(LocalItemStyles provides styles, LocalTabOrder provides tabOrder) {
                     RequestNotificationPermission()
-                    AppNavHost(openItem = openItem, onItemOpened = { openItem = null })
+                    AppNavHost(
+                        openItem = openItem, onItemOpened = { openItem = null },
+                        openSettings = openSettings, onSettingsOpened = { openSettings = false },
+                    )
                 }
             }
         }
@@ -73,7 +79,13 @@ class MainActivity : ComponentActivity() {
         val type = ItemType.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_OPEN_TYPE) }
         val id = intent.getLongExtra(EXTRA_OPEN_ID, 0L)
         val token = intent.getLongExtra(EXTRA_TOKEN, 0L)
-        if (type == null || id == 0L || token == handledToken) return
+        if (token == handledToken) return
+        if (intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false)) {
+            handledToken = token
+            openSettings = true
+            return
+        }
+        if (type == null || id == 0L) return
         handledToken = token
         openItem = ItemRef(type, id)
     }
@@ -82,6 +94,8 @@ class MainActivity : ComponentActivity() {
         /** The [ItemType] name and id of the item a notification opens. */
         const val EXTRA_OPEN_TYPE = "openType"
         const val EXTRA_OPEN_ID = "openId"
+        /** True to open Settings, as a failed backup's notification does. */
+        const val EXTRA_OPEN_SETTINGS = "openSettings"
         /** Unique per notification, so each tap is handled exactly once. */
         const val EXTRA_TOKEN = "openTaskToken"
         private const val KEY_HANDLED_TOKEN = "handledOpenTaskToken"

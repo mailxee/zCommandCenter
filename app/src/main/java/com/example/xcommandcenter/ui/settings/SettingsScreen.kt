@@ -594,8 +594,8 @@ private fun DailyBackupSettings(viewModel: SettingsViewModel) {
     SectionTitle("Daily backup")
     Text(
         "Once a day, the same workbook as Export is saved to a folder you choose: on the phone, or in a cloud app that offers folders " +
-            "(such as OneDrive or Nextcloud). Each day's file is named by its date, and the oldest are deleted beyond the number to keep. " +
-            "Google Drive's app doesn't offer folders to other apps.",
+            "(such as Google Drive, OneDrive or Nextcloud). Each day's file is named by its date, and the oldest are deleted beyond the number to keep. " +
+            "If a backup fails (Google Drive sometimes withdraws access), a notification tells you.",
         style = MaterialTheme.typography.bodyMedium,
     )
     Card(Modifier.fillMaxWidth()) {

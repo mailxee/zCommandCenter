@@ -29,11 +29,14 @@ import com.example.xcommandcenter.ui.task.TaskDetailScreen
 
 /**
  * @param openItem an item to open, e.g. from a tapped reminder; [onItemOpened] consumes it.
+ * @param openSettings true to open Settings, e.g. from a failed backup's notification; [onSettingsOpened] consumes it.
  */
 @Composable
 fun AppNavHost(
     openItem: ItemRef?,
     onItemOpened: () -> Unit,
+    openSettings: Boolean = false,
+    onSettingsOpened: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
 ) {
     val open: (ItemRef) -> Unit = { navController.navigate(Routes.item(it)) }
@@ -43,6 +46,13 @@ fun AppNavHost(
         if (openItem != null) {
             navController.navigate(Routes.item(openItem)) { launchSingleTop = true }
             onItemOpened()
+        }
+    }
+
+    LaunchedEffect(openSettings) {
+        if (openSettings) {
+            navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+            onSettingsOpened()
         }
     }
 

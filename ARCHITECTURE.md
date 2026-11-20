@@ -1138,14 +1138,20 @@ schedule is the one in use today.
 ### 2.64 Daily backup
 
 Settings › Daily backup saves the Export workbook once a day to a folder the user picks with
-Android's folder picker: on the phone, or in a cloud app that offers folders (OneDrive, Nextcloud,
-and so on; Google Drive's app offers none to other apps, so it can't be used this way).
+Android's folder picker: on the phone, or in a cloud app that offers folders (Google Drive, OneDrive,
+Nextcloud and so on).
 
 - `AutoBackupRepository` keeps the settings in DataStore (on/off, the folder's tree URI with a
   persisted read and write grant, how many to keep: 3, 7, 14 or 30, and how the last backup went).
 - WorkManager (`AutoBackupWorker`, a new dependency, `androidx.work`) runs it once a day when the
   battery isn't low, also with the app closed; it is registered at start while backups are on.
-  "Back up now" runs it once at once. A failure is retried twice and shown in Settings.
+  "Back up now" runs it once at once, as does choosing a folder. A failure is retried twice and shown in Settings.
+- **Lost access.** Android drops the folder grant when the app is reinstalled, and Google Drive's
+  provider withdraws it at times; Drive then refuses with a SecurityException ("requires that you
+  obtain access using ACTION_OPEN_DOCUMENT"). `hasAccess` checks the persisted grant first, and the
+  failure is recorded as `ACCESS_LOST` in plain words. That isn't retried. When the worker gives up,
+  a "Backup problems" notification says why and opens Settings (`MainActivity.EXTRA_OPEN_SETTINGS`);
+  a later backup that works clears it.
 - Each day's file is "Manage Everything backup YYYY-MM-DD.xlsx", replacing that day's if it ran
   before; then the oldest backups beyond the number to keep are deleted (`domain/BackupNames`).
   Other files in the folder are never touched.

@@ -20,6 +20,8 @@ import com.example.xcommandcenter.domain.ItemType
 object Notifications {
     private const val CHANNEL_REMINDERS = "task_reminders"
     private const val CHANNEL_HABITS = "habit_reminders"
+    private const val CHANNEL_BACKUP = "backup"
+    private const val BACKUP_ID = 1
 
     /**
      * Notifications are tagged with the item's type and keyed by its id, so items of different
@@ -37,6 +39,10 @@ object Notifications {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_HABITS, "Habit reminders", NotificationManager.IMPORTANCE_HIGH)
                 .apply { description = "Daily reminders to mark your habits" },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_BACKUP, "Backup problems", NotificationManager.IMPORTANCE_DEFAULT)
+                .apply { description = "When the daily backup couldn't be saved" },
         )
     }
 
@@ -107,6 +113,37 @@ object Notifications {
             .putExtra(ReminderReceiver.EXTRA_ITEM_ID, ref.id),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+
+    /** The daily backup failed; tapping opens Settings, where the folder can be chosen again. */
+    fun showBackupFailed(context: Context, reason: String) {
+        if (!hasPermission(context)) return
+        val open = PendingIntent.getActivity(
+            context, BACKUP_ID,
+            Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_SETTINGS, true)
+                .putExtra(MainActivity.EXTRA_TOKEN, System.currentTimeMillis())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_BACKUP)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Daily backup failed")
+            .setContentText(reason)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(reason))
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(CHANNEL_BACKUP, BACKUP_ID, notification)
+        } catch (_: SecurityException) {
+            // Permission revoked between the check and the call.
+        }
+    }
+
+    fun cancelBackupFailed(context: Context) {
+        NotificationManagerCompat.from(context).cancel(CHANNEL_BACKUP, BACKUP_ID)
+    }
 
     /** Opens [ref]'s page when the notification is tapped. */
     private fun openItem(context: Context, ref: ItemRef): PendingIntent = PendingIntent.getActivity(

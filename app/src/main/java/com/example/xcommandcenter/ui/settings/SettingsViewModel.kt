@@ -89,7 +89,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 autoBackup.setFolder(folder)
-                message = "Daily backups go to that folder now."
+                message = "Daily backups go to that folder now; backing up once now…"
             } catch (e: SecurityException) {
                 message = "That folder can't be kept for backups. Try another."
             }
