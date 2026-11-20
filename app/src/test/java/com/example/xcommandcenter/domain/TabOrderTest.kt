@@ -12,7 +12,7 @@ class TabOrderTest {
     @Test
     fun `default order starts with Schedule`() {
         assertEquals(
-            listOf(ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.IDEA, ItemType.NOTE, ItemType.BOOK,
+            listOf(ItemType.BLOCK, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.IDEA, ItemType.NOTE, ItemType.BOOK,
                 ItemType.QUOTE, ItemType.PERSON),
             TabOrder.default,
         )
@@ -26,11 +26,11 @@ class TabOrderTest {
 
     @Test
     fun `unknown names are dropped and missing tabs appended`() {
-        val parsed = TabOrder.parse("QUOTE,BOGUS,TASK,CHAPTER")
+        val parsed = TabOrder.parse("QUOTE,BOGUS,GOAL,TASK,CHAPTER")
         assertEquals(ItemType.QUOTE, parsed[0])
         assertEquals(ItemType.TASK, parsed[1])
         assertEquals(ItemType.tabs.toSet(), parsed.toSet())
-        assertEquals(10, parsed.size)
+        assertEquals(9, parsed.size)
     }
 
     @Test
@@ -43,14 +43,15 @@ class TabOrderTest {
     @Test
     fun `move shifts one tab`() {
         val moved = TabOrder.move(TabOrder.default, from = 0, to = 2)
-        assertEquals(listOf(ItemType.GOAL, ItemType.PLAN, ItemType.BLOCK), moved.take(3))
+        assertEquals(listOf(ItemType.PLAN, ItemType.TASK, ItemType.BLOCK), moved.take(3))
     }
 
     @Test
     fun `hidden tabs round trip and the last shown tab stays`() {
-        assertEquals(setOf(ItemType.GOAL, ItemType.PLAN), TabOrder.parseHidden("GOAL,PLAN,NOPE"))
-        assertEquals(setOf(ItemType.GOAL), TabOrder.withHidden(emptySet(), ItemType.GOAL, hide = true))
-        assertEquals(emptySet<ItemType>(), TabOrder.withHidden(setOf(ItemType.GOAL), ItemType.GOAL, hide = false))
+        // A "GOAL" stored before goals went is dropped like any unknown name.
+        assertEquals(setOf(ItemType.QUOTE, ItemType.PLAN), TabOrder.parseHidden("QUOTE,PLAN,GOAL"))
+        assertEquals(setOf(ItemType.PLAN), TabOrder.withHidden(emptySet(), ItemType.PLAN, hide = true))
+        assertEquals(emptySet<ItemType>(), TabOrder.withHidden(setOf(ItemType.PLAN), ItemType.PLAN, hide = false))
         val allButTasks = ItemType.tabs.toSet() - ItemType.TASK
         assertEquals(allButTasks, TabOrder.withHidden(allButTasks, ItemType.TASK, hide = true))
     }

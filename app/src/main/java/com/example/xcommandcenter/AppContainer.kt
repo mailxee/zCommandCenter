@@ -1,7 +1,6 @@
 package com.example.xcommandcenter
 
 import com.example.xcommandcenter.share.HandoffGate
-import com.example.xcommandcenter.data.repository.SimplifyRepository
 import com.example.xcommandcenter.data.repository.PersonRepository
 import com.example.xcommandcenter.data.repository.IdeaRepository
 import com.example.xcommandcenter.data.prefs.ModeRepository
@@ -21,7 +20,6 @@ import com.example.xcommandcenter.data.prefs.TaskSortRepository
 import com.example.xcommandcenter.data.prefs.ShareAccessRepository
 import com.example.xcommandcenter.data.repository.BlockRepository
 import com.example.xcommandcenter.data.repository.BookRepository
-import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
@@ -54,7 +52,7 @@ class AppContainer(context: Context) {
     val mapPrefsRepository = MapPrefsRepository(context)
     val linkRepository = LinkRepository(
         database.linkDao(), routePrefsRepository.route, modeRepository.mode, modeRepository.tabModes,
-        routePrefsRepository.thinkRoute, routePrefsRepository.checkWhy,
+        routePrefsRepository.thinkRoute,
     )
     val tagRepository = TagRepository(database.tagDao())
     val reminderPrefsRepository = ReminderPrefsRepository(context)
@@ -68,7 +66,6 @@ class AppContainer(context: Context) {
     private val scheduleChoiceRepository = ScheduleChoiceRepository(context)
     val scheduleRepository: ScheduleRepository = ScheduleRepository(database.scheduleDao(), scheduleChoiceRepository) { reminderRepository }
     val taskRepository = TaskRepository(database.taskDao(), reminderRepository)
-    val goalRepository = GoalRepository(database.goalDao(), reminderRepository)
     val habitRepository = HabitRepository(database.habitDao(), reminderRepository)
     val planRepository = PlanRepository(database.planDao(), reminderRepository)
     val noteRepository = NoteRepository(database.noteDao(), reminderRepository)
@@ -79,7 +76,7 @@ class AppContainer(context: Context) {
     val ideaRepository = IdeaRepository(database.ideaDao(), noteRepository, reminderRepository)
     val glossaryRepository = GlossaryRepository(database.glossaryDao())
     val itemCardSource = ItemCardSource(
-        taskRepository, goalRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
+        taskRepository, habitRepository, planRepository, noteRepository, bookRepository, quoteRepository,
         blockRepository, personRepository, ideaRepository, glossaryRepository, scheduleRepository, linkRepository, tagRepository, reminderRepository,
     )
     val backupRepository = BackupRepository(
@@ -87,7 +84,6 @@ class AppContainer(context: Context) {
     )
     val autoBackupRepository = AutoBackupRepository(context, backupRepository)
     val shareAccessRepository = ShareAccessRepository(context)
-    val simplifyRepository = SimplifyRepository(database.simplifyDao(), reminderRepository, tabOrderRepository)
     val handoffGate = HandoffGate(context.packageManager, context.packageName, shareAccessRepository)
     /** Read by `ShareProvider` for apps the user allowed. */
     val shareDao = database.shareDao()

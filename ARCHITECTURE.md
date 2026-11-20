@@ -1460,8 +1460,32 @@ turns each into a top-level Vision (`SimplifyDao.goalsToVisions`, one transactio
 strategy as the explanation, priority and creation time kept; its links re-made between the new
 ends (normalized again, the label still read from the same item, `SimplifyDao.remap`); its tags
 and reminders moved; the goals deleted. `SimplifyRepository` then sets the moved reminders'
-alarms again and hides the Goals tab. No schema change. Once used, Simplify and the Goals tab are
-to be removed from the code.
+alarms again and hides the Goals tab. No schema change. Removed once used (§2.77).
+
+### 2.77 Goals removed
+
+After Simplify (§2.76) the Goals tab, `ItemType.GOAL` and the `goals` table are gone; earlier
+sections that mention goals describe the app as it was. Visions in Ideas take their place, and
+tasks, plans and habits link to visions, principles and ideas.
+
+- **Database version 16** (`data/db/GoalsToVisions.kt`, a manual `Migration(15, 16)` in
+  `AppDatabase.MIGRATIONS`): any goal still there becomes a top-level Vision as Simplify did (title,
+  strategy as the explanation, priority, creation time; after the existing ideas), its links re-made
+  between the new ends (normalized, the label still read from the same item), its tags and reminders
+  moved; kept findings naming goals (and "why:" ones) dropped; the `goals` table dropped and the
+  `item_index` view made again from `ITEM_INDEX_QUERY` (trimmed, as Room compares it). Room stores
+  item types by name and rejects unknown ones, so nothing naming "GOAL" may remain.
+- **Older workbooks** (`data/backup/LegacyGoals.kt`): before `BackupFormat.fromSheets` reads them,
+  a Goals sheet's rows are added to the Ideas sheet as visions with new ids, and rows on the Links,
+  Tags and Reminders sheets naming a goal point at its vision (a goal not on the sheet drops the row,
+  a missing item as before); the Settings sheet's Goals row goes. Exports have no Goals sheet.
+- **Do mode** now runs through plans, tasks and habits (`AppMode.through`); the default route is
+  Plans, then Tasks and Habits (`LinkRoute`; a stored "GOAL" layer is ignored). Tidy links'
+  "Goal without a why" check and its setting are gone.
+- **Sharing** (§2.72): the `goals` path is gone, so `ShareProvider.CONTRACT_VERSION` is 2; item_tags
+  no longer lists goals.
+- **Sample data**: the four sample goals are visions (ideas 11 to 14).
+- Simplify (its DAO, repository and Settings section) is removed.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1532,7 +1556,6 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 |---|---|
 | `data/entity/TaskEntity.kt` | `tasks`: title, description, due date, reminder time, priority, completed, optional schedule, next-occurrence flag. |
 | `data/entity/TagEntity.kt` | `tags` (unique name ignoring case), `item_tags` (which item carries which tag) and the `ItemTag` projection. |
-| `data/entity/GoalEntity.kt` | `goals`: title, strategy. |
 | `data/entity/HabitEntity.kt` | `habits`: name, category, flat recurrence columns, start date, notes; maps to `Recurrence`. |
 | `data/entity/HabitMarkEntity.kt` | `habit_marks`: one explicit mark per habit per date (cascade on habit delete). |
 | `data/entity/ChecklistItemEntity.kt` | `checklist_items`: a task's checklist, and the `ChecklistCount` projection (§2.19). |
@@ -1551,7 +1574,6 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/dao/TaskDao.kt` | Task CRUD, completion (creates a repeating task's next occurrence with its links and tags), pending reminders, transactional delete with links and tags. |
 | `data/dao/BackupDao.kt` | Whole-database snapshot for export; `replaceAll` (import) and `deleteAll`, each one transaction. |
 | `data/dao/TagDao.kt` | Tags in use, all item tags, one item's tags, add (reusing a name) and remove (deleting unused tags). |
-| `data/dao/GoalDao.kt` | Goal CRUD, transactional delete with links and tags. |
 | `data/dao/HabitDao.kt` | Habit CRUD, marks (observe, toggle), transactional delete with links and tags. |
 | `data/dao/PlanDao.kt` | Plan CRUD; completion rule (complete, complete subtree, reopen with ancestors); delete moves children to the grandparent and removes links and tags. |
 | `data/dao/NoteDao.kt` | Note CRUD, transactional delete with links and tags. |
@@ -1582,7 +1604,6 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/repository/LinkRepository.kt` | Link/unlink with normalization, linked items, links grouped by owner, per-tab search (Books includes chapters). |
 | `data/repository/TaskRepository.kt` | Task save/complete/delete that keeps the alarms (including a new occurrence's) in sync; reschedule all. |
 | `data/repository/TagRepository.kt` | Tags in use, tags grouped by item, add (trimmed, `#` dropped) and remove. |
-| `data/repository/GoalRepository.kt` | Goal access (insert-or-update save). |
 | `data/repository/HabitRepository.kt` | Habits and marks as `Map`/`Set` of dates; toggle marks. |
 | `data/repository/PlanRepository.kt` | Plan access; rejects moving a plan under its own subtree. |
 | `data/repository/NoteRepository.kt` | Note access. |
@@ -1639,7 +1660,6 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/settings/SettingsViewModel.kt` | Reads/saves tab order; exact-alarm status; export, import and delete with a busy flag and result messages. |
 | `ui/settings/SettingsScreen.kt`, `ItemStyleDialog.kt` | Reorder tabs (drag and drop, reset); item styles per tab; notification and exact-alarm status with shortcuts; Data section (export, import, delete) with file pickers and confirmations. |
 | `ui/task/TaskDetailViewModel.kt`, `TaskDetailScreen.kt` | Task form: priority, due date, reminder, repeat schedule, completed; tags; links. |
-| `ui/goal/GoalDetailViewModel.kt`, `GoalDetailScreen.kt` | Goal form: title, strategy; tags; links. |
 | `ui/habit/HabitDetailViewModel.kt`, `HabitDetailScreen.kt` | Habit form with category and recurrence editors; streak, total and tappable recent occurrences; tags; links. |
 | `ui/plan/PlanDetailViewModel.kt`, `PlanDetailScreen.kt` | Plan form, completed checkbox, parent picker (no cycles), child list, add child; tags; links. |
 | `ui/plan/CompletePlanDialog.kt` | "Complete all" dialog shown when a plan still has open subplans. |
@@ -1659,7 +1679,6 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `data/entity/KeptFindingEntity.kt` | Tidy links findings kept as they are (§2.57). |
 | `ui/links/MapScreen.kt`, `MapViewModel.kt` | The map of links (§2.57), its item panel and Show panel (§2.66). |
 | `ui/links/LineControls.kt` | Line patterns and widths: the samples and choices shared by the Show panel and Settings (§2.66). |
-| `data/dao/SimplifyDao.kt`, `data/repository/SimplifyRepository.kt`, `ui/settings/SimplifySettings.kt` | Simplify: goals into Ideas as visions (§2.76). |
 | `ui/settings/MapLinesSettings.kt` | Settings, Map lines: each kind of link's pattern and width (§2.66). |
 | `ui/links/MapCanvas.kt` | The map's picture: boxes measured and placed, lines, zoom levels, Fit all, folding, dragging and dropping (§2.69, §2.70). |
 | `ui/links/MapStylePicker.kt` | Choosing the map's or a branch's layout (§2.70). |
@@ -1680,7 +1699,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/settings/GlossaryScreen.kt` | Settings › Glossary and its view model (§2.60). |
 | `domain/ReminderToday.kt` | Which items have a reminder today, for the Reminder chip (§2.63). |
 | `domain/BackupNames.kt`, `data/backup/AutoBackupRepository.kt`, `AutoBackupWorker.kt` | Daily backups to a chosen folder (§2.64). |
-| `domain/ThinkRoute.kt`, `domain/ThinkAnalysis.kt` | Think mode's route and checks; goals without a why (§2.62). |
+| `domain/ThinkRoute.kt`, `domain/ThinkAnalysis.kt` | Think mode's route and checks (§2.62). |
+| `data/db/GoalsToVisions.kt`, `data/backup/LegacyGoals.kt` | Goals become visions: the version 16 upgrade, and older workbooks on import (§2.77). |
 | `domain/AppMode.kt`, `data/prefs/ModeRepository.kt` | Do and Think: the mode, each tab's mode, what each mode's networks run through (§2.61). |
 
 ### Resources
@@ -1716,7 +1736,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `ui/links/MapCanvasTest.kt` | The map opens readable with full titles, Fit all and zoom change the detail, folding, dropping a box on another, every layout and a mixed one (§2.69, §2.70). |
 | `ui/links/MapStateTest.kt` | Putting an item under another (same tab, no loops), linked both ways, Do mode's plans under plans. |
 | `ui/home/PlanRowsTest.kt` | Plans tab rows: tasks under their plan, completed plans hidden, collapsing, a search keeping the plans above. |
-| `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions, goals' why) and the Think route. |
+| `domain/ThinkAnalysisTest.kt`, `domain/ThinkRouteTest.kt` | Think checks (acted on through children, sources, authors, contradictions) and the Think route. |
 | `domain/TabModesTest.kt` | Default tabs per mode, marking the other mode, stored form. |
 | `domain/GlossaryTest.kt` | Every term has a starting definition; rewritten ones win. |
 | `domain/IdeaOutlineTest.kt` | The Ideas outline (depths, collapsing, filtering keeps ancestors) and the kind chips. |

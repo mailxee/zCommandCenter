@@ -1,7 +1,7 @@
 package com.example.xcommandcenter.domain
 
 /**
- * The app's two views of the same items: [DO] manages goals, plans, tasks and habits; [THINK]
+ * The app's two views of the same items: [DO] manages plans, tasks and habits; [THINK]
  * ponders visions, beliefs and ideas with their sources. Each has its own tabs ([TabMode]) and its
  * own network: the types its links pass through ([through]); anything else ends a route there.
  */
@@ -13,7 +13,7 @@ enum class AppMode(val label: String) {
     /** The types this mode's networks run through; the rest are its end points. */
     val through: Set<ItemType>
         get() = when (this) {
-            DO -> setOf(ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT)
+            DO -> setOf(ItemType.PLAN, ItemType.TASK, ItemType.HABIT)
             THINK -> setOf(ItemType.IDEA)
         }
 
@@ -49,7 +49,7 @@ data class TabModes(val modes: Map<ItemType, TabMode> = emptyMap()) {
 
     companion object {
         val DEFAULT = mapOf(
-            ItemType.BLOCK to TabMode.DO, ItemType.GOAL to TabMode.DO, ItemType.PLAN to TabMode.DO, ItemType.TASK to TabMode.DO,
+            ItemType.BLOCK to TabMode.DO, ItemType.PLAN to TabMode.DO, ItemType.TASK to TabMode.DO,
             ItemType.HABIT to TabMode.DO, ItemType.NOTE to TabMode.BOTH, ItemType.PERSON to TabMode.BOTH,
             ItemType.IDEA to TabMode.THINK, ItemType.QUOTE to TabMode.THINK, ItemType.BOOK to TabMode.THINK,
         )

@@ -9,13 +9,11 @@ import com.example.xcommandcenter.domain.ItemType
  * picker query this view, so they need no per-type code, and Room re-emits their Flows whenever
  * an underlying table changes (renaming a book updates every list it is linked from).
  *
- * The type literals must match [ItemType] names.
+ * The type literals must match [ItemType] names. The query is a constant so the migration that
+ * makes the view again (version 16) uses the very same text, which Room checks.
  */
-@DatabaseView(
-    viewName = "item_index",
-    value = """
+const val ITEM_INDEX_QUERY = """
         SELECT 'TASK' AS type, id, title, NULL AS subtitle FROM tasks
-        UNION ALL SELECT 'GOAL', id, title, NULL FROM goals
         UNION ALL SELECT 'HABIT', id, name, NULL FROM habits
         UNION ALL SELECT 'PLAN', id, title, NULL FROM plans
         UNION ALL SELECT 'NOTE', id,
@@ -30,8 +28,10 @@ import com.example.xcommandcenter.domain.ItemType
             CASE kind WHEN 'VISION' THEN 'Vision' WHEN 'BELIEF' THEN 'Belief' WHEN 'PRINCIPLE' THEN 'Principle'
                 WHEN 'QUESTION' THEN 'Question' ELSE 'Idea' END
             FROM ideas
-    """,
-)
+    """
+
+/** See [ITEM_INDEX_QUERY]. */
+@DatabaseView(viewName = "item_index", value = ITEM_INDEX_QUERY)
 data class ItemIndexEntry(
     val type: ItemType,
     val id: Long,

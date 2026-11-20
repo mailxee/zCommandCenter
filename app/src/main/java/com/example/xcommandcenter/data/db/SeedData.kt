@@ -11,7 +11,6 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.domain.ItemType.BLOCK
 import com.example.xcommandcenter.domain.ItemType.BOOK
 import com.example.xcommandcenter.domain.ItemType.CHAPTER
-import com.example.xcommandcenter.domain.ItemType.GOAL
 import com.example.xcommandcenter.domain.ItemType.HABIT
 import com.example.xcommandcenter.domain.ItemType.NOTE
 import com.example.xcommandcenter.domain.ItemType.PLAN
@@ -31,8 +30,8 @@ import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 
 /**
- * First-launch content for someone whose goals are to live as a Stoic, to learn the piano and to
- * run a half marathon: about five items per tab (nine ideas in two trees), cross-linked so every tab shows links, and two
+ * First-launch content for someone whose visions are to live as a Stoic, to learn the piano and to
+ * run a half marathon: about five items per tab (fourteen ideas: two trees and four visions), cross-linked so every tab shows links, and two
  * schedules (Weekday and Weekend).
  *
  * Written as raw inserts because it runs inside Room's onCreate, before the DAOs can be used.
@@ -63,16 +62,6 @@ internal object SeedData {
             content.put("createdAt", created())
             db.insert(table, SQLiteDatabase.CONFLICT_ABORT, content)
         }
-
-        // Goals: the three this sample life is built around, plus one that supports them all.
-        row("goals", "id" to 1L, "title" to "Live as a Stoic", "priority" to Priority.CRITICAL,
-            "strategy" to "Morning reflection, evening review, and a page of the Stoics every day. Focus on what is in my control.")
-        row("goals", "id" to 2L, "title" to "Play the piano", "priority" to Priority.HIGH,
-            "strategy" to "30 minutes of practice every evening, a lesson every week, one new piece a month.")
-        row("goals", "id" to 3L, "title" to "Run a half marathon", "priority" to Priority.HIGH,
-            "strategy" to "12-week plan: three runs a week, a long run on Sundays, add no more than 10% distance per week.")
-        row("goals", "id" to 4L, "title" to "Sleep 7.5 hours a night", "priority" to Priority.MEDIUM,
-            "strategy" to "Lights out by 10:30. Training, practice and focus all depend on it.")
 
         // Plans: a training plan in phases (the first already done), a piano path, and a Stoic study plan.
         row("plans", "id" to 1L, "title" to "Half marathon training", "description" to "12 weeks from easy base runs to race day.",
@@ -234,6 +223,14 @@ internal object SeedData {
         idea(8, 1, IdeaKind.VISION, "Make music part of every day")
         idea(9, 0, IdeaKind.PRINCIPLE, "Practise a little, every day", 8, "Thirty minutes daily beats three hours on Sunday.")
         idea(10, 2, IdeaKind.IDEA, "Answer messages right away", body = "Being reachable shows I care.")
+        // Visions: the three this sample life is built around, plus one that supports them all (once goals).
+        idea(11, 3, IdeaKind.VISION, "Live as a Stoic", priority = Priority.CRITICAL,
+            body = "Morning reflection, evening review, and a page of the Stoics every day. Focus on what is in my control.")
+        idea(12, 4, IdeaKind.VISION, "Play the piano", priority = Priority.HIGH,
+            body = "30 minutes of practice every evening, a lesson every week, one new piece a month.")
+        idea(13, 5, IdeaKind.VISION, "Run a half marathon", priority = Priority.HIGH,
+            body = "12-week plan: three runs a week, a long run on Sundays, add no more than 10% distance per week.")
+        idea(14, 6, IdeaKind.VISION, "Sleep 7.5 hours a night", body = "Lights out by 10:30. Training, practice and focus all depend on it.")
 
         // Schedules: the first (created with the database) becomes "Weekday"; "Weekend" is added. Automatic switching stays off.
         db.execSQL("UPDATE schedules SET name = 'Weekday', days = ${Recurrence.maskFromDays(DayOfWeek.entries.take(5).toSet())} WHERE id = 1")
@@ -259,15 +256,15 @@ internal object SeedData {
 
         // Links. Chapter 1 is Meditations, Book One; chapter 6 is "On Saving Time".
         listOf(
-            HABIT to 1L to (GOAL to 1L),
-            HABIT to 2L to (GOAL to 1L),
-            HABIT to 3L to (GOAL to 2L),
-            HABIT to 4L to (GOAL to 3L),
-            HABIT to 5L to (GOAL to 1L),
-            PLAN to 1L to (GOAL to 3L),
-            PLAN to 5L to (GOAL to 2L),
-            PLAN to 8L to (GOAL to 1L),
-            TASK to 1L to (GOAL to 3L),
+            HABIT to 1L to (IDEA to 11L),
+            HABIT to 2L to (IDEA to 11L),
+            HABIT to 3L to (IDEA to 12L),
+            HABIT to 4L to (IDEA to 13L),
+            HABIT to 5L to (IDEA to 11L),
+            PLAN to 1L to (IDEA to 13L),
+            PLAN to 5L to (IDEA to 12L),
+            PLAN to 8L to (IDEA to 11L),
+            TASK to 1L to (IDEA to 13L),
             TASK to 2L to (PLAN to 3L),
             TASK to 3L to (PLAN to 5L),
             TASK to 4L to (PLAN to 7L),
@@ -278,17 +275,17 @@ internal object SeedData {
             HABIT to 4L to (NOTE to 2L),
             HABIT to 4L to (BOOK to 5L),
             PLAN to 4L to (NOTE to 4L),
-            GOAL to 1L to (NOTE to 1L),
+            IDEA to 11L to (NOTE to 1L),
             HABIT to 5L to (NOTE to 5L),
             PLAN to 8L to (BOOK to 1L),
             PLAN to 8L to (BOOK to 2L),
             HABIT to 1L to (CHAPTER to 1L),
             PLAN to 5L to (BOOK to 4L),
-            GOAL to 1L to (QUOTE to 1L),
+            IDEA to 11L to (QUOTE to 1L),
             HABIT to 5L to (QUOTE to 4L),
             HABIT to 1L to (QUOTE to 3L),
             PLAN to 1L to (QUOTE to 5L),
-            GOAL to 1L to (QUOTE to 2L),
+            IDEA to 11L to (QUOTE to 2L),
             QUOTE to 1L to (BOOK to 1L),
             QUOTE to 2L to (BOOK to 1L),
             QUOTE to 3L to (BOOK to 2L),
@@ -305,12 +302,12 @@ internal object SeedData {
             PERSON to 1L to (BOOK to 1L),
             PERSON to 1L to (QUOTE to 1L),
             PERSON to 1L to (QUOTE to 2L),
-            PERSON to 1L to (GOAL to 1L),
+            PERSON to 1L to (IDEA to 11L),
             PERSON to 2L to (BOOK to 2L),
             PERSON to 2L to (QUOTE to 3L),
             PERSON to 3L to (QUOTE to 4L),
             PERSON to 3L to (NOTE to 1L),
-            IDEA to 1L to (GOAL to 1L),
+            IDEA to 1L to (IDEA to 11L),
             IDEA to 2L to (NOTE to 1L),
             IDEA to 6L to (BLOCK to 3L),
         ).forEach { (from, to) -> link(db, from, to, created()) }
@@ -334,9 +331,9 @@ internal object SeedData {
             db.insert("tags", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply { put("id", id); put("name", name) })
         }
         listOf(
-            GOAL to 1L to 1L, HABIT to 1L to 1L, HABIT to 2L to 1L, HABIT to 5L to 1L, PLAN to 8L to 1L, NOTE to 1L to 1L,
-            GOAL to 2L to 2L, HABIT to 3L to 2L, PLAN to 5L to 2L, TASK to 3L to 2L, TASK to 4L to 2L, NOTE to 3L to 2L, BLOCK to 6L to 2L,
-            GOAL to 3L to 3L, HABIT to 4L to 3L, PLAN to 1L to 3L, TASK to 1L to 3L, TASK to 2L to 3L, NOTE to 2L to 3L, BLOCK to 10L to 3L,
+            IDEA to 11L to 1L, HABIT to 1L to 1L, HABIT to 2L to 1L, HABIT to 5L to 1L, PLAN to 8L to 1L, NOTE to 1L to 1L,
+            IDEA to 12L to 2L, HABIT to 3L to 2L, PLAN to 5L to 2L, TASK to 3L to 2L, TASK to 4L to 2L, NOTE to 3L to 2L, BLOCK to 6L to 2L,
+            IDEA to 13L to 3L, HABIT to 4L to 3L, PLAN to 1L to 3L, TASK to 1L to 3L, TASK to 2L to 3L, NOTE to 2L to 3L, BLOCK to 10L to 3L,
             BOOK to 1L to 4L, BOOK to 2L to 4L, BOOK to 3L to 4L, BLOCK to 8L to 4L,
             PERSON to 1L to 1L, PERSON to 2L to 1L, PERSON to 3L to 1L,
             IDEA to 1L to 1L, IDEA to 8L to 2L,

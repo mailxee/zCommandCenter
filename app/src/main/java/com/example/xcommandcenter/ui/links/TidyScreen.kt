@@ -192,7 +192,7 @@ fun findingColor(kind: LinkAnalysis.Kind): Color = when (kind) {
     LinkAnalysis.Kind.SHORTCUT, LinkAnalysis.Kind.EXTRA_ROUTE -> RemoveColor
     LinkAnalysis.Kind.OFF_ROUTE_LOOP, LinkAnalysis.Kind.SKIPS_LAYER -> OffRouteColor
     LinkAnalysis.Kind.SHARED_END_POINT -> MaterialTheme.colorScheme.outline
-    LinkAnalysis.Kind.GOAL_WITHOUT_WHY, LinkAnalysis.Kind.BELIEF_NOT_ACTED -> Color(0xFFC2185B)
+    LinkAnalysis.Kind.BELIEF_NOT_ACTED -> Color(0xFFC2185B)
     LinkAnalysis.Kind.AUTHOR_IS_PERSON -> Color(0xFF1565C0)
     LinkAnalysis.Kind.UNPLACED_QUOTE -> Color(0xFFB26A00)
     LinkAnalysis.Kind.UNGROUNDED_IDEA -> Color(0xFF00796B)

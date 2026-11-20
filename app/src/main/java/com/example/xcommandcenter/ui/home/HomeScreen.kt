@@ -221,7 +221,6 @@ fun HomeScreen(
                 ) { tab ->
                     when (tab) {
                         ItemType.TASK -> TasksTab(viewModel, open, showFilters)
-                        ItemType.GOAL -> GoalsTab(viewModel, open, showFilters)
                         ItemType.HABIT -> HabitsTab(viewModel, open, showFilters)
                         ItemType.PLAN -> PlansTab(viewModel, open, showFilters)
                         ItemType.NOTE -> NotesTab(viewModel, open, showFilters)

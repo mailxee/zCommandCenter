@@ -12,7 +12,6 @@ import com.example.xcommandcenter.domain.StyleColor
 /** Each tab's own color, unless the user gave the tab's items a color in Settings: then that one. */
 private fun defaultAccent(tab: ItemType): StyleColor = when (tab) {
     ItemType.BLOCK -> StyleColor.TEAL
-    ItemType.GOAL -> StyleColor.PURPLE
     ItemType.PLAN -> StyleColor.INDIGO
     ItemType.TASK -> StyleColor.BLUE
     ItemType.HABIT -> StyleColor.GREEN
@@ -37,7 +36,6 @@ fun onTabAccent(): Color = if (isDarkSurface()) Color(0xFF15171C) else Color.Whi
 @DrawableRes
 fun tabIcon(type: ItemType): Int = when (type.tab) {
     ItemType.BLOCK -> R.drawable.ic_tab_schedule
-    ItemType.GOAL -> R.drawable.ic_tab_goal
     ItemType.PLAN -> R.drawable.ic_tab_plan
     ItemType.TASK -> R.drawable.ic_tab_task
     ItemType.HABIT -> R.drawable.ic_tab_habit

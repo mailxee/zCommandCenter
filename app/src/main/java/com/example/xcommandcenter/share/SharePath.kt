@@ -9,7 +9,6 @@ enum class SharePath(val path: String, val read: (ShareDao) -> Cursor) {
     TASKS("tasks", ShareDao::tasks),
     HABITS("habits", ShareDao::habits),
     HABIT_MARKS("habit_marks", ShareDao::habitMarks),
-    GOALS("goals", ShareDao::goals),
     PLANS("plans", ShareDao::plans),
     SCHEDULES("schedules", ShareDao::schedules),
     BLOCKS("blocks", ShareDao::blocks),

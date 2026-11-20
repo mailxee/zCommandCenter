@@ -245,8 +245,8 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             tabModes.isOtherMode(ref.type, mode) -> graph.thinkRoute.depth + 1
             else -> graph.thinkRoute.depth
         }
-        // In Think mode only links that touch an idea are drawn: two end points (a goal and its habit)
-        // aren't part of the thinking, and following them would put the habit a ring out from the goal.
+        // In Think mode only links that touch an idea are drawn: two end points (a plan and its habit)
+        // aren't part of the thinking, and following them would put the habit a ring out from the plan.
         val inside = graph.links.filter { it.a in shown && it.b in shown && (!think || it.a.type == ItemType.IDEA || it.b.type == ItemType.IDEA) }
         // One line per pair of items (a book and its chapter may both be linked to a task).
         val findings = graph.analysis(mode).findings.filter { f -> f.items.any { it in shown } }

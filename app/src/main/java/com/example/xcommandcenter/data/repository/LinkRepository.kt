@@ -42,7 +42,7 @@ data class LinkGraph(
     val links: List<LinkAnalysis.Link>,
     val bookOfChapter: Map<Long, Long>,
     val route: LinkRoute,
-    /** Do mode's findings (goals without a why included, when that check is on). */
+    /** Do mode's findings. */
     val analysis: LinkAnalysis.Result,
     /** Every idea's parent and kind. */
     val ideas: List<ThinkAnalysis.Idea> = emptyList(),
@@ -106,7 +106,6 @@ class LinkRepository(
     /** Which mode shows each tab, to mark items from the other mode. */
     val tabModes: Flow<TabModes> = flowOf(TabModes()),
     private val thinkRoute: Flow<ThinkRoute> = flowOf(ThinkRoute()),
-    private val checkWhy: Flow<Boolean> = flowOf(true),
 ) {
 
     /**
@@ -235,10 +234,10 @@ class LinkRepository(
         combine(
             combine(dao.observeIndex(), dao.observeAll(), dao.observeIdeas(), ::Triple),
             combine(dao.observeChapterBooks(), dao.observePlanParents(), ::Pair),
-            combine(route, thinkRoute, checkWhy, ::Triple),
+            combine(route, thinkRoute, ::Pair),
             dao.observeKept(),
             labels,
-        ) { (index, stored, ideas), (chapterBooks, planParents), (route, thinkRoute, checkWhy), kept, labels ->
+        ) { (index, stored, ideas), (chapterBooks, planParents), (route, thinkRoute), kept, labels ->
             val bookOf = chapterBooks.associate { it.chapterId to it.id }
             fun node(ref: ItemRef) = if (ref.type == ItemType.CHAPTER) bookOf[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
             val labelById = labels.associateBy { it.id }
@@ -250,12 +249,7 @@ class LinkRepository(
                 )
             }
             val folded = links.map { it.copy(a = node(it.a), b = node(it.b)) }.filter { it.a != it.b }
-            val doAnalysis = LinkAnalysis.analyze(links, bookOf, route, kept.toSet()).let { result ->
-                if (!checkWhy) return@let result
-                val goals = index.filter { it.type == ItemType.GOAL }.map { it.id }.toSet()
-                val (open, keptWhy) = ThinkAnalysis.goalsWithoutWhy(folded, goals).partition { it.key !in kept }
-                LinkAnalysis.Result(result.findings + open, result.kept + keptWhy)
-            }
+            val doAnalysis = LinkAnalysis.analyze(links, bookOf, route, kept.toSet())
             LinkGraph(
                 ideas = ideas,
                 thinkRoute = thinkRoute,

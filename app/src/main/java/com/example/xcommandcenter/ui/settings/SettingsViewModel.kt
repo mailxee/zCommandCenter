@@ -14,7 +14,6 @@ import com.example.xcommandcenter.data.backup.AutoBackupSettings
 import com.example.xcommandcenter.data.prefs.ModeRepository
 import com.example.xcommandcenter.data.prefs.ShareAccessRepository
 import com.example.xcommandcenter.data.prefs.MapPrefsRepository
-import com.example.xcommandcenter.data.repository.SimplifyRepository
 import com.example.xcommandcenter.domain.LineStyle
 import com.example.xcommandcenter.domain.LineWidth
 import com.example.xcommandcenter.domain.MapFilter
@@ -55,7 +54,6 @@ class SettingsViewModel(
     private val autoBackup: AutoBackupRepository,
     private val shareAccess: ShareAccessRepository,
     private val mapPrefs: MapPrefsRepository,
-    private val simplify: SimplifyRepository,
 ) : ViewModel() {
 
     /** Tabs left off the main screen. */
@@ -66,17 +64,6 @@ class SettingsViewModel(
         viewModelScope.launch { tabOrderRepository.setHidden(tab, hide) }
     }
 
-    /** How many goals Simplify would move; the section shows only while there are some. */
-    val goalCount: StateFlow<Int> = simplify.goalCount
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
-
-    fun goalsToVisions() {
-        viewModelScope.launch {
-            val n = simplify.goalsToVisions()
-            message = if (n == 0) "There were no goals to move." else
-                "Moved ${if (n == 1) "1 goal" else "$n goals"} to Ideas as visions, with their links, tags and reminders. The Goals tab is now hidden."
-        }
-    }
 
     /** Apps that asked to read the shared data, newest first. */
     val sharePending: StateFlow<List<ShareApp>> = shareAccess.pending
@@ -206,13 +193,6 @@ class SettingsViewModel(
         viewModelScope.launch { routePrefs.setThinkRoute(ThinkRoute()) }
     }
 
-    /** Whether Tidy links points out goals no idea links to. */
-    val checkWhy: StateFlow<Boolean> = routePrefs.checkWhy
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
-    fun setCheckWhy(on: Boolean) {
-        viewModelScope.launch { routePrefs.setCheckWhy(on) }
-    }
 
     /** How many Tidy links findings ask for something, across every network, in both modes. */
     val tidySuggestions: StateFlow<Int> = links.observeGraph().map { g -> (g.analysis.findings + g.thinkAnalysis.findings).count { it.suggests } }

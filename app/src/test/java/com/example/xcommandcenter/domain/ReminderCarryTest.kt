@@ -42,7 +42,7 @@ class ReminderCarryTest {
         assertTrue(ReminderCarry.applies(ItemType.PLAN, false, listOf(at("2026-11-01T09:00")), now, 1))
         assertFalse(ReminderCarry.applies(ItemType.TASK, true, emptyList(), now, 1))
         assertFalse(ReminderCarry.applies(ItemType.TASK, false, listOf(at("2026-11-05T09:00")), now, 1))
-        assertFalse(ReminderCarry.applies(ItemType.GOAL, false, emptyList(), now, 1))
+        assertFalse(ReminderCarry.applies(ItemType.IDEA, false, emptyList(), now, 1))
         assertFalse(ReminderCarry.applies(ItemType.NOTE, false, emptyList(), now, 1))
         assertFalse(ReminderCarry.applies(ItemType.TASK, false, emptyList(), now, 0))
     }

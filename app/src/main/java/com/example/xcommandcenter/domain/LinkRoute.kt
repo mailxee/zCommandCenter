@@ -2,7 +2,7 @@ package com.example.xcommandcenter.domain
 
 /**
  * The suggested route of links: which layer each linking type sits in, top to bottom (by default
- * Goals, then Plans, then Tasks and Habits); end points (notes, quotes, books, people, blocks) are
+ * Plans, then Tasks and Habits); end points (notes, quotes, books, people, blocks) are
  * always the last layer. Links between neighbouring layers are on route; links within one layer
  * run sideways, and links that jump a layer skip it. Only an input to the map's rows and to
  * [LinkAnalysis]: linking is never blocked.
@@ -35,19 +35,19 @@ data class LinkRoute(val layers: Map<ItemType, Int> = DEFAULT) {
         }
     }
 
-    /** Stored as "GOAL:1,PLAN:2,TASK:3,HABIT:3". */
+    /** Stored as "PLAN:1,TASK:2,HABIT:2"; a "GOAL" left from before goals went is ignored. */
     fun encode(): String = types.joinToString(",") { "${it.name}:${layers[it] ?: DEFAULT.getValue(it)}" }
 
     fun with(type: ItemType, layer: Int): LinkRoute = LinkRoute(types.associateWith { layers[it] ?: DEFAULT.getValue(it) } + (type to layer))
 
     companion object {
         /** The types links pass through, in their default order; each can be put in any layer. */
-        val types = listOf(ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT)
+        val types = listOf(ItemType.PLAN, ItemType.TASK, ItemType.HABIT)
 
         /** The layers offered for each type. */
         val choices = 1..4
 
-        val DEFAULT = mapOf(ItemType.GOAL to 1, ItemType.PLAN to 2, ItemType.TASK to 3, ItemType.HABIT to 3)
+        val DEFAULT = mapOf(ItemType.PLAN to 1, ItemType.TASK to 2, ItemType.HABIT to 2)
 
         /** Reads [encode]'s form; anything unreadable keeps its default. */
         fun parse(text: String?): LinkRoute {

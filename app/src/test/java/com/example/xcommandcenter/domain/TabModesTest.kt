@@ -10,7 +10,7 @@ class TabModesTest {
     fun `the default modes split the tabs, with notes and people in both`() {
         val modes = TabModes()
         assertEquals(
-            listOf(ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.NOTE, ItemType.PERSON),
+            listOf(ItemType.BLOCK, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.NOTE, ItemType.PERSON),
             modes.tabs(TabOrder.default, AppMode.DO),
         )
         assertEquals(
@@ -26,7 +26,7 @@ class TabModesTest {
         assertTrue(modes.isOtherMode(ItemType.PLAN, AppMode.THINK))
         assertTrue(modes.isOtherMode(ItemType.IDEA, AppMode.DO))
         assertFalse(modes.isOtherMode(ItemType.NOTE, AppMode.THINK))
-        assertFalse(modes.isOtherMode(ItemType.GOAL, AppMode.DO))
+        assertFalse(modes.isOtherMode(ItemType.TASK, AppMode.DO))
     }
 
     @Test

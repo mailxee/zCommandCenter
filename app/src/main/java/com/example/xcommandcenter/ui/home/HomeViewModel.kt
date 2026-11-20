@@ -16,7 +16,6 @@ import com.example.xcommandcenter.AppContainer
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChecklistCount
-import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.NoteEntity
 import com.example.xcommandcenter.data.entity.PlanEntity
@@ -54,7 +53,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val plansRepo = container.planRepository
     private val collapsedPlans = container.collapsedPlansRepository
     private val tagsRepo = container.tagRepository
-    private val goalsRepo = container.goalRepository
     private val notesRepo = container.noteRepository
     private val booksRepo = container.bookRepository
     private val quotesRepo = container.quoteRepository
@@ -240,9 +238,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 .sortedWith(compareBy<TaskEntity> { it.completed }.then(order).thenBy { it.title.lowercase() })
         }.stateIn(emptyList())
 
-
-    val goals: StateFlow<List<GoalEntity>> =
-        goalsRepo.observeAll().sortedAndFiltered(ItemType.GOAL, { it.id }, { it.priority }) { listOf(it.title, it.strategy) }
 
     val habits: StateFlow<List<HabitSummary>> =
         combine(habitsRepo.observeAll(), habitsRepo.observeAllMarks(), today) { habits, marks, today ->
@@ -443,7 +438,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         combine(
             listOf(
                 count(ItemType.TASK, tasks, tasksRepo.observeAll().map { all -> all.map { it.id } }),
-                count(ItemType.GOAL, goals, goalsRepo.observeAll().map { all -> all.map { it.id } }),
                 count(ItemType.HABIT, habits, habitsRepo.observeAll().map { all -> all.map { it.id } }),
                 combine(planView, plansRepo.observeAll(), network) { (_, shown), all, network ->
                     ItemType.PLAN to TabCount(shown, all.count { network.has(ItemRef(ItemType.PLAN, it.id)) })
@@ -541,7 +535,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     val task = tasks.value.firstOrNull { it.id == id } ?: return@launch
                     tasks.value.filter { it.completed == task.completed }.map { it.id }
                 }
-                ItemType.GOAL -> goals.value.map { it.id }
                 ItemType.HABIT -> habits.value.map { it.habit.id }
                 ItemType.PLAN -> {
                     val shownPlans = planTree.value.filterIsInstance<PlanTreeItem.Plan>().map { it.plan }
@@ -569,7 +562,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         ItemType.TASK -> tasksRepo.observeAll().first()
             .sortedWith(compareBy<TaskEntity> { it.completed }.thenBy { it.sortOrder }.thenBy { it.title.lowercase() })
             .map { it.id }
-        ItemType.GOAL -> goalsRepo.observeAll().first().map { it.id }
         ItemType.HABIT -> habitsRepo.observeAll().first().map { it.id }
         ItemType.PLAN -> {
             val all = plansRepo.observeAll().first()
@@ -591,7 +583,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     private suspend fun saveOrder(type: ItemType, ids: List<Long>) = when (type) {
         ItemType.TASK -> tasksRepo.reorder(ids)
-        ItemType.GOAL -> goalsRepo.reorder(ids)
         ItemType.HABIT -> habitsRepo.reorder(ids)
         ItemType.PLAN -> plansRepo.reorder(ids)
         ItemType.NOTE -> notesRepo.reorder(ids)

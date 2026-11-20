@@ -65,7 +65,6 @@ import com.example.xcommandcenter.R
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookWithProgress
 import com.example.xcommandcenter.data.entity.ChecklistCount
-import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
 import com.example.xcommandcenter.data.entity.NoteEntity
@@ -137,13 +136,6 @@ fun taskCardText(task: TaskEntity, checklist: ChecklistCount?) = CardText(
 
 /** Critical items are also shown in red. */
 private fun critical(priority: Priority, open: Boolean = true) = open && priority == Priority.CRITICAL
-
-fun goalCardText(goal: GoalEntity) = CardText(
-    title = goal.title,
-    lines = listOfNotNull(goal.strategy.ifBlank { null }),
-    emphasis = critical(goal.priority),
-    priority = goal.priority,
-)
 
 fun habitCardText(summary: HabitSummary) = CardText(
     title = summary.habit.name,

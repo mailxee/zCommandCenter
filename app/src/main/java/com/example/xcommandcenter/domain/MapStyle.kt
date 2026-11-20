@@ -14,7 +14,7 @@ enum class MapStyle(val label: String, val description: String) {
     OUTLINE("Outline", "Sub-items listed below each item, indented."),
     RINGS("Rings", "Sub-items in a circle round each item."),
     FREE("Free", "Branches spread round each item and pushed apart, so none overlap."),
-    BY_ROUTE("By route", "The whole branch in rows by the suggested route: goals, then plans, then tasks…"),
+    BY_ROUTE("By route", "The whole branch in rows by the suggested route: plans, then tasks and habits…"),
     ;
 
     companion object {

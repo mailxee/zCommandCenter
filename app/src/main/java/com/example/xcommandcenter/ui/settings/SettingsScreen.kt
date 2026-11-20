@@ -144,7 +144,6 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SimplifySettings(viewModel)
             SectionTitle("Tabs")
             Text(
                 "Drag tabs by their handle to change their order on the main screen. Tap a tab to give its items their own look; " +
@@ -279,7 +278,7 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Glossary", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "What visions, beliefs, goals, labels and the rest mean to you",
+                            "What visions, beliefs, labels and the rest mean to you",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -452,7 +451,6 @@ private fun LinksSettings(viewModel: SettingsViewModel, onTidy: () -> Unit) {
     }
     TextButton(onClick = viewModel::resetRoute) { Text("Reset to default route") }
     val thinkRoute by viewModel.thinkRoute.collectAsStateWithLifecycle()
-    val checkWhy by viewModel.checkWhy.collectAsStateWithLifecycle()
     Text(
         "Think route: the same for Think mode's map, one layer per kind of idea. Sources (notes, quotes, books, people) come after the ideas, " +
             "and Do mode's items last.",
@@ -483,17 +481,6 @@ private fun LinksSettings(viewModel: SettingsViewModel, onTidy: () -> Unit) {
         }
     }
     TextButton(onClick = viewModel::resetThinkRoute) { Text("Reset to default Think route") }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("Goals without a why", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Tidy links points out goals that no vision, belief, principle or idea links to.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checkWhy, onCheckedChange = viewModel::setCheckWhy)
-    }
     Card(Modifier.fillMaxWidth().clickable(onClick = onTidy)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
             Icon(painterResource(R.drawable.ic_map), contentDescription = null, tint = MaterialTheme.colorScheme.primary)

@@ -22,7 +22,7 @@ fun findingText(f: Finding, route: LinkRoute, itemTitle: (ItemRef) -> String): F
         }
     }
     val link = f.link
-    // The upper item first: "the goal is linked to the task".
+    // The upper item first: "the plan is linked to the task".
     val (upper, lower) = if (link == null) null to null else
         if (route.layer(link.a.type) <= route.layer(link.b.type)) link.a to link.b else link.b to link.a
     return when (f.kind) {
@@ -74,12 +74,6 @@ fun findingText(f: Finding, route: LinkRoute, itemTitle: (ItemRef) -> String): F
             "No change suggested.",
             null,
         )
-        Kind.GOAL_WITHOUT_WHY -> FindingText(
-            "Goal without a why",
-            "No vision, belief, principle or idea links to ${title(f.endPoint!!)}, so nothing says why it matters.",
-            "Suggestion: link it to the idea behind it, or keep it as is. This check can be turned off in Settings.",
-            null,
-        )
         Kind.AUTHOR_IS_PERSON -> FindingText(
             "Author is in People",
             "${title(f.endPoint!!)} is by ${title(f.add!!.first)}, who is in People but isn't linked to it.",
@@ -100,7 +94,7 @@ fun findingText(f: Finding, route: LinkRoute, itemTitle: (ItemRef) -> String): F
         )
         Kind.BELIEF_NOT_ACTED -> FindingText(
             "Not acted on",
-            "${title(f.endPoint!!)} doesn't lead to any goal, plan, task or habit, nor do the ideas under it.",
+            "${title(f.endPoint!!)} doesn't lead to any plan, task or habit, nor do the ideas under it.",
             "Suggestion: link it to what it should change in Do mode.",
             null,
         )

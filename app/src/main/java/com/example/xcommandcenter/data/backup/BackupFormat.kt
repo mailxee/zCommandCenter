@@ -13,7 +13,6 @@ import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
-import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
@@ -52,7 +51,6 @@ import java.time.format.DateTimeFormatter
 /** Everything the app stores, as it goes into or comes out of a workbook. */
 data class BackupData(
     val tasks: List<TaskEntity> = emptyList(),
-    val goals: List<GoalEntity> = emptyList(),
     val habits: List<HabitEntity> = emptyList(),
     val habitMarks: List<HabitMarkEntity> = emptyList(),
     val plans: List<PlanEntity> = emptyList(),
@@ -76,7 +74,7 @@ data class BackupData(
     val glossary: List<GlossaryEntity> = emptyList(),
     val ideaListItems: List<IdeaListItemEntity> = emptyList(),
 ) {
-    val itemCount: Int get() = tasks.size + goals.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size + ideas.size
+    val itemCount: Int get() = tasks.size + habits.size + plans.size + notes.size + books.size + quotes.size + blocks.size + people.size + ideas.size
 }
 
 /** A problem that stops an import; [message] says where, in words the user can act on. */
@@ -148,11 +146,6 @@ object BackupFormat {
                             moment(it.completedAt),
                         )
                     },
-            ),
-            ItemType.GOAL to Sheet(
-                ItemType.GOAL.tabLabel,
-                listOf(listOf("ID", "Title", "Strategy", "Created", "Order", "Priority")) +
-                    data.goals.map { listOf(it.id.toString(), it.title, it.strategy, time(it.createdAt), it.sortOrder.toString(), it.priority.label) },
             ),
             ItemType.HABIT to Sheet(
                 ItemType.HABIT.tabLabel,
@@ -345,7 +338,6 @@ object BackupFormat {
 
     private fun titlesByRef(data: BackupData): Map<ItemRef, String> = buildMap {
         data.tasks.forEach { put(ItemRef(ItemType.TASK, it.id), it.title) }
-        data.goals.forEach { put(ItemRef(ItemType.GOAL, it.id), it.title) }
         data.habits.forEach { put(ItemRef(ItemType.HABIT, it.id), it.name) }
         data.plans.forEach { put(ItemRef(ItemType.PLAN, it.id), it.title) }
         data.notes.forEach { put(ItemRef(ItemType.NOTE, it.id), it.title.ifBlank { it.body.take(40) }) }
@@ -367,7 +359,9 @@ object BackupFormat {
      * sheets from before the Schedule tab must be present; the others, Schedule included, are optional. Rows that refer to missing items (a link
      * to a deleted task, a tag on an unknown id) are skipped and counted in [ImportResult.skipped].
      */
-    fun fromSheets(sheets: List<Sheet>, zone: ZoneId = ZoneId.systemDefault(), now: Long = System.currentTimeMillis()): ImportResult {
+    fun fromSheets(given: List<Sheet>, zone: ZoneId = ZoneId.systemDefault(), now: Long = System.currentTimeMillis()): ImportResult {
+        // An older workbook's goals come in as visions.
+        val sheets = LegacyGoals.toVisions(given)
         val byName = sheets.associateBy { it.name.trim().lowercase() }
         fun sheet(name: String, required: Boolean): Table? {
             val s = byName[name.lowercase()] ?: return if (required) throw ImportException("The workbook has no \"$name\" sheet. Nothing was imported.") else null
@@ -387,10 +381,6 @@ object BackupFormat {
                 intervalDays = r.interval(type), nextCreated = r.bool("Next created"), sortOrder = r.order(),
             ).also { if (type != null && it.dueDate == null) r.fail("A repeating task needs a due date") }
         }.withIds("Tasks") { t, id -> t.copy(id = id) }
-
-        val goals = sheet(ItemType.GOAL.tabLabel, true)!!.items("Title") { r ->
-            GoalEntity(id = r.id(), title = r.required("Title"), strategy = r.text("Strategy"), createdAt = r.dateTime("Created") ?: now, sortOrder = r.order(), priority = r.priority())
-        }.withIds("Goals") { g, id -> g.copy(id = id) }
 
         val habitSheet = sheet(ItemType.HABIT.tabLabel, true)!!
         val habits = habitSheet.items("Name") { r ->
@@ -547,7 +537,6 @@ object BackupFormat {
 
         val existing: Set<ItemRef> = buildSet {
             tasks.forEach { add(ItemRef(ItemType.TASK, it.id)) }
-            goals.forEach { add(ItemRef(ItemType.GOAL, it.id)) }
             habits.forEach { add(ItemRef(ItemType.HABIT, it.id)) }
             plans.forEach { add(ItemRef(ItemType.PLAN, it.id)) }
             notes.forEach { add(ItemRef(ItemType.NOTE, it.id)) }
@@ -655,7 +644,7 @@ object BackupFormat {
 
         return ImportResult(
             BackupData(
-                tasks, goals, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
+                tasks, habits, marks, plans, notes, books, chapters, quotes, links, tagIds.values.toList(), itemTags, checklistItems,
                 noteListItems, reminders, blocks, schedules, people, personProfiles, personItems, ideas, linkLabels, glossary, ideaListItems,
             ),
             skipped,

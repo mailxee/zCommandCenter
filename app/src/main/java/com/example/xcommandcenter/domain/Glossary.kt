@@ -19,7 +19,6 @@ object Glossary {
     }
 
     fun default(type: ItemType): String = when (type) {
-        ItemType.GOAL -> "An outcome you want to reach and can say is achieved."
         ItemType.PLAN -> "A structured way to get somewhere, broken into subplans and tasks."
         ItemType.TASK -> "A single action that can be done and ticked off."
         ItemType.HABIT -> "Something done repeatedly to build or keep a practice, or to break one."

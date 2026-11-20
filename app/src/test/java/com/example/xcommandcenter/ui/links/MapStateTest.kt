@@ -48,7 +48,7 @@ class MapStateTest {
 
     @Test
     fun doModesMapIncludesAPlansSubplans() {
-        val goal = ItemRef(ItemType.GOAL, 1)
+        val goal = ItemRef(ItemType.TASK, 1)
         val entries = listOf(goal, plan(1), plan(2), plan(3)).associateWith { ItemIndexEntry(it.type, it.id, "x", null) }
         val graph = LinkGraph(
             labels = emptyMap(), entries = entries, stored = emptyMap(),

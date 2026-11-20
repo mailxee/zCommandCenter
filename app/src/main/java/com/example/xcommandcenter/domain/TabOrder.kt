@@ -7,7 +7,7 @@ object TabOrder {
      * thinking side, ideas first, so Think mode opens on them.
      */
     val default: List<ItemType> = listOf(
-        ItemType.BLOCK, ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.IDEA, ItemType.NOTE, ItemType.BOOK,
+        ItemType.BLOCK, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.IDEA, ItemType.NOTE, ItemType.BOOK,
         ItemType.QUOTE, ItemType.PERSON,
     )
 

@@ -48,7 +48,8 @@ class GraphLayoutTest {
 
     @Test
     fun byRouteGoesTopToBottomAndOrdersRowsToAvoidCrossings() {
-        val g = ItemRef(ItemType.GOAL, 1)
+        // A plan above the plans, as a goal once was.
+        val g = ItemRef(ItemType.PLAN, 100)
         val p1 = ItemRef(ItemType.PLAN, 1)
         val p2 = ItemRef(ItemType.PLAN, 2)
         val t1 = ItemRef(ItemType.TASK, 1)
@@ -58,7 +59,7 @@ class GraphLayoutTest {
         // Listed crossed: t3 and t4 under p1, t1 and t2 under p2; each pair links on, so none stacks.
         val n = ItemRef(ItemType.NOTE, 1)
         val e = listOf(g to p1, g to p2, p1 to t3, p1 to t4, p2 to t1, p2 to t2, t1 to n, t2 to n, t3 to n, t4 to n)
-        val at = GraphLayout.byRoute(listOf(g, p1, p2, t1, t2, t3, t4, n), e, { route.layer(it.type) }, size, maxWidth = 1000f).at
+        val at = GraphLayout.byRoute(listOf(g, p1, p2, t1, t2, t3, t4, n), e, { if (it == g) 0 else route.layer(it.type) + 1 }, size, maxWidth = 1000f).at
         assertTrue(at.getValue(g).y < at.getValue(p1).y)
         assertTrue(at.getValue(p1).y < at.getValue(t1).y)
         assertTrue(at.getValue(t1).y < at.getValue(n).y)

@@ -72,7 +72,6 @@ import com.example.xcommandcenter.ui.common.OutlineGuides
 import com.example.xcommandcenter.ui.common.HabitTodayButton
 import com.example.xcommandcenter.ui.common.ItemCard
 import com.example.xcommandcenter.ui.common.bookCardText
-import com.example.xcommandcenter.ui.common.goalCardText
 import com.example.xcommandcenter.ui.common.habitCardText
 import com.example.xcommandcenter.ui.common.noteCardText
 import com.example.xcommandcenter.ui.common.planCardText
@@ -195,38 +194,6 @@ fun TasksTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         )
-    }
-}
-
-@Composable
-fun GoalsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boolean) {
-    val goals by viewModel.goals.collectAsStateWithLifecycle()
-    val links by viewModel.linksByOwner.collectAsStateWithLifecycle()
-    val tagFilter by viewModel.tagFilter.collectAsStateWithLifecycle()
-    val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
-    val drag = rememberDragOrder(goals, key = { it.id })
-    val rows = drag.rows
-    val view = viewModel.priorityView(ItemType.GOAL)
-    val movable = reorder && view.sort == PrioritySort.CUSTOM
-    ItemList(ItemType.GOAL, empty = goals.isEmpty(), emptyText = "No goals yet.", filtered = viewModel.filtering(tagFilter) || view.filtered, controls = controls, state = drag.listState) {
-        if (controls) priorityControls(ItemType.GOAL, view, viewModel)
-        itemsIndexed(rows, key = { _, goal -> goal.id }) { index, goal ->
-            val ref = ItemRef(ItemType.GOAL, goal.id)
-            ReorderableItem(drag.state, key = goal.id, enabled = movable) {
-                ItemCard(
-                    ItemType.GOAL,
-                    goalCardText(goal),
-                    links[ref].orEmpty(),
-                    { onOpen(ref) },
-                    tags = tagFilter.tagsOf(ref),
-                    onLongClick = { viewModel.showNetwork(ref) },
-                    reminder = viewModel.reminderOf(ref),
-                    trailing = dragHandleIf(movable, index, rows.size, { viewModel.move(ItemType.GOAL, goal.id, it) }) {
-                        viewModel.reorder(ItemType.GOAL, drag.rows.map { it.id })
-                    },
-                )
-            }
-        }
     }
 }
 
@@ -636,7 +603,7 @@ fun IdeasTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Bool
             ReorderableItem(drag.state, key = idea.id, enabled = enabled) {
                 Box(Modifier.padding(top = if (row.depth == 0) 6.dp else 0.dp)) {
                     val hidden = row.childCount.takeIf { row.collapsed && it > 0 }?.let { if (it == 1) "1 idea hidden" else "$it ideas hidden" }
-                    // How many goals, plans, tasks and habits (Do mode's items) this idea links to.
+                    // How many plans, tasks and habits (Do mode's items) this idea links to.
                     val inDo = links[ref].orEmpty().count { tabModes.isOtherMode(it.type, AppMode.THINK) }
                     ItemCard(
                         ItemType.IDEA,

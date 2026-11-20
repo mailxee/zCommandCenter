@@ -16,7 +16,6 @@ import com.example.xcommandcenter.data.entity.QuoteEntity
 import com.example.xcommandcenter.data.entity.TagEntity
 import com.example.xcommandcenter.data.repository.BlockRepository
 import com.example.xcommandcenter.data.repository.BookRepository
-import com.example.xcommandcenter.data.repository.GoalRepository
 import com.example.xcommandcenter.data.repository.HabitRepository
 import com.example.xcommandcenter.data.repository.LinkRepository
 import com.example.xcommandcenter.data.repository.NoteRepository
@@ -62,7 +61,6 @@ data class ItemCardData(
  */
 class ItemCardSource(
     private val tasks: TaskRepository,
-    private val goals: GoalRepository,
     private val habits: HabitRepository,
     private val plans: PlanRepository,
     private val notes: NoteRepository,
@@ -81,7 +79,7 @@ class ItemCardSource(
     val terms: Flow<Glossary.Terms> = glossary.terms
 
     private val baseTexts: Flow<Map<ItemRef, Pair<CardText, CardControl?>>> = combine(
-        combine(tasks.observeAll(), tasks.observeChecklistCounts(), goals.observeAll(), ::Triple),
+        combine(tasks.observeAll(), tasks.observeChecklistCounts(), ::Pair),
         combine(habits.observeAll(), habits.observeAllMarks(), plans.observeAll(), ::Triple),
         combine(
             notes.observeAll(), notes.observeListCounts(), books.observeAllWithProgress(), quotes.observeAll(),
@@ -90,10 +88,9 @@ class ItemCardSource(
             NoteBookQuote(a, b, c, d, e.blocks, e.schedules.takeIf { it.size > 1 }?.associate { it.id to it.name }.orEmpty(), e.people, e.personLists)
         },
         today,
-    ) { (taskList, checklists, goalList), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList, scheduleNames, personList, personLists), today ->
+    ) { (taskList, checklists), (habitList, marks, planList), (noteList, listCounts, bookList, quoteList, blockList, scheduleNames, personList, personLists), today ->
         buildMap {
             taskList.forEach { put(ItemRef(ItemType.TASK, it.id), taskCardText(it, checklists[it.id]) to CardControl.Task(it.completed)) }
-            goalList.forEach { put(ItemRef(ItemType.GOAL, it.id), goalCardText(it) to null) }
             habitList.forEach { habit ->
                 val summary = habitSummary(habit, marks[habit.id].orEmpty(), today)
                 val control = if (summary.scheduledToday) CardControl.Habit(summary.positive, summary.markedToday) else null

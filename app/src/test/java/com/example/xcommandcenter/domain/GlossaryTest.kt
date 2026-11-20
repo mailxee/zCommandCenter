@@ -22,6 +22,6 @@ class GlossaryTest {
         assertEquals("Echoes it", terms.ofLabel(9, null))
         assertEquals(Glossary.defaultForLabel("SUPPORTS"), terms.ofLabel(1, "SUPPORTS"))
         assertTrue(terms.isEdited(Glossary.kindKey(IdeaKind.BELIEF)))
-        assertFalse(terms.isEdited(Glossary.typeKey(ItemType.GOAL)))
+        assertFalse(terms.isEdited(Glossary.typeKey(ItemType.PLAN)))
     }
 }

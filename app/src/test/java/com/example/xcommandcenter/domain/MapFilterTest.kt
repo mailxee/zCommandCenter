@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class MapFilterTest {
-    private val goal = ItemRef(ItemType.GOAL, 1)
+    private val goal = ItemRef(ItemType.PLAN, 1)
     private val book = ItemRef(ItemType.BOOK, 2)
     private val quote = ItemRef(ItemType.QUOTE, 3)
     private val idea = ItemRef(ItemType.IDEA, 4)

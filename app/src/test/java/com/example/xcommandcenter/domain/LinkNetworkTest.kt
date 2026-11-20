@@ -5,7 +5,8 @@ import org.junit.Test
 
 class LinkNetworkTest {
     private fun task(id: Long) = ItemRef(ItemType.TASK, id)
-    private fun goal(id: Long) = ItemRef(ItemType.GOAL, id)
+    // Once goals; plans walk through a network the same way.
+    private fun goal(id: Long) = ItemRef(ItemType.PLAN, 100 + id)
     private fun note(id: Long) = ItemRef(ItemType.NOTE, id)
     private fun quote(id: Long) = ItemRef(ItemType.QUOTE, id)
     private fun book(id: Long) = ItemRef(ItemType.BOOK, id)

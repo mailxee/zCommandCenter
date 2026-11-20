@@ -77,6 +77,40 @@ class MigrationTest {
     }
 
     @Test
+    fun goalsBecomeVisionsWhenUpgradingTo16() {
+        createDatabase(DB, 15).use { db ->
+            db.execSQL("INSERT INTO ideas (id, title, body, kind, createdAt, sortOrder) VALUES (1, 'Live well', '', 'VISION', 0, 4)")
+            db.execSQL("INSERT INTO goals (id, title, strategy, createdAt, sortOrder, priority) VALUES (6, 'Writer', 'Write on substack', 77, 1, 'HIGH')")
+            db.execSQL("INSERT INTO goals (id, title, strategy, createdAt, sortOrder, priority) VALUES (2, 'Teacher', '', 0, 0, 'MEDIUM')")
+            db.execSQL("INSERT INTO tasks (id, title, description, priority, completed, createdAt) VALUES (3, 'Write', '', 'MEDIUM', 0, 0)")
+            db.execSQL("INSERT INTO link_labels (id, forward, backward, sortOrder) VALUES (50, 'supports', 'supported by', 0)")
+            // "Write supports Writer", read from the task (side B, as GOAL sorts before TASK).
+            db.execSQL("INSERT INTO links (aType, aId, bType, bId, createdAt, labelId, labelFromA) VALUES ('GOAL', 6, 'TASK', 3, 5, 50, 0)")
+            db.execSQL("INSERT INTO links (aType, aId, bType, bId, createdAt, labelFromA) VALUES ('GOAL', 2, 'GOAL', 6, 5, 1)")
+            db.execSQL("INSERT INTO links (aType, aId, bType, bId, createdAt, labelFromA) VALUES ('GOAL', 6, 'IDEA', 1, 5, 1)")
+            db.execSQL("INSERT INTO tags (id, name) VALUES (1, 'career')")
+            db.execSQL("INSERT INTO item_tags (type, itemId, tagId) VALUES ('GOAL', 6, 1)")
+            db.execSQL("INSERT INTO reminders (itemType, itemId, time, carried) VALUES ('GOAL', 6, 1234, 0)")
+            db.execSQL("INSERT INTO kept_findings (`key`, keptAt) VALUES ('why:6', 0)")
+        }
+        upgrade(DB).let { db ->
+            assertEquals("0", db.text("SELECT COUNT(*) FROM sqlite_master WHERE name = 'goals'"))
+            // In the goals' order (Teacher first), after the existing ideas.
+            assertEquals("2", db.text("SELECT id FROM ideas WHERE title = 'Teacher' AND kind = 'VISION' AND sortOrder = 5 AND parentId IS NULL"))
+            assertEquals("3", db.text("SELECT id FROM ideas WHERE title = 'Writer' AND body = 'Write on substack' AND priority = 'HIGH' AND createdAt = 77 AND sortOrder = 6"))
+            assertEquals("0", db.text("SELECT COUNT(*) FROM links WHERE aType = 'GOAL' OR bType = 'GOAL'"))
+            // IDEA sorts before TASK, so the task stays side B and the label still reads from it.
+            assertEquals("50|0", db.text("SELECT labelId || '|' || labelFromA FROM links WHERE aType = 'IDEA' AND aId = 3 AND bType = 'TASK' AND bId = 3"))
+            assertEquals("1", db.text("SELECT COUNT(*) FROM links WHERE aType = 'IDEA' AND aId = 2 AND bType = 'IDEA' AND bId = 3"))
+            assertEquals("1", db.text("SELECT COUNT(*) FROM links WHERE aType = 'IDEA' AND aId = 1 AND bType = 'IDEA' AND bId = 3"))
+            assertEquals("3", db.text("SELECT itemId FROM item_tags WHERE type = 'IDEA'"))
+            assertEquals("3", db.text("SELECT itemId FROM reminders WHERE itemType = 'IDEA' AND time = 1234"))
+            assertEquals("0", db.text("SELECT COUNT(*) FROM kept_findings"))
+            assertEquals("Writer", db.text("SELECT title FROM item_index WHERE type = 'IDEA' AND id = 3"))
+        }
+    }
+
+    @Test
     fun singleRemindersMoveIntoTheRemindersTable() {
         createDatabase(DB, 3).use { db ->
             db.execSQL("INSERT INTO tasks (id, title, description, reminderAt, priority, completed, createdAt) VALUES (1, 'Call', '', 1234, 'MEDIUM', 0, 0)")
@@ -125,7 +159,7 @@ class MigrationTest {
 
     /** Opens [name] with the app's database, which upgrades it to [LATEST] and checks its schema. */
     private fun upgrade(name: String): SupportSQLiteDatabase {
-        val database = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
+        val database = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.MIGRATIONS).allowMainThreadQueries().build()
         opened += database
         return database.openHelper.writableDatabase.also { assertEquals(LATEST, it.version) }
     }
@@ -133,7 +167,7 @@ class MigrationTest {
     private fun SupportSQLiteDatabase.text(sql: String): String? = query(sql).use { c -> if (c.moveToFirst()) c.getString(0) else null }
 
     private companion object {
-        const val LATEST = 15
+        const val LATEST = 16
         const val DB = "migration-test"
     }
 }

@@ -3,9 +3,9 @@ package com.example.xcommandcenter.domain
 /**
  * Link mode's network: every item reachable from a root by following links, however many steps
  * away. Links are undirected. In Do mode, notes, quotes, books, people, ideas and schedule blocks
- * are end points, never followed: the walk goes only through tasks, goals, habits and plans, and an
+ * are end points, never followed: the walk goes only through tasks, habits and plans, and an
  * end point shows (a book with all its chapters) when it is linked to one of them. In Think mode the
- * walk goes through ideas, and everything else (goals and plans included) ends it. A chapter's
+ * walk goes through ideas, and everything else (plans included) ends it. A chapter's
  * links count as its book's.
  */
 object LinkNetwork {

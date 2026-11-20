@@ -12,14 +12,14 @@ import com.example.xcommandcenter.domain.ItemType
 enum class TaskSort(val label: String) { DUE_DATE("Due date"), PRIORITY("Priority"), CUSTOM("Custom") }
 
 /**
- * How the Goals, Habits, Plans, Notes, Books and Quotes tabs are sorted: [CUSTOM] is the user's own
+ * How the Habits, Plans, Notes, Books and Quotes tabs are sorted: [CUSTOM] is the user's own
  * order, the only one in which items can be moved; [PRIORITY] puts Critical first, keeping the
  * custom order among items of the same priority.
  */
 enum class PrioritySort(val label: String) { CUSTOM("Custom"), PRIORITY("Priority") }
 
 /** The tabs sorted and filtered by [PrioritySort] and a priority filter; Tasks have their own sorts but the same priority filter. */
-val priorityTabs: Set<ItemType> = setOf(ItemType.GOAL, ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.PERSON, ItemType.IDEA)
+val priorityTabs: Set<ItemType> = setOf(ItemType.HABIT, ItemType.PLAN, ItemType.NOTE, ItemType.BOOK, ItemType.QUOTE, ItemType.PERSON, ItemType.IDEA)
 
 enum class RepeatFilter(val label: String) {
     ALL("All"),

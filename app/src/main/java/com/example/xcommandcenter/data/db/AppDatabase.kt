@@ -12,7 +12,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.xcommandcenter.data.dao.BackupDao
 import com.example.xcommandcenter.data.dao.BlockDao
 import com.example.xcommandcenter.data.dao.BookDao
-import com.example.xcommandcenter.data.dao.GoalDao
 import com.example.xcommandcenter.data.dao.HabitDao
 import com.example.xcommandcenter.data.dao.LinkDao
 import com.example.xcommandcenter.data.dao.NoteDao
@@ -30,12 +29,10 @@ import com.example.xcommandcenter.data.dao.ScheduleDao
 import com.example.xcommandcenter.data.dao.TagDao
 import com.example.xcommandcenter.data.dao.TaskDao
 import com.example.xcommandcenter.data.dao.ShareDao
-import com.example.xcommandcenter.data.dao.SimplifyDao
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
-import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemIndexEntry
@@ -59,7 +56,6 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     entities = [
         TaskEntity::class,
         ChecklistItemEntity::class,
-        GoalEntity::class,
         HabitEntity::class,
         HabitMarkEntity::class,
         PlanEntity::class,
@@ -99,6 +95,7 @@ import com.example.xcommandcenter.data.entity.TaskEntity
     // 13: definitions rewritten in the glossary.
     // 14: ideas have lists, like notes.
     // 15: when a task was completed and when a habit mark was made, for apps that read the shared data.
+    // 16: no goals: any left become visions in Ideas (a manual migration, see GoalsToVisions).
     version = AppDatabase.VERSION,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -120,7 +117,6 @@ import com.example.xcommandcenter.data.entity.TaskEntity
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
-    abstract fun goalDao(): GoalDao
     abstract fun habitDao(): HabitDao
     abstract fun planDao(): PlanDao
     abstract fun noteDao(): NoteDao
@@ -136,7 +132,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun ideaDao(): IdeaDao
     abstract fun glossaryDao(): GlossaryDao
     abstract fun shareDao(): ShareDao
-    abstract fun simplifyDao(): SimplifyDao
 
     /** Moves each task's and habit's single reminder into the new reminders table. */
     class CopyReminders : AutoMigrationSpec {
@@ -162,7 +157,10 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         /** The schema version; also reported to apps that read the shared data (see `ShareProvider`). */
-        const val VERSION = 15
+        const val VERSION = 16
+
+        /** The upgrades Room can't write itself; the rest are the auto-migrations above. */
+        val MIGRATIONS = arrayOf(GoalsToVisions.MIGRATION_15_16)
 
         /** There is always a schedule; blocks default to this one. */
         fun insertFirstSchedule(db: SupportSQLiteDatabase) {
@@ -183,6 +181,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "xcommandcenter.db")
+                .addMigrations(*MIGRATIONS)
                 .addCallback(
                     object : Callback() {
                         // Runs once, inside the transaction that creates the schema, so the

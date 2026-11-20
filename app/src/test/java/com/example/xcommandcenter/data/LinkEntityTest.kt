@@ -40,6 +40,6 @@ class LinkEntityTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun `self link is rejected`() {
-        LinkEntity.between(ItemRef(ItemType.GOAL, 1), ItemRef(ItemType.GOAL, 1))
+        LinkEntity.between(ItemRef(ItemType.PLAN, 1), ItemRef(ItemType.PLAN, 1))
     }
 }

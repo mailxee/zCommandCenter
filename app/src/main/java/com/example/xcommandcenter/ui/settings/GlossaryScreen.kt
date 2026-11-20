@@ -72,7 +72,7 @@ class GlossaryViewModel(private val glossary: GlossaryRepository, links: LinkRep
 data class Term(val key: String, val name: String, val default: String, val icon: Int, val tint: Color?)
 
 /** The tabs on the managing side, then the sources and notes; ideas have their own section. */
-private val doingTypes = listOf(ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.BLOCK)
+private val doingTypes = listOf(ItemType.PLAN, ItemType.TASK, ItemType.HABIT, ItemType.BLOCK)
 private val sourceTypes = listOf(ItemType.IDEA, ItemType.NOTE, ItemType.BOOK, ItemType.CHAPTER, ItemType.QUOTE, ItemType.PERSON)
 
 /**

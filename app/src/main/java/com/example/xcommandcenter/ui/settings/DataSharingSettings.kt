@@ -30,7 +30,7 @@ fun DataSharingSettings(viewModel: SettingsViewModel) {
     val allowed by viewModel.shareAllowed.collectAsStateWithLifecycle()
     SectionTitle("Data sharing")
     Text(
-        "Apps you allow here can read your tasks, habits and their history, goals, plans, schedules, tags, quotes and books, " +
+        "Apps you allow here can read your tasks, habits and their history, plans, schedules, tags, quotes and books, " +
             "but not change them. Notes, people, ideas, links and reminders are never shared. " +
             "They can also ask to add a habit or mark one, which happens only once you confirm it on the screen that opens. " +
             "An app that tries either before you allow it is listed here.",

@@ -5,7 +5,7 @@ package com.example.xcommandcenter.domain
  * Tidy links list and the map's markings). Links are undirected; a chapter counts as its book, and
  * end points (see [LinkNetwork]) close a route rather than carry it on.
  *
- * Routes run only through goals, plans, tasks and habits. Among their links, a spanning forest is
+ * Routes run only through plans, tasks and habits. Among their links, a spanning forest is
  * built keeping on-route links first, then links that skip a layer, then sideways ones, older
  * before newer. Every link left over closes a loop: there are two routes between its items. That
  * link is the one suggested for removal, so a loop is reported once, by its least fitting, newest
@@ -29,13 +29,13 @@ object LinkAnalysis {
     )
 
     enum class Kind {
-        /** A link that jumps over items already connecting its two ends: goal to task, beside goal to plan to task. */
+        /** A link that jumps over items already connecting its two ends: plan to habit, beside plan to task to habit. */
         SHORTCUT,
 
         /** A sideways or layer-skipping link that closes a loop. */
         OFF_ROUTE_LOOP,
 
-        /** An on-route link that makes a second route (a task under two plans of one goal). */
+        /** An on-route link that makes a second route (a task linked to two plans already linked together). */
         EXTRA_ROUTE,
 
         /** A link that skips a layer, with no loop. */
@@ -44,8 +44,6 @@ object LinkAnalysis {
         /** An end point linked to several items of one network; usually intended. */
         SHARED_END_POINT,
 
-        /** Do mode: a goal no idea links to (see [ThinkAnalysis]). */
-        GOAL_WITHOUT_WHY,
 
         // Think mode (see [ThinkAnalysis]).
         AUTHOR_IS_PERSON,
@@ -81,7 +79,7 @@ object LinkAnalysis {
         val actionable: Boolean get() = remove != null || add != null
 
         /** Whether the finding asks for something, as counted on the Tidy links buttons; information doesn't. */
-        val suggests: Boolean get() = actionable || kind in setOf(Kind.GOAL_WITHOUT_WHY, Kind.UNPLACED_QUOTE, Kind.UNGROUNDED_IDEA, Kind.BELIEF_NOT_ACTED)
+        val suggests: Boolean get() = actionable || kind in setOf(Kind.UNPLACED_QUOTE, Kind.UNGROUNDED_IDEA, Kind.BELIEF_NOT_ACTED)
     }
 
     data class Result(

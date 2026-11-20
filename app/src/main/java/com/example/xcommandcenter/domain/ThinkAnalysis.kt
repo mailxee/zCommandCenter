@@ -23,7 +23,7 @@ object ThinkAnalysis {
     data class Idea(val id: Long, val parentId: Long?, val kind: IdeaKind)
 
     private val sources = setOf(ItemType.QUOTE, ItemType.BOOK, ItemType.CHAPTER, ItemType.PERSON, ItemType.NOTE)
-    private val doing = setOf(ItemType.GOAL, ItemType.PLAN, ItemType.TASK, ItemType.HABIT)
+    private val doing = setOf(ItemType.PLAN, ItemType.TASK, ItemType.HABIT)
 
     /**
      * [authors] maps each quote to its author's name (quotes without one are left out); [people]
@@ -74,13 +74,5 @@ object ThinkAnalysis {
         val order = compareBy<Finding>({ it.kind.ordinal }, { it.key })
         val (open, keptFindings) = found.distinctBy { it.key }.sortedWith(order).partition { it.key !in kept }
         return LinkAnalysis.Result(open, keptFindings)
-    }
-
-    /** Do mode's check: goals that no idea links to, so nothing says why they matter. */
-    fun goalsWithoutWhy(links: List<Link>, goals: Set<Long>): List<Finding> {
-        val withWhy = links.flatMap { listOf(it.a to it.b, it.b to it.a) }
-            .filter { (goal, other) -> goal.type == ItemType.GOAL && other.type == ItemType.IDEA }
-            .map { it.first.id }.toSet()
-        return goals.sorted().filter { it !in withWhy }.map { Finding("why:$it", Kind.GOAL_WITHOUT_WHY, null, endPoint = ItemRef(ItemType.GOAL, it)) }
     }
 }

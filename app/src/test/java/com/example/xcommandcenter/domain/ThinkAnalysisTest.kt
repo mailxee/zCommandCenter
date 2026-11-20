@@ -53,11 +53,4 @@ class ThinkAnalysisTest {
         assertEquals(contra, r.findings.single { it.kind == Kind.CONTRADICTION }.link)
         assertTrue(analyze(contra, kept = setOf("contra:${contra.id}")).findings.none { it.kind == Kind.CONTRADICTION })
     }
-
-    @Test
-    fun `goals no idea links to have no why`() {
-        val goal1 = ItemRef(ItemType.GOAL, 1)
-        val found = ThinkAnalysis.goalsWithoutWhy(listOf(link(idea(1), goal1), link(goal1, plan)), setOf(1, 2))
-        assertEquals(listOf(ItemRef(ItemType.GOAL, 2)), found.map { it.endPoint })
-    }
 }

@@ -9,7 +9,6 @@ package com.example.xcommandcenter.domain
  */
 enum class ItemType(val tabLabel: String, val singular: String, val isTab: Boolean = true) {
     TASK("Tasks", "Task"),
-    GOAL("Goals", "Goal"),
     HABIT("Habits", "Habit"),
     PLAN("Plans", "Plan"),
     NOTE("Notes", "Note"),

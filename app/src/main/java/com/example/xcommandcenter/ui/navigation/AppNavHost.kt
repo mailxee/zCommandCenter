@@ -15,7 +15,6 @@ import com.example.xcommandcenter.domain.ItemType
 import com.example.xcommandcenter.ui.block.BlockDetailScreen
 import com.example.xcommandcenter.ui.book.BookDetailScreen
 import com.example.xcommandcenter.ui.book.ChapterDetailScreen
-import com.example.xcommandcenter.ui.goal.GoalDetailScreen
 import com.example.xcommandcenter.ui.habit.HabitDetailScreen
 import com.example.xcommandcenter.ui.home.HomeScreen
 import com.example.xcommandcenter.ui.links.MapScreen
@@ -101,7 +100,6 @@ fun AppNavHost(
             val type = ItemType.valueOf(entry.arguments?.getString(Routes.ARG_TYPE) ?: ItemType.TASK.name)
             when (type) {
                 ItemType.TASK -> TaskDetailScreen(onBack = back, onOpen = open)
-                ItemType.GOAL -> GoalDetailScreen(onBack = back, onOpen = open)
                 ItemType.HABIT -> HabitDetailScreen(onBack = back, onOpen = open)
                 ItemType.PLAN -> PlanDetailScreen(
                     onBack = back,

@@ -161,15 +161,13 @@ interface LinkDao {
     fun search(typeNames: List<String>, query: String): Flow<List<ItemIndexEntry>>
 
     /**
-     * An item's explanation for the map's panel: a task's or plan's description, a goal's
-     * strategy, a habit's or block's notes, a note's text, a book's description, a quote's author
+     * An item's explanation for the map's panel: a task's or plan's description, a habit's or block's notes, a note's text, a book's description, a quote's author
      * and source, a person's bio, an idea's explanation. Null or blank when there is none.
      */
     @Query(
         """
         SELECT text FROM (
             SELECT description AS text FROM tasks WHERE :typeName = 'TASK' AND id = :id
-            UNION ALL SELECT strategy FROM goals WHERE :typeName = 'GOAL' AND id = :id
             UNION ALL SELECT notes FROM habits WHERE :typeName = 'HABIT' AND id = :id
             UNION ALL SELECT description FROM plans WHERE :typeName = 'PLAN' AND id = :id
             UNION ALL SELECT body FROM notes WHERE :typeName = 'NOTE' AND id = :id
@@ -192,7 +190,6 @@ interface LinkDao {
         """
         SELECT type, id, text FROM (
             SELECT 'TASK' AS type, id, SUBSTR(TRIM(description), 1, 240) AS text FROM tasks
-            UNION ALL SELECT 'GOAL', id, SUBSTR(TRIM(strategy), 1, 240) FROM goals
             UNION ALL SELECT 'HABIT', id, SUBSTR(TRIM(notes), 1, 240) FROM habits
             UNION ALL SELECT 'PLAN', id, SUBSTR(TRIM(description), 1, 240) FROM plans
             UNION ALL SELECT 'NOTE', id, SUBSTR(TRIM(body), 1, 240) FROM notes

@@ -80,7 +80,8 @@ class ShareProvider : ContentProvider() {
          * Raise this whenever a shared table or column is renamed or removed (or its meaning
          * changes), so reading apps can tell; added tables and columns don't need it.
          */
-        const val CONTRACT_VERSION = 1
+        // 2: the goals path is gone (goals became visions in Ideas, read through no path).
+        const val CONTRACT_VERSION = 2
 
         private const val READ_ONLY = "The shared data is read-only."
     }

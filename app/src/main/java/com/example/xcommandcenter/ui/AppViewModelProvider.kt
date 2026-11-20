@@ -13,7 +13,6 @@ import com.example.xcommandcenter.XCommandCenterApp
 import com.example.xcommandcenter.ui.block.BlockDetailViewModel
 import com.example.xcommandcenter.ui.book.BookDetailViewModel
 import com.example.xcommandcenter.ui.book.ChapterDetailViewModel
-import com.example.xcommandcenter.ui.goal.GoalDetailViewModel
 import com.example.xcommandcenter.ui.habit.HabitDetailViewModel
 import com.example.xcommandcenter.handoff.AddHabitHandoffViewModel
 import com.example.xcommandcenter.handoff.MarkHabitViewModel
@@ -31,11 +30,10 @@ object AppViewModelProvider {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
         initializer { with(container()) { HomeViewModel(this) } }
         initializer { with(container()) { GlossaryViewModel(glossaryRepository, linkRepository) } }
-        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository, modeRepository, autoBackupRepository, shareAccessRepository, mapPrefsRepository, simplifyRepository) } }
+        initializer { with(container()) { SettingsViewModel(tabOrderRepository, itemStyleRepository, reminderScheduler, backupRepository, tagRepository, reminderPrefsRepository, routePrefsRepository, linkRepository, modeRepository, autoBackupRepository, shareAccessRepository, mapPrefsRepository) } }
         initializer { with(container()) { MapViewModel(createSavedStateHandle(), linkRepository, mapPrefsRepository) } }
         initializer { with(container()) { TidyViewModel(createSavedStateHandle(), linkRepository) } }
         initializer { with(container()) { TaskDetailViewModel(createSavedStateHandle(), taskRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
-        initializer { with(container()) { GoalDetailViewModel(createSavedStateHandle(), goalRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { PlanDetailViewModel(createSavedStateHandle(), planRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { NoteDetailViewModel(createSavedStateHandle(), noteRepository, ideaRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }

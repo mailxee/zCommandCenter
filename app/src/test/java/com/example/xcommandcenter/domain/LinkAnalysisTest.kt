@@ -8,19 +8,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LinkAnalysisTest {
-    private val goal = ItemRef(ItemType.GOAL, 1)
-    private val reading = ItemRef(ItemType.PLAN, 1)
-    private val practice = ItemRef(ItemType.PLAN, 2)
-    private val meditations = ItemRef(ItemType.TASK, 1)
-    private val journal = ItemRef(ItemType.TASK, 2)
-    private val review = ItemRef(ItemType.HABIT, 1)
+    // Three layers of linking types, as goals, plans and tasks once were: a plan over tasks over habits.
+    private val route = LinkRoute(mapOf(ItemType.PLAN to 1, ItemType.TASK to 2, ItemType.HABIT to 3))
+    private val goal = ItemRef(ItemType.PLAN, 1)
+    private val reading = ItemRef(ItemType.TASK, 1)
+    private val practice = ItemRef(ItemType.TASK, 2)
+    private val meditations = ItemRef(ItemType.HABIT, 1)
+    private val journal = ItemRef(ItemType.HABIT, 2)
+    private val review = ItemRef(ItemType.HABIT, 3)
     private val book = ItemRef(ItemType.BOOK, 1)
     private val chapter = ItemRef(ItemType.CHAPTER, 7)
     private val notes = ItemRef(ItemType.NOTE, 1)
     private var nextId = 1L
     private fun link(a: ItemRef, b: ItemRef) = Link(nextId, a, b, createdAt = nextId++)
     private fun analyze(vararg links: Link, kept: Set<String> = emptySet()) =
-        LinkAnalysis.analyze(links.toList(), mapOf(7L to 1L), LinkRoute(), kept)
+        LinkAnalysis.analyze(links.toList(), mapOf(7L to 1L), route, kept)
 
     @Test
     fun anUnlabelledLinkIsSuggestedBeforeALabelledOne() {

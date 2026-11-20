@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapPositionsTest {
-    private val goal = ItemRef(ItemType.GOAL, 3)
+    private val goal = ItemRef(ItemType.PLAN, 3)
     private val idea = ItemRef(ItemType.IDEA, 12)
 
     @Test

@@ -49,6 +49,19 @@ data class LinkEntity(
             return LinkEntity(aType = a.type, aId = a.id, bType = b.type, bId = b.id)
         }
 
+        /**
+         * [link] between the items [moved] gives for its ends, normalized again (the ends may now sort
+         * the other way), with its label still read from the same item and its id and creation time
+         * kept; null if both ends became one item. Used when goals became visions.
+         */
+        fun remap(link: LinkEntity, moved: (ItemRef) -> ItemRef): LinkEntity? {
+            val a = moved(ItemRef(link.aType, link.aId))
+            val b = moved(ItemRef(link.bType, link.bId))
+            if (a == b) return null
+            val (subject, obj) = if (link.labelFromA) a to b else b to a
+            return labelled(subject, obj, link.labelId).copy(id = link.id, createdAt = link.createdAt)
+        }
+
         /** A link from [subject] to [obj] carrying [labelId], reading forward from [subject]. */
         fun labelled(subject: ItemRef, obj: ItemRef, labelId: Long?): LinkEntity {
             val link = between(subject, obj)

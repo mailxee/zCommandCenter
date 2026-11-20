@@ -11,7 +11,6 @@ import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
 import com.example.xcommandcenter.data.entity.ChecklistItemEntity
-import com.example.xcommandcenter.data.entity.GoalEntity
 import com.example.xcommandcenter.data.entity.HabitEntity
 import com.example.xcommandcenter.data.entity.HabitMarkEntity
 import com.example.xcommandcenter.data.entity.ItemTagEntity
@@ -66,7 +65,6 @@ class BackupFormatTest {
             TaskEntity(4, "Clean filters", dueDate = LocalDate.of(2026, 11, 2), createdAt = created,
                 recurrenceType = RecurrenceType.EVERY_N_WEEKS, weekdays = Recurrence.maskFromDays(setOf(DayOfWeek.MONDAY)), intervalDays = 3),
         ),
-        goals = listOf(GoalEntity(1, "Run a half marathon", "Three runs a week", created, priority = Priority.CRITICAL)),
         habits = listOf(HabitEntity(1, "Read", HabitCategory.NEGATIVE, RecurrenceType.EVERY_N_DAYS, 0, 1, 3, LocalDate.of(2026, 9, 1), "", created, priority = Priority.LOW)),
         habitMarks = listOf(HabitMarkEntity(1, LocalDate.of(2026, 10, 1)), HabitMarkEntity(1, LocalDate.of(2026, 10, 2), markedAt = created + 5_000)),
         plans = listOf(
@@ -161,7 +159,6 @@ class BackupFormatTest {
     fun `export then import gives the same data`() {
         val back = BackupFormat.fromSheets(BackupFormat.toSheets(data, TabOrder.default, zone), zone).data
         assertEquals(data.tasks, back.tasks)
-        assertEquals(data.goals, back.goals)
         assertEquals(data.habits, back.habits)
         assertEquals(data.habitMarks, back.habitMarks)
         // Parents come first on import, so the foreign key is satisfied.
@@ -330,7 +327,7 @@ class BackupFormatTest {
         val sheets = BackupFormat.toSheets(BackupData(), TabOrder.default, zone).map { sheet ->
             when (sheet.name) {
                 "Tasks" -> sheet.copy(rows = sheet.rows + listOf(listOf("", "New task", "", "46320", "high", "yes", "Every N days", "", "", "3")))
-                "Goals" -> sheet.copy(rows = sheet.rows + listOf(listOf("4", "Goal"), listOf("", "Another goal"), listOf("", "", "", "")))
+                "Plans" -> sheet.copy(rows = sheet.rows + listOf(listOf("4", "Plan"), listOf("", "Another plan"), listOf("", "", "", "")))
                 else -> sheet
             }
         }
@@ -344,14 +341,14 @@ class BackupFormatTest {
         assertEquals(3, task.intervalDays)
         assertEquals(created, task.createdAt)
         // A blank id gets the next one after the largest given id; fully blank rows are ignored.
-        assertEquals(listOf(4L, 5L), back.goals.map { it.id })
+        assertEquals(listOf(4L, 5L), back.plans.map { it.id })
     }
 
     @Test
     fun `references to missing items are skipped and counted`() {
         val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { sheet ->
             when (sheet.name) {
-                "Links" -> sheet.copy(rows = sheet.rows + listOf(listOf("Task", "1", "", "Goal", "99")))
+                "Links" -> sheet.copy(rows = sheet.rows + listOf(listOf("Task", "1", "", "Habit", "99")))
                 "Tags" -> sheet.copy(rows = sheet.rows + listOf(listOf("Note", "42", "", "work")))
                 else -> sheet
             }
@@ -386,16 +383,40 @@ class BackupFormatTest {
 
     @Test(expected = ImportException::class)
     fun `duplicate ids stop the import`() {
-        val sheets = listOf(Sheet("Goals", listOf(listOf("ID", "Title"), listOf("1", "A"), listOf("1", "B"))))
-        BackupFormat.fromSheets(BackupFormat.toSheets(BackupData(), TabOrder.default, zone).filterNot { it.name == "Goals" } + sheets, zone)
+        val sheets = listOf(Sheet("Plans", listOf(listOf("ID", "Title"), listOf("1", "A"), listOf("1", "B"))))
+        BackupFormat.fromSheets(BackupFormat.toSheets(BackupData(), TabOrder.default, zone).filterNot { it.name == "Plans" } + sheets, zone)
     }
 
     @Test
     fun hiddenTabsRoundTripAndOlderWorkbooksLeaveThemAlone() {
-        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone, hiddenTabs = setOf(ItemType.GOAL))
-        assertEquals(setOf(ItemType.GOAL), BackupFormat.fromSheets(sheets, zone).settings?.hiddenTabs)
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone, hiddenTabs = setOf(ItemType.QUOTE))
+        assertEquals(setOf(ItemType.QUOTE), BackupFormat.fromSheets(sheets, zone).settings?.hiddenTabs)
         // A workbook from before the Hidden column says nothing about hiding.
         val older = sheets.map { sheet -> if (sheet.name == "Settings") sheet.copy(rows = sheet.rows.map { it.dropLast(1) }) else sheet }
         assertEquals(null, BackupFormat.fromSheets(older, zone).settings?.hiddenTabs)
+    }
+
+    @Test
+    fun anOlderWorkbooksGoalsComeInAsVisions() {
+        val sheets = BackupFormat.toSheets(data, TabOrder.default, zone).map { sheet ->
+            when (sheet.name) {
+                "Links" -> sheet.copy(rows = sheet.rows + listOf(listOf("Goal", "8", "Writer", "Task", "1", "Water plants", "", "", ""), listOf("Habit", "1", "", "Goal", "99")))
+                "Tags" -> sheet.copy(rows = sheet.rows + listOf(listOf("Goal", "8", "Writer", "career")))
+                "Settings" -> sheet.copy(rows = sheet.rows + listOf(listOf("Goals", "11", "Purple", "", "", "", "", "Do", "No")))
+                else -> sheet
+            }
+        } + Sheet("Goals", listOf(listOf("ID", "Title", "Strategy", "Created", "Order", "Priority"), listOf("8", "Writer", "Substack", "", "0", "High")))
+        val back = BackupFormat.fromSheets(sheets, zone).data
+        val vision = back.ideas.single { it.title == "Writer" }
+        assertEquals(IdeaKind.VISION, vision.kind)
+        assertEquals("Substack", vision.body)
+        assertEquals(Priority.HIGH, vision.priority)
+        assertEquals(null, vision.parentId)
+        // After the ideas already there.
+        assertTrue(vision.id > data.ideas.maxOf { it.id })
+        val ref = ItemRef(ItemType.IDEA, vision.id)
+        assertTrue(back.links.any { setOf(ItemRef(it.aType, it.aId), ItemRef(it.bType, it.bId)) == setOf(ref, ItemRef(ItemType.TASK, 1)) })
+        assertEquals(data.links.size + 1, back.links.size)
+        assertTrue(back.itemTags.any { it.type == ItemType.IDEA && it.itemId == vision.id })
     }
 }
