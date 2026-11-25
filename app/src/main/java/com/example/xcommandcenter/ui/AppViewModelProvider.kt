@@ -37,7 +37,7 @@ object AppViewModelProvider {
         initializer { with(container()) { HabitDetailViewModel(createSavedStateHandle(), habitRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { PlanDetailViewModel(createSavedStateHandle(), planRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { NoteDetailViewModel(createSavedStateHandle(), noteRepository, ideaRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
-        initializer { with(container()) { IdeaDetailViewModel(createSavedStateHandle(), ideaRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
+        initializer { with(container()) { IdeaDetailViewModel(createSavedStateHandle(), ideaRepository, linkRepository, tagRepository, itemCardSource, reminderRepository, backupRepository) } }
         initializer { with(container()) { BookDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { ChapterDetailViewModel(createSavedStateHandle(), bookRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }
         initializer { with(container()) { PersonDetailViewModel(createSavedStateHandle(), personRepository, linkRepository, tagRepository, itemCardSource, reminderRepository) } }

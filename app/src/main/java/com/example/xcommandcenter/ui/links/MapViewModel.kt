@@ -287,7 +287,10 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
         val allEdges = underEdges + linkEdges
         // The Show panel's choices: what's left of the network once hidden tabs and kinds of link go.
         val (visible, edges) = filter.apply(shown, allEdges, root, { it.link.a to it.link.b }, { it.kind })
-        val sorted = visible.mapNotNull { graph.entries[it] }.sortedWith(compareBy({ layer(it.ref) }, { it.title.lowercase() }))
+        // Ideas (Think) or plans (Do) in their tab's order, first; everything else by layer and title.
+        val outline = graph.outline(mode)
+        val sorted = visible.mapNotNull { graph.entries[it] }
+            .sortedWith(compareBy({ if (it.ref in outline) -1 else layer(it.ref) }, { outline[it.ref] ?: Int.MAX_VALUE }, { it.title.lowercase() }))
         val counts = allEdges.groupingBy { it.kind }.eachCount()
         val linkKinds = buildList {
             counts[MapFilter.UNDER]?.let { add(LinkKindInfo(MapFilter.UNDER, "Under", filter.styleOf(MapFilter.UNDER), filter.shows(MapFilter.UNDER), it, width = filter.widthOf(MapFilter.UNDER))) }
@@ -310,7 +313,7 @@ class MapViewModel(savedState: SavedStateHandle, private val links: LinkReposito
             think -> refs.filter { it.type == ItemType.IDEA && it !in parents }
             else -> emptyList()
         }
-        val tree = GraphLayout.tree(roots, refs, pairs, firm = parents.toList())
+        val tree = GraphLayout.tree(roots, refs, pairs, firm = parents.toList().sortedBy { outline[it.first] ?: Int.MAX_VALUE })
         // Folding hides what is below an item in the tree, with the lines to it.
         val fold = folded.filter { it in visible && tree.children[it].orEmpty().isNotEmpty() }.toSet()
         val foldHidden = fold.flatMap { tree.descendants(it) }.toSet()

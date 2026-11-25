@@ -1,5 +1,7 @@
 package com.example.xcommandcenter.ui.common
 
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.Box
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,8 @@ fun DetailScaffold(
     onSave: ((close: Boolean) -> Unit)?,
     onDelete: (() -> Unit)?,
     deleteWarning: String = "This also removes all of its links.",
+    /** Extra actions in a ⋮ menu in the title bar, each given a way to close the menu; none without. */
+    menu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val snackbar = remember { SnackbarHostState() }
@@ -73,6 +77,15 @@ fun DetailScaffold(
                     }
                 },
                 actions = {
+                    if (menu != null) {
+                        var open by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { open = true }) {
+                                Icon(painterResource(R.drawable.ic_more_vert), contentDescription = "More")
+                            }
+                            DropdownMenu(expanded = open, onDismissRequest = { open = false }) { menu { open = false } }
+                        }
+                    }
                     if (onDelete != null) {
                         IconButton(onClick = { confirmDelete = true }) {
                             Icon(painterResource(R.drawable.ic_delete), contentDescription = "Delete")
@@ -133,3 +146,6 @@ fun DetailScaffold(
         )
     }
 }
+
+/** An Excel workbook's MIME type, for the file pickers of export and import. */
+const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

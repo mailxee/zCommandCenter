@@ -1487,6 +1487,30 @@ tasks, plans and habits link to visions, principles and ideas.
 - **Sample data**: the four sample goals are visions (ideas 11 to 14).
 - Simplify (its DAO, repository and Settings section) is removed.
 
+### 2.78 Map order, and networks of ideas as files
+
+- **The map follows the tabs' order.** `LinkGraph.outline(mode)` numbers the ideas (Think) or plans
+  (Do) as their tab lists them: depth first, siblings by `sortOrder` then title (`LinkDao.observeIdeas`
+  and `observePlanTree` now read in that order). `MapViewModel` puts them first in that order (other
+  items still by layer and title) and hands the tree's own Under lines to `GraphLayout.tree` sorted
+  the same way, so siblings keep it: clockwise from the top in a mind map or rings, left to right in a
+  tree, top to bottom in a list. A reorder on the tab shows on the map at once. Dragged boxes keep
+  their offsets.
+- **Export** (`data/backup/IdeaNetwork.kt`): `select` takes an idea and everything under it (the
+  idea made top level), or every idea; their lists and tags; and only the links joining two of them,
+  with the labels those use. `toSheets` writes the backup's own sheets for these (Ideas, Idea lists,
+  Links, Link labels, Tags), so the file opens and edits in Excel. On an idea's screen, ⋮ > Export
+  this network (`DetailScaffold`'s new `menu`); on the Ideas tab, ⋮ > Export all ideas.
+- **Import** never replaces: ⋮ > Import ideas… on the Ideas tab, then a place picked in
+  `IdeaPlacePicker` (the top level, or under an idea; the Under picker, now shared, with a search).
+  `IdeaNetwork.fromSheets` reads only those sheets (empty tab sheets fill in for the backup reader,
+  so a full backup imports its ideas only) and leaves out and counts links and tags on anything
+  else. `BackupDao.addIdeas` inserts in one transaction, parents first, with new ids: the top-level
+  ideas after the place's existing children in their own order, the rest keeping theirs; labels
+  matched by key or by wording both ways ignoring case (`IdeaNetwork.sameLabel`), else added; links
+  re-made between the new ends with the label read from the same idea; tags matched by name. The same
+  file imported twice gives two copies. A snackbar says what was added.
+
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
 The user taps the **"Done today"** check button on *Read 20 pages*.
@@ -1700,6 +1724,7 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/ReminderToday.kt` | Which items have a reminder today, for the Reminder chip (§2.63). |
 | `domain/BackupNames.kt`, `data/backup/AutoBackupRepository.kt`, `AutoBackupWorker.kt` | Daily backups to a chosen folder (§2.64). |
 | `domain/ThinkRoute.kt`, `domain/ThinkAnalysis.kt` | Think mode's route and checks (§2.62). |
+| `data/backup/IdeaNetwork.kt`, `ui/idea/IdeaPlacePicker.kt` | A network of ideas to and from a file, and the picker of where it goes (§2.78). |
 | `data/db/GoalsToVisions.kt`, `data/backup/LegacyGoals.kt` | Goals become visions: the version 16 upgrade, and older workbooks on import (§2.77). |
 | `domain/AppMode.kt`, `data/prefs/ModeRepository.kt` | Do and Think: the mode, each tab's mode, what each mode's networks run through (§2.61). |
 

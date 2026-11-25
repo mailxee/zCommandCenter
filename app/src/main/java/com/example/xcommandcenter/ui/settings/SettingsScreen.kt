@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.settings
 
+import com.example.xcommandcenter.ui.common.XLSX_MIME
 import com.example.xcommandcenter.domain.BackupNames
 import androidx.compose.material3.Switch
 import com.example.xcommandcenter.ui.common.KindIcon
@@ -383,7 +384,6 @@ fun SettingsScreen(
 
 private fun itemCount(n: Int) = if (n == 1) "1 item" else "$n items"
 
-private const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 /**
  * How long after a task's or plan's reminder goes off, with the item still open and no later

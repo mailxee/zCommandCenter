@@ -11,6 +11,7 @@ import com.example.xcommandcenter.domain.LinkLabels
 import com.example.xcommandcenter.domain.AppMode
 import com.example.xcommandcenter.domain.IdeaKind
 import com.example.xcommandcenter.domain.ThinkAnalysis
+import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.domain.ThinkRoute
 import com.example.xcommandcenter.domain.TabModes
 import kotlinx.coroutines.flow.map
@@ -51,7 +52,22 @@ data class LinkGraph(
     val thinkAnalysis: LinkAnalysis.Result = LinkAnalysis.Result(emptyList(), emptyList()),
     /** Each plan under another, as (plan, parent). */
     val planParents: List<PlanParent> = emptyList(),
+    /** Every plan in the Plans tab's order among siblings, for the order of plans on the map. */
+    val plans: List<TreeNode> = emptyList(),
 ) {
+    /**
+     * Each idea's (Think) or plan's (Do) place in its tab's outline, read top to bottom: the map
+     * places them in this order, so its branches run as the tab lists them (§2.78).
+     */
+    fun outline(mode: AppMode): Map<ItemRef, Int> {
+        val rows = if (mode == AppMode.THINK) {
+            PlanTree.flatten(ideas, { it.id }, { it.parentId }).map { ItemRef(ItemType.IDEA, it.node.id) }
+        } else {
+            PlanTree.flatten(plans, { it.id }, { it.parentId }).map { ItemRef(ItemType.PLAN, it.node.id) }
+        }
+        return rows.withIndex().associate { (i, ref) -> ref to i }
+    }
+
     /** Each idea under its parent, as pairs (child, parent): the mind map's tree. */
     val under: List<Pair<ItemRef, ItemRef>> =
         ideas.mapNotNull { idea -> idea.parentId?.let { ItemRef(ItemType.IDEA, idea.id) to ItemRef(ItemType.IDEA, it) } }
@@ -233,11 +249,11 @@ class LinkRepository(
     fun observeGraph(): Flow<LinkGraph> =
         combine(
             combine(dao.observeIndex(), dao.observeAll(), dao.observeIdeas(), ::Triple),
-            combine(dao.observeChapterBooks(), dao.observePlanParents(), ::Pair),
+            combine(dao.observeChapterBooks(), dao.observePlanParents(), dao.observePlanTree(), ::Triple),
             combine(route, thinkRoute, ::Pair),
             dao.observeKept(),
             labels,
-        ) { (index, stored, ideas), (chapterBooks, planParents), (route, thinkRoute), kept, labels ->
+        ) { (index, stored, ideas), (chapterBooks, planParents, plans), (route, thinkRoute), kept, labels ->
             val bookOf = chapterBooks.associate { it.chapterId to it.id }
             fun node(ref: ItemRef) = if (ref.type == ItemType.CHAPTER) bookOf[ref.id]?.let { ItemRef(ItemType.BOOK, it) } ?: ref else ref
             val labelById = labels.associateBy { it.id }
@@ -252,6 +268,7 @@ class LinkRepository(
             val doAnalysis = LinkAnalysis.analyze(links, bookOf, route, kept.toSet())
             LinkGraph(
                 ideas = ideas,
+                plans = plans,
                 thinkRoute = thinkRoute,
                 thinkAnalysis = ThinkAnalysis.analyze(
                     folded, ideas,

@@ -97,8 +97,11 @@ interface LinkDao {
     @Query("SELECT * FROM links")
     fun observeAll(): Flow<List<LinkEntity>>
 
-    /** Every idea's parent and kind: the mind map's tree and Think mode's checks. */
-    @Query("SELECT id, parentId, kind FROM ideas")
+    /**
+     * Every idea's parent and kind: the mind map's tree and Think mode's checks. In the Ideas tab's
+     * order among siblings, which the map keeps.
+     */
+    @Query("SELECT id, parentId, kind FROM ideas ORDER BY sortOrder, title COLLATE NOCASE")
     fun observeIdeas(): Flow<List<ThinkAnalysis.Idea>>
 
     /** Every plan under another, as (plan, parent): Do mode's tree on the map. */
@@ -110,7 +113,7 @@ interface LinkDao {
     fun observeIdeaTree(): Flow<List<TreeNode>>
 
     /** Every plan's parent and order among its siblings, for the link picker's outline. */
-    @Query("SELECT id, parentId, sortOrder FROM plans")
+    @Query("SELECT id, parentId, sortOrder FROM plans ORDER BY sortOrder, title COLLATE NOCASE")
     fun observePlanTree(): Flow<List<TreeNode>>
 
     /** Puts an idea under another, or at the top level with null; the map checks for loops first. */

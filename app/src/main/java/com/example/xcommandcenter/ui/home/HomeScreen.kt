@@ -1,5 +1,17 @@
 package com.example.xcommandcenter.ui.home
 
+import com.example.xcommandcenter.ui.idea.IdeaPlacePicker
+import com.example.xcommandcenter.ui.common.XLSX_MIME
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.Box
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.net.Uri
 import com.example.xcommandcenter.domain.AppMode
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -117,6 +129,20 @@ fun HomeScreen(
     val reorder by viewModel.reorderMode.collectAsStateWithLifecycle()
     val counts by viewModel.tabCounts.collectAsStateWithLifecycle()
     val open: (ItemRef) -> Unit = onOpen
+    val snackbar = remember { SnackbarHostState() }
+    viewModel.message?.let { text ->
+        LaunchedEffect(text) {
+            viewModel.messageShown()
+            snackbar.showSnackbar(text, withDismissAction = true, duration = SnackbarDuration.Long)
+        }
+    }
+    // A network of ideas to and from a file (§2.78); an imported one goes where the user picks.
+    var importing by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val exportIdeas = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(XLSX_MIME)) { uri ->
+        uri?.let(viewModel::exportIdeas)
+    }
+    // Some file pickers label .xlsx files as generic binary data, so accept that too.
+    val importIdeas = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> importing = uri }
 
     // The title bar slides away while the list scrolls down and back on the way up; the add button
     // shrinks to its icon meanwhile, so it covers less of the cards.
@@ -158,9 +184,28 @@ fun HomeScreen(
                     IconButton(onClick = onSettings) {
                         Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings")
                     }
+                    if (selected == ItemType.IDEA && !reorder) {
+                        var menu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menu = true }) {
+                                Icon(painterResource(R.drawable.ic_more_vert), contentDescription = "More")
+                            }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Export all ideas") },
+                                    onClick = { menu = false; exportIdeas.launch(viewModel.ideasFileName()) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Import ideas…") },
+                                    onClick = { menu = false; importIdeas.launch(arrayOf(XLSX_MIME, "application/octet-stream")) },
+                                )
+                            }
+                        }
+                    }
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             val label = "New ${selected.singular.lowercase()}"
             ExtendedFloatingActionButton(
@@ -234,6 +279,21 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    importing?.let { uri ->
+        val ideas by viewModel.allIdeas.collectAsStateWithLifecycle()
+        IdeaPlacePicker(
+            title = "Where should the imported ideas go?",
+            all = ideas,
+            excluded = emptySet(),
+            topLabel = "At the top level",
+            onPick = { parentId ->
+                importing = null
+                viewModel.importIdeas(uri, parentId)
+            },
+            onDismiss = { importing = null },
+        )
     }
 }
 

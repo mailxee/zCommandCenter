@@ -1,5 +1,11 @@
 package com.example.xcommandcenter.ui.home
 
+import android.net.Uri
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.example.xcommandcenter.data.backup.IdeaNetworkFiles
+import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.entity.PersonEntity
 import com.example.xcommandcenter.data.entity.IdeaEntity
@@ -666,6 +672,44 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             }
             if (sorts[type] == PrioritySort.PRIORITY) shown.sortedByDescending { priority(it).ordinal } else shown
         }.stateIn(emptyList())
+
+    /** Every idea, for the picker of where imported ideas go. */
+    val allIdeas: StateFlow<List<IdeaEntity>> = ideasRepo.observeAll().stateIn(emptyList())
+
+    /** Shown once in a snackbar, then cleared by the screen. */
+    var message by mutableStateOf<String?>(null)
+        private set
+
+    fun messageShown() {
+        message = null
+    }
+
+    fun ideasFileName(): String = IdeaNetworkFiles.name(null)
+
+    /** Writes every idea, with the links between them, to [uri] (see [IdeaNetwork]). */
+    fun exportIdeas(uri: Uri) {
+        viewModelScope.launch {
+            message = try {
+                val count = container.backupRepository.exportIdeas(uri, null)
+                "Exported ${if (count == 1) "1 idea" else "$count ideas"}."
+            } catch (e: Exception) {
+                "Export failed: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
+    /** Adds the ideas in the file at [uri] as copies, its top-level ones under [parentId] (null: top level). */
+    fun importIdeas(uri: Uri, parentId: Long?) {
+        viewModelScope.launch {
+            message = try {
+                container.backupRepository.importIdeas(uri, parentId).message
+            } catch (e: ImportException) {
+                e.message
+            } catch (e: Exception) {
+                "Import failed: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
 
     private fun <T> Flow<T>.stateIn(initial: T): StateFlow<T> =
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)

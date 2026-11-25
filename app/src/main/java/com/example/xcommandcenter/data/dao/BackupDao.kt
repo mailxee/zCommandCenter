@@ -12,6 +12,10 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import com.example.xcommandcenter.data.backup.BackupData
+import com.example.xcommandcenter.data.backup.IdeaNetwork
+import com.example.xcommandcenter.domain.ItemRef
+import com.example.xcommandcenter.domain.ItemType
+import com.example.xcommandcenter.domain.PlanTree
 import com.example.xcommandcenter.data.entity.BlockEntity
 import com.example.xcommandcenter.data.entity.BookEntity
 import com.example.xcommandcenter.data.entity.ChapterEntity
@@ -193,5 +197,60 @@ interface BackupDao {
         insertTags(data.tags)
         insertItemTags(data.itemTags)
         insertReminders(data.reminders)
+    }
+
+    @Insert suspend fun insertIdea(row: IdeaEntity): Long
+    @Insert suspend fun insertLinkLabel(row: LinkLabelEntity): Long
+    @Insert suspend fun insertTag(row: TagEntity): Long
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM ideas WHERE parentId IS :parentId") suspend fun nextIdeaOrder(parentId: Long?): Int
+    @Query("SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM link_labels") suspend fun nextLabelOrder(): Int
+
+    /**
+     * Adds a network of ideas (see [IdeaNetwork]) as copies with new ids, all or nothing, and
+     * changes nothing already here. Its top-level ideas go under [parentId] (null: top level)
+     * after the ideas already there, in their own order; the rest keep their places. Its labels
+     * are matched to these by [IdeaNetwork.sameLabel] and added when new; tags are matched by name.
+     */
+    @Transaction
+    suspend fun addIdeas(network: BackupData, parentId: Long?): IdeaNetwork.Added {
+        val rows = PlanTree.flatten(network.ideas, { it.id }, { it.parentId }).map { it.node }
+        val newId = HashMap<Long, Long>()
+        var nextTop = nextIdeaOrder(parentId)
+        val tops = rows.filter { it.parentId == null }.sortedBy { it.sortOrder }.map { it.id }
+        val topOrder = tops.withIndex().associate { (i, id) -> id to nextTop + i }
+        nextTop += tops.size
+        rows.forEach { idea ->
+            val parent = idea.parentId?.let(newId::get) ?: parentId
+            newId[idea.id] = insertIdea(idea.copy(id = 0, parentId = parent, sortOrder = topOrder[idea.id] ?: idea.sortOrder))
+        }
+        insertIdeaListItems(network.ideaListItems.mapNotNull { item -> newId[item.ideaId]?.let { item.copy(id = 0, ideaId = it) } })
+
+        val labels = linkLabels().toMutableList()
+        var newLabels = 0
+        var labelOrder = nextLabelOrder()
+        val labelId = network.linkLabels.associate { label ->
+            val same = IdeaNetwork.sameLabel(label, labels)
+            label.id to (same ?: label.copy(id = 0, sortOrder = labelOrder++).let { it.copy(id = insertLinkLabel(it)) }.also { labels += it; newLabels++ }).id
+        }
+        val links = network.links
+            .filter { it.aType == ItemType.IDEA && it.bType == ItemType.IDEA && it.aId in newId && it.bId in newId }
+            .mapNotNull { link ->
+                val label = link.labelId?.let(labelId::get)
+                val relabelled = link.copy(labelId = label, labelFromA = label == null || link.labelFromA)
+                LinkEntity.remap(relabelled) { ItemRef(ItemType.IDEA, newId.getValue(it.id)) }?.copy(id = 0)
+            }
+        insertLinks(links)
+
+        val tagIds = tags().associate { it.name.lowercase() to it.id }.toMutableMap()
+        val names = network.tags.associate { it.id to it.name }
+        insertItemTags(
+            network.itemTags.mapNotNull { t ->
+                val idea = newId[t.itemId] ?: return@mapNotNull null
+                val name = names[t.tagId] ?: return@mapNotNull null
+                val tag = tagIds.getOrPut(name.lowercase()) { insertTag(TagEntity(name = name)) }
+                ItemTagEntity(ItemType.IDEA, idea, tag)
+            }.distinct(),
+        )
+        return IdeaNetwork.Added(ideas = rows.size, links = links.size, newLabels = newLabels)
     }
 }

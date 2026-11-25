@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.idea
 
+import android.net.Uri
+import com.example.xcommandcenter.data.backup.BackupRepository
+import com.example.xcommandcenter.data.backup.IdeaNetworkFiles
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -30,6 +33,7 @@ class IdeaDetailViewModel(
     tags: TagRepository,
     cards: ItemCardSource,
     reminders: ReminderRepository,
+    private val backup: BackupRepository? = null,
 ) : ItemDetailViewModel(savedStateHandle, ItemType.IDEA, links, tags, cards, reminders) {
 
     var idea by mutableStateOf(
@@ -120,6 +124,24 @@ class IdeaDetailViewModel(
                 onSaved(repository.save(toSave, listItems), close)
             } catch (e: IllegalArgumentException) {
                 message = e.message
+            }
+        }
+    }
+
+    /** A file name for this idea's network: its title, made safe for a file name, and the date. */
+    fun networkFileName(): String = IdeaNetworkFiles.name(idea.title)
+
+    /** Writes this idea and everything under it, as saved, to [uri] (see [IdeaNetwork]). */
+    fun exportNetwork(uri: Uri) {
+        val id = itemId.value
+        val backup = backup ?: return
+        if (id == 0L) return
+        viewModelScope.launch {
+            message = try {
+                val count = backup.exportIdeas(uri, id)
+                "Exported ${if (count == 1) "1 idea" else "$count ideas"}."
+            } catch (e: Exception) {
+                "Export failed: ${e.message ?: e.javaClass.simpleName}"
             }
         }
     }

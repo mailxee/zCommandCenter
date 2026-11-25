@@ -1,5 +1,9 @@
 package com.example.xcommandcenter.ui.idea
 
+import com.example.xcommandcenter.ui.common.XLSX_MIME
+import androidx.compose.material3.DropdownMenuItem
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -77,6 +81,10 @@ fun IdeaDetailScreen(
     var addingExisting by rememberSaveable { mutableStateOf(false) }
     val parent = all.firstOrNull { it.id == idea.parentId }
     val children = if (id == 0L) emptyList() else all.filter { it.parentId == id }
+    // The idea, everything under it and the links between them, as a file (§2.78).
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(XLSX_MIME)) { uri ->
+        uri?.let(viewModel::exportNetwork)
+    }
 
     DetailScaffold(
         title = if (id == 0L) "New ${idea.kind.label.lowercase()}" else idea.kind.label,
@@ -85,6 +93,12 @@ fun IdeaDetailScreen(
         onSave = viewModel::save,
         onDelete = if (id == 0L) null else viewModel::delete,
         deleteWarning = "The ideas under it move up one level. All of its links are removed.",
+        menu = if (id == 0L) null else { close ->
+            DropdownMenuItem(
+                text = { Text("Export this network") },
+                onClick = { close(); exportLauncher.launch(viewModel.networkFileName()) },
+            )
+        },
     ) {
         SectionTitle("Kind")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -185,7 +199,8 @@ fun IdeaDetailScreen(
     }
 
     if (choosingParent) {
-        ParentPicker(
+        IdeaPlacePicker(
+            title = "Under",
             all = all,
             // An idea can't go under itself or anything below it.
             excluded = if (id == 0L) emptySet() else PlanTree.subtreeIds(id, all, { it.id }, { it.parentId }),
@@ -214,36 +229,6 @@ fun KindDefinition(kind: IdeaKind, definition: String) {
             )
         }
     }
-}
-
-@Composable
-private fun ParentPicker(all: List<IdeaEntity>, excluded: Set<Long>, onPick: (Long?) -> Unit, onDismiss: () -> Unit) {
-    val options = PlanTree.flatten(all, { it.id }, { it.parentId }).filter { it.node.id !in excluded }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Under") },
-        text = {
-            Column {
-                ListItem(
-                    colors = clearListItemColors(),
-                    headlineContent = { Text("Nothing (top level)") },
-                    modifier = Modifier.clickable { onPick(null) },
-                )
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    items(options, key = { it.node.id }) { row ->
-                        ListItem(
-                            colors = clearListItemColors(),
-                            leadingContent = { KindIcon(row.node.kind) },
-                            headlineContent = { Text(row.node.title) },
-                            modifier = Modifier.padding(start = (row.depth * 16).dp).clickable { onPick(row.node.id) },
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 /**

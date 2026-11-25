@@ -46,14 +46,7 @@ class BackupRepository(
      * anything is wrong an [ImportException] says what, and the current data is left untouched.
      */
     suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
-        val sheets = try {
-            val input = context.contentResolver.openInputStream(uri) ?: error("Can't open the chosen file")
-            input.use { Xlsx.read(it) }
-        } catch (e: ImportException) {
-            throw e
-        } catch (e: Exception) {
-            throw ImportException("This file couldn't be read as an Excel workbook (.xlsx). Nothing was imported.")
-        }
+        val sheets = read(uri)
         val result = BackupFormat.fromSheets(sheets)
         reminders.cancelAll()
         dao.replaceAll(result.data)
@@ -67,6 +60,35 @@ class BackupRepository(
         }
         result.scheduleChoice?.let { scheduleChoice.restore(it.selectedId, it.automatic) }
         result
+    }
+
+    /**
+     * Writes a network of ideas to [uri] (see [IdeaNetwork]): [rootId] and everything under it, or
+     * with null every idea. Returns how many ideas went in.
+     */
+    suspend fun exportIdeas(uri: Uri, rootId: Long?): Int = withContext(Dispatchers.IO) {
+        val network = IdeaNetwork.select(dao.snapshot(), rootId)
+        val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Can't write to the chosen file")
+        out.use { Xlsx.write(IdeaNetwork.toSheets(network), it) }
+        network.ideas.size
+    }
+
+    /**
+     * Adds the network of ideas at [uri] as copies, its top-level ideas under [parentId] (null: at
+     * the top level). Nothing already here changes; an [ImportException] says why a file can't be used.
+     */
+    suspend fun importIdeas(uri: Uri, parentId: Long?): IdeaNetwork.Added = withContext(Dispatchers.IO) {
+        val read = IdeaNetwork.fromSheets(read(uri))
+        dao.addIdeas(read.network, parentId).copy(skipped = read.skipped)
+    }
+
+    private fun read(uri: Uri): List<Sheet> = try {
+        val input = context.contentResolver.openInputStream(uri) ?: error("Can't open the chosen file")
+        input.use { Xlsx.read(it) }
+    } catch (e: ImportException) {
+        throw e
+    } catch (e: Exception) {
+        throw ImportException("This file couldn't be read as an Excel workbook (.xlsx). Nothing was imported.")
     }
 
     /**
