@@ -1009,7 +1009,7 @@ default tab order, so an existing order gets it at the end.
   that kind (several can be on), hold to hide it; with any filter on, the ideas above a match stay so
   the tree reads.
 - **Idea page:** the kind as chips with its definition below (from the glossary, §2.60), the idea, the explanation, **Under** (a picker showing the tree) and the ideas
-  under this one with "Add an idea under this" (one kind narrower than the parent by default).
+  under this one with "Add an idea under this" (an Idea by default, since §2.79).
 - **Turn into idea** (a note's page): saves the note, then makes it an idea of the chosen kind and
   deletes the note (`IdeaRepository.fromNote`). The title (or the note's first line) becomes the
   idea; the rest of the text and the list become the explanation. Links are made again from the
@@ -1510,6 +1510,16 @@ tasks, plans and habits link to visions, principles and ideas.
   matched by key or by wording both ways ignoring case (`IdeaNetwork.sameLabel`), else added; links
   re-made between the new ends with the label read from the same idea; tags matched by name. The same
   file imported twice gives two copies. A snackbar says what was added.
+### 2.79 Swipe to remove list items, back twice to exit, new ideas are Ideas
+
+- **List items** (`ListEditor`: a task's checklist, a note's, idea's and person's lists) have no
+  remove button any more: an item is swiped away either way (`SwipeToDismissBox`, a red strip with a
+  bin behind it; off while moving items). Screen readers get a "Remove item" action instead.
+- **Back on the main tabs** (`HomeScreen`'s `BackHandler`) first leaves Reorder or link mode;
+  otherwise the first press shows a "Press back again to exit" toast, and a second press within two
+  seconds closes the app.
+- **A new idea is an Idea**, from the tab or under another idea; it no longer starts one kind
+  narrower than its parent.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

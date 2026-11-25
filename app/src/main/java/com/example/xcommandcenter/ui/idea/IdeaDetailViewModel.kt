@@ -59,15 +59,6 @@ class IdeaDetailViewModel(
                 list = repository.listItems(id).map { lines.line(it.text) }
                 markClean()
             }
-        } else {
-            // A new idea under another starts one kind narrower than its parent (a belief under a
-            // vision), down to Idea: a question is only ever chosen.
-            val parentId = idea.parentId
-            if (parentId != null) viewModelScope.launch {
-                val parent = repository.get(parentId) ?: return@launch
-                idea = idea.copy(kind = IdeaKind.entries[minOf(parent.kind.ordinal + 1, IdeaKind.IDEA.ordinal)])
-                markClean()
-            }
         }
         markClean()
     }

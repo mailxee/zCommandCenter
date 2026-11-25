@@ -1,5 +1,12 @@
 package com.example.xcommandcenter.ui.common
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +46,7 @@ import sh.calvin.reorderable.ReorderableColumn
 data class ListLine(val key: Long, val text: String, val done: Boolean = false)
 
 /**
- * A bulleted list edited in place: edit, remove or drag items to a new place, and add new ones at
+ * A bulleted list edited in place: edit, swipe away to remove, or drag items to a new place, and add new ones at
  * the end. With [checkable], each item has a checkbox instead of a bullet (a task's checklist);
  * without, items are plain bullets (a note's list). [leading], when given, draws the start of each
  * row instead (a person's profiles and items show what each one is). [onMove] gets the item's old
@@ -85,13 +92,27 @@ fun ListEditor(
     ReorderableColumn(list = lines, onSettle = onMove) { index, line, dragging ->
         key(line.key) {
             ReorderableItem {
+                // Swiped away either way to remove, so a stray tap can't (there is no remove button);
+                // screen readers get "Remove item" as an action instead. Not while moving.
+                val swipe = rememberSwipeToDismissBoxState()
+                SwipeToDismissBox(
+                    state = swipe,
+                    gesturesEnabled = !moving,
+                    onDismiss = { onRemove(line.key) },
+                    backgroundContent = { RemoveBackground(swipe.dismissDirection) },
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .semantics {
+                            if (!moving) customActions = listOf(CustomAccessibilityAction("Remove item") { onRemove(line.key); true })
+                        },
+                ) {
                 // Each item is its own soft box, so items read apart; the controls sit level with
                 // the first line of the text rather than the middle of a long item.
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = if (dragging) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                     shadowElevation = if (dragging) 6.dp else 0.dp,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     val struck = checkable && line.done
                     val textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -136,17 +157,8 @@ fun ListEditor(
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             modifier = Modifier.weight(1f).padding(start = 4.dp, top = 8.dp, bottom = 8.dp),
                         )
-                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-                            IconButton(onClick = { onRemove(line.key) }, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    painterResource(R.drawable.ic_close),
-                                    contentDescription = "Remove item",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
                     }
+                }
                 }
             }
         }
@@ -170,6 +182,24 @@ fun ListEditor(
         )
         IconButton(onClick = add, enabled = newItem.isNotBlank()) {
             Icon(painterResource(R.drawable.ic_add), contentDescription = "Add item")
+        }
+    }
+}
+
+/** Behind an item being swiped away: a red strip with a bin on the side it is uncovered from. */
+@Composable
+private fun RemoveBackground(direction: SwipeToDismissBoxValue) {
+    if (direction == SwipeToDismissBoxValue.Settled) return
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Box(
+            contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            Icon(painterResource(R.drawable.ic_delete), contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
         }
     }
 }

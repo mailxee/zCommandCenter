@@ -1,5 +1,9 @@
 package com.example.xcommandcenter.ui.home
 
+import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import com.example.xcommandcenter.ui.idea.IdeaPlacePicker
 import com.example.xcommandcenter.ui.common.XLSX_MIME
 import androidx.compose.runtime.LaunchedEffect
@@ -130,6 +134,27 @@ fun HomeScreen(
     val counts by viewModel.tabCounts.collectAsStateWithLifecycle()
     val open: (ItemRef) -> Unit = onOpen
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val linkRootEntry by viewModel.linkRoot.collectAsStateWithLifecycle()
+    // Back leaves Reorder or link mode first. Otherwise the first press only says the next one
+    // exits (a toast); a second press within two seconds lets the system close the app.
+    var exitArmed by remember { mutableStateOf(false) }
+    LaunchedEffect(exitArmed) {
+        if (exitArmed) {
+            delay(2_000)
+            exitArmed = false
+        }
+    }
+    BackHandler(enabled = reorder || linkRootEntry != null || !exitArmed) {
+        when {
+            reorder -> viewModel.setReorderMode(false)
+            linkRootEntry != null -> viewModel.exitLinkMode()
+            else -> {
+                exitArmed = true
+                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     viewModel.message?.let { text ->
         LaunchedEffect(text) {
             viewModel.messageShown()
