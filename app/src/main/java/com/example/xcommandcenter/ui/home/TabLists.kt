@@ -228,8 +228,8 @@ fun HabitsTab(viewModel: HomeViewModel, onOpen: (ItemRef) -> Unit, controls: Boo
                             HabitTodayButton(summary.positive, summary.markedToday) { viewModel.toggleHabitToday(habit.id) }
                         }
                     },
-                    // This week only; the habit's page has the full calendar.
-                    footer = { HabitWeek(habit, summary.marks) },
+                    // The last seven days, each due one tappable; the habit's page has the full calendar.
+                    footer = { HabitWeek(habit, summary.marks, onToggle = { day -> viewModel.toggleHabitDay(habit, day, day in summary.marks) }) },
                 )
             }
         }

@@ -1,5 +1,8 @@
 package com.example.xcommandcenter.ui.home
 
+import com.example.xcommandcenter.data.entity.HabitEntity
+import com.example.xcommandcenter.domain.HabitCategory
+import com.example.xcommandcenter.domain.HabitHandoff
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -651,6 +654,34 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun toggleHabitToday(habitId: Long) {
         viewModelScope.launch { habitsRepo.toggleMark(habitId, LocalDate.now()) }
+    }
+
+    /** A habit's day switched from its card, said in a snackbar with Undo (taps on a scrolling list can stray). */
+    data class HabitDayChange(val habitId: Long, val date: LocalDate, val text: String)
+
+    var habitDayChange by mutableStateOf<HabitDayChange?>(null)
+        private set
+
+    /** Switches [date] of [habit] between marked and not; [wasMarked] is how it was, for the message. */
+    fun toggleHabitDay(habit: HabitEntity, date: LocalDate, wasMarked: Boolean) {
+        viewModelScope.launch {
+            habitsRepo.toggleMark(habit.id, date)
+            val positive = habit.category == HabitCategory.POSITIVE
+            // A negative habit's mark is a miss; unmarked, a due day counts as done.
+            val done = if (positive) !wasMarked else wasMarked
+            val day = HabitHandoff.dayLabel(date, LocalDate.now())
+            habitDayChange = HabitDayChange(habit.id, date, "'${habit.name}' marked ${if (done) "done" else "missed"} on $day")
+        }
+    }
+
+    /** Puts the day back as it was. */
+    fun undoHabitDay(change: HabitDayChange) {
+        viewModelScope.launch { habitsRepo.toggleMark(change.habitId, change.date) }
+    }
+
+    /** Clears [change] once its snackbar is done, unless a newer one has replaced it. */
+    fun habitDayChangeShown(change: HabitDayChange) {
+        if (habitDayChange == change) habitDayChange = null
     }
 
     /**

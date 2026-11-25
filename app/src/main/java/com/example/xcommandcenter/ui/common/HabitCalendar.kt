@@ -152,9 +152,10 @@ private fun RowScope.DayCell(date: LocalDate?, status: DayStatus, today: LocalDa
                 DayStatus.MISSED -> "missed"
                 else -> "not marked yet"
             }
+            // Clickable before the cleared semantics, which would otherwise hide its action too.
             circle = circle
-                .clearAndSetSemantics { contentDescription = "${date.format(dayName)}, $state" }
                 .clickable(role = Role.Button, onClickLabel = if (status == DayStatus.DONE) "Mark missed" else "Mark done") { onToggle(date) }
+                .clearAndSetSemantics { contentDescription = "${date.format(dayName)}, $state" }
         }
         Box(circle, contentAlignment = Alignment.Center) {
             Text(
@@ -173,29 +174,40 @@ private fun RowScope.DayCell(date: LocalDate?, status: DayStatus, today: LocalDa
     }
 }
 
-/** This week, Monday to Sunday, marked as [HabitCalendar] marks a month: for a habit's card. */
+/**
+ * The last seven days, today at the right, marked as [HabitCalendar] marks a month: for a habit's
+ * card. With [onToggle], each day the habit was due (or is marked) can be tapped anywhere in its
+ * column, letter and number, to switch it between done and missed; later days and days it wasn't
+ * due can't.
+ */
 @Composable
-fun HabitWeek(habit: HabitEntity, marks: Set<LocalDate>, today: LocalDate = LocalDate.now()) {
+fun HabitWeek(habit: HabitEntity, marks: Set<LocalDate>, today: LocalDate = LocalDate.now(), onToggle: ((LocalDate) -> Unit)? = null) {
     val due = remember(habit, marks, today) {
         HabitStats.dueDates(habit.category, habit.recurrence, habit.startDate, marks, today, until = today).toSet()
     }
     val positive = habit.category == HabitCategory.POSITIVE
-    val monday = today.minusDays(today.dayOfWeek.value - 1L)
-    val days = (0L..6L).map { monday.plusDays(it) }
+    val days = (6L downTo 0L).map { today.minusDays(it) }
     val status = days.associateWith { dayStatus(it, it in marks, it in due, positive, habit.startDate, today) }
+    val summary = "Last 7 days: done ${status.values.count { it == DayStatus.DONE }}, missed ${status.values.count { it == DayStatus.MISSED }}"
     Row(
-        Modifier.fillMaxWidth().clearAndSetSemantics {
-            contentDescription = "This week: done ${status.values.count { it == DayStatus.DONE }}, missed ${status.values.count { it == DayStatus.MISSED }}"
-        },
+        Modifier.fillMaxWidth().then(
+            if (onToggle == null) Modifier.clearAndSetSemantics { contentDescription = summary } else Modifier.semantics { contentDescription = summary },
+        ),
     ) {
         days.forEach { date ->
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            val dayStatus = status.getValue(date)
+            val column = if (onToggle == null || dayStatus == DayStatus.NONE) Modifier else Modifier
+                .clickable(role = Role.Button, onClickLabel = if (dayStatus == DayStatus.DONE) "Mark missed" else "Mark done") { onToggle(date) }
+                .clearAndSetSemantics {
+                    contentDescription = "${date.format(dayName)}, ${if (dayStatus == DayStatus.DONE) "done" else "missed"}"
+                }
+            Column(Modifier.weight(1f).then(column).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row { DayCell(date, status.getValue(date), today, null) }
+                Row { DayCell(date, dayStatus, today, null) }
             }
         }
     }

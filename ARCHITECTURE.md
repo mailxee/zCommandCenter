@@ -1520,6 +1520,14 @@ tasks, plans and habits link to visions, principles and ideas.
   seconds closes the app.
 - **A new idea is an Idea**, from the tab or under another idea; it no longer starts one kind
   narrower than its parent.
+- **Habits, marked without scrolling.** A habit card's week row (`HabitWeek`) is now the last seven
+  days, today at the right, and a day the habit was due (or is marked) switches between done and
+  missed when tapped anywhere in its column (about 45 by 44 dp; the circles look as before). A
+  snackbar says what changed, with Undo (`HomeViewModel.toggleHabitDay`, `undoHabitDay`). On the
+  habit's page the streak and month calendar now sit right under today's button and the name, with
+  the fields to edit below.
+- **Snackbars** on the detail screens and the main tabs are cleared only after they have shown:
+  clearing first changed the effect's key and cancelled the snackbar.
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 

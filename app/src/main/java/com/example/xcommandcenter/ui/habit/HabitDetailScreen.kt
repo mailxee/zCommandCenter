@@ -60,6 +60,23 @@ fun HabitDetailScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        // The history next, so marking a past day needs no scrolling; the other fields follow.
+        viewModel.saved?.let { saved ->
+            val today = LocalDate.now()
+            val positive = saved.category == HabitCategory.POSITIVE
+            val streak = HabitStats.streak(saved.category, saved.recurrence, saved.startDate, marks, today)
+            Text(
+                if (positive) "Current streak: $streak · Done ${times(marks.size)}"
+                else "Clean streak: $streak · Missed ${times(marks.size)}",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                "Tap a due day to switch it between done (green) and missed (red). Swipe for other months.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HabitCalendar(saved, marks, onToggle = viewModel::toggleMark, today = today)
+        }
 
         SectionTitle("Category")
         HabitCategory.entries.forEach { category ->
@@ -110,25 +127,6 @@ fun HabitDetailScreen(
         PriorityField(habit.priority) { p -> viewModel.update { it.copy(priority = p) } }
         TagsSection(viewModel)
         LinkedItemsSection(viewModel, onOpen)
-
-        viewModel.saved?.let { saved ->
-            val today = LocalDate.now()
-            val positive = saved.category == HabitCategory.POSITIVE
-            val streak = HabitStats.streak(saved.category, saved.recurrence, saved.startDate, marks, today)
-            SectionTitle("History")
-            Text(
-                if (positive) "Current streak: $streak · Done ${times(marks.size)}"
-                else "Clean streak: $streak · Missed ${times(marks.size)}",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Text(
-                "Tap a due day to switch it between done (green) and missed (red). Swipe for other months.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            HabitCalendar(saved, marks, onToggle = viewModel::toggleMark, today = today)
-        }
-
     }
 }
 

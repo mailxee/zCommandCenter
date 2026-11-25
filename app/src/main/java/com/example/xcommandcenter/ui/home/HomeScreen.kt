@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.ui.home
 
+import androidx.compose.material3.SnackbarResult
 import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
@@ -135,6 +136,14 @@ fun HomeScreen(
     val open: (ItemRef) -> Unit = onOpen
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
+    viewModel.habitDayChange?.let { change ->
+        // Cleared only once shown: clearing first would end this effect, and the snackbar with it.
+        LaunchedEffect(change) {
+            val result = snackbar.showSnackbar(change.text, actionLabel = "Undo", duration = SnackbarDuration.Short)
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoHabitDay(change)
+            viewModel.habitDayChangeShown(change)
+        }
+    }
     val linkRootEntry by viewModel.linkRoot.collectAsStateWithLifecycle()
     // Back leaves Reorder or link mode first. Otherwise the first press only says the next one
     // exits (a toast); a second press within two seconds lets the system close the app.
@@ -157,8 +166,8 @@ fun HomeScreen(
     }
     viewModel.message?.let { text ->
         LaunchedEffect(text) {
-            viewModel.messageShown()
             snackbar.showSnackbar(text, withDismissAction = true, duration = SnackbarDuration.Long)
+            viewModel.messageShown()
         }
     }
     // A network of ideas to and from a file (§2.78); an imported one goes where the user picks.

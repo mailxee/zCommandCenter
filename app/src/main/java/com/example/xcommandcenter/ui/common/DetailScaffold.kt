@@ -60,10 +60,11 @@ fun DetailScaffold(
     BackHandler(enabled = unsaved) { confirmLeave = true }
 
     LaunchedEffect(viewModel.closed) { if (viewModel.closed) onBack() }
+    // Cleared only once shown: clearing first changes the key, which ends this effect and the snackbar.
     LaunchedEffect(viewModel.message) {
         viewModel.message?.let {
-            viewModel.messageShown()
             snackbar.showSnackbar(it)
+            viewModel.messageShown()
         }
     }
 
