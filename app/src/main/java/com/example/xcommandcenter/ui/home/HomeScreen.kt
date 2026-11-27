@@ -5,7 +5,8 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import com.example.xcommandcenter.ui.idea.IdeaPlacePicker
+import com.example.xcommandcenter.ui.idea.IdeaImportPreviewDialog
+import com.example.xcommandcenter.ui.common.DOCX_MIME
 import com.example.xcommandcenter.ui.common.XLSX_MIME
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.SnackbarHostState
@@ -170,13 +171,18 @@ fun HomeScreen(
             viewModel.messageShown()
         }
     }
-    // A network of ideas to and from a file (§2.78); an imported one goes where the user picks.
-    var importing by rememberSaveable { mutableStateOf<Uri?>(null) }
+    // A network of ideas to and from a file (§2.78), or an outline from a Word document; what a
+    // file holds is shown first, and goes where the user picks (§2.80).
     val exportIdeas = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(XLSX_MIME)) { uri ->
         uri?.let(viewModel::exportIdeas)
     }
     // Some file pickers label .xlsx files as generic binary data, so accept that too.
-    val importIdeas = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> importing = uri }
+    val importIdeas = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.previewIdeas(it, word = false) }
+    }
+    val importOutline = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.previewIdeas(it, word = true) }
+    }
 
     // The title bar slides away while the list scrolls down and back on the way up; the add button
     // shrinks to its icon meanwhile, so it covers less of the cards.
@@ -230,8 +236,12 @@ fun HomeScreen(
                                     onClick = { menu = false; exportIdeas.launch(viewModel.ideasFileName()) },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Import ideas…") },
+                                    text = { Text("Import ideas from Excel…") },
                                     onClick = { menu = false; importIdeas.launch(arrayOf(XLSX_MIME, "application/octet-stream")) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Import a Word outline…") },
+                                    onClick = { menu = false; importOutline.launch(arrayOf(DOCX_MIME, "application/octet-stream")) },
                                 )
                             }
                         }
@@ -315,18 +325,13 @@ fun HomeScreen(
         }
     }
 
-    importing?.let { uri ->
+    viewModel.importPreview?.let { preview ->
         val ideas by viewModel.allIdeas.collectAsStateWithLifecycle()
-        IdeaPlacePicker(
-            title = "Where should the imported ideas go?",
-            all = ideas,
-            excluded = emptySet(),
-            topLabel = "At the top level",
-            onPick = { parentId ->
-                importing = null
-                viewModel.importIdeas(uri, parentId)
-            },
-            onDismiss = { importing = null },
+        IdeaImportPreviewDialog(
+            preview = preview,
+            existing = ideas,
+            onImport = viewModel::importPreviewed,
+            onDismiss = viewModel::cancelImport,
         )
     }
 }

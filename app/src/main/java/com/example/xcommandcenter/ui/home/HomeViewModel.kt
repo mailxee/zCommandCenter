@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.xcommandcenter.data.backup.IdeaNetworkFiles
+import com.example.xcommandcenter.data.backup.IdeaImportPreview
 import com.example.xcommandcenter.data.backup.ImportException
 import com.example.xcommandcenter.data.repository.PersonLists
 import com.example.xcommandcenter.data.entity.PersonEntity
@@ -729,17 +730,38 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Adds the ideas in the file at [uri] as copies, its top-level ones under [parentId] (null: top level). */
-    fun importIdeas(uri: Uri, parentId: Long?) {
+    /** Ideas read from a file, shown before they are added (§2.80); null when none is. */
+    var importPreview by mutableStateOf<IdeaImportPreview?>(null)
+        private set
+
+    /** Reads the ideas in the file at [uri] (a Word outline with [word], else a workbook) into [importPreview]. */
+    fun previewIdeas(uri: Uri, word: Boolean) {
+        viewModelScope.launch {
+            try {
+                importPreview = container.backupRepository.previewIdeas(uri, word)
+            } catch (e: ImportException) {
+                message = e.message
+            } catch (e: Exception) {
+                message = "Import failed: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
+    /** Adds the previewed ideas as copies, under a new idea named [rootTitle] if given, the top under [parentId]. */
+    fun importPreviewed(rootTitle: String?, parentId: Long?) {
+        val preview = importPreview ?: return
+        importPreview = null
         viewModelScope.launch {
             message = try {
-                container.backupRepository.importIdeas(uri, parentId).message
-            } catch (e: ImportException) {
-                e.message
+                container.backupRepository.addPreviewed(preview, rootTitle, parentId).message
             } catch (e: Exception) {
                 "Import failed: ${e.message ?: e.javaClass.simpleName}"
             }
         }
+    }
+
+    fun cancelImport() {
+        importPreview = null
     }
 
     private fun <T> Flow<T>.stateIn(initial: T): StateFlow<T> =

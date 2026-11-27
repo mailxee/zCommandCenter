@@ -89,7 +89,7 @@ import kotlin.math.sign
  * How much each box shows, by zoom (§2.69): one-line titles when zoomed out, full titles at
  * normal size, and the explanation's first lines too when zoomed in.
  */
-private enum class Detail(val label: String, val maxWidth: Dp, val titleLines: Int) {
+internal enum class Detail(val label: String, val maxWidth: Dp, val titleLines: Int) {
     FAR("One-line titles", 128.dp, 1),
     NORMAL("Full titles", 150.dp, 3),
     CLOSE("Titles and explanations", 196.dp, 3),
@@ -104,27 +104,27 @@ private enum class Detail(val label: String, val maxWidth: Dp, val titleLines: I
     }
 }
 
-private const val FAR_BELOW = 0.7f
-private const val CLOSE_FROM = 1.35f
+internal const val FAR_BELOW = 0.7f
+internal const val CLOSE_FROM = 1.35f
 
 /** The smallest zoom the map opens at: below it the text is too small to read. */
 private const val READABLE = 0.75f
 private const val MIN_SCALE = 0.2f
 private const val MAX_SCALE = 3f
 
-private val NodeMinWidth = 64.dp
-private val NodePadStart = 7.dp
-private val NodePadEnd = 8.dp
-private val NodePadV = 6.dp
-private val NodeIcon = 14.dp
-private val NodeIconGap = 5.dp
-private val SwapIcon = 12.dp
-private val SwapGap = 2.dp
-private val FoldSize = 20.dp
-private val FoldGap = 4.dp
-private val FoldPad = 4.dp
-private val ExplainGap = 2.dp
-private val Margin = 24.dp
+internal val NodeMinWidth = 64.dp
+internal val NodePadStart = 7.dp
+internal val NodePadEnd = 8.dp
+internal val NodePadV = 6.dp
+internal val NodeIcon = 14.dp
+internal val NodeIconGap = 5.dp
+internal val SwapIcon = 12.dp
+internal val SwapGap = 2.dp
+internal val FoldSize = 20.dp
+internal val FoldGap = 4.dp
+internal val FoldPad = 4.dp
+internal val ExplainGap = 2.dp
+internal val Margin = 24.dp
 
 /** Room at the top of the map for the zoom chip and buttons. */
 private val ControlsHeight = 44.dp
@@ -132,22 +132,22 @@ private val ControlsHeight = 44.dp
 /** At least this wide, the mind map's branches split left and right. */
 private val WideScreen = 600.dp
 
-private class NodeStyles(val title: TextStyle, val root: TextStyle, val explain: TextStyle, val fold: TextStyle)
+internal class NodeStyles(val title: TextStyle, val root: TextStyle, val explain: TextStyle, val fold: TextStyle)
 
 /** What a box shows under its title when zoomed in, if anything. */
-private fun explanationOf(node: MapNode, state: MapState, detail: Detail): String? =
+internal fun explanationOf(node: MapNode, state: MapState, detail: Detail): String? =
     if (detail != Detail.CLOSE) null else state.explanations[node.ref]?.let { if (node.entry.type == ItemType.QUOTE) "— $it" else it }
 
-private fun foldLabel(folded: Boolean, below: Int) = if (folded) "+" + (if (below > 99) "99+" else below.toString()) else "–"
+internal fun foldLabel(folded: Boolean, below: Int) = if (folded) "+" + (if (below > 99) "99+" else below.toString()) else "–"
 
 /** How many items a box can fold away: none for the item in the middle. */
-private fun foldable(node: MapNode, state: MapState) = if (node.ref == state.root?.ref) 0 else state.belowCount(node.ref)
+internal fun foldable(node: MapNode, state: MapState) = if (node.ref == state.root?.ref) 0 else state.belowCount(node.ref)
 
 /**
  * A box's size at [detail], in dp, from its text measured the way [NodeBox] draws it: as wide as
  * its title needs, between [NodeMinWidth] and the detail's widest, and as tall as its lines.
  */
-private fun measureNode(node: MapNode, state: MapState, detail: Detail, measurer: TextMeasurer, styles: NodeStyles, density: Density): GraphLayout.Size = with(density) {
+internal fun measureNode(node: MapNode, state: MapState, detail: Detail, measurer: TextMeasurer, styles: NodeStyles, density: Density): GraphLayout.Size = with(density) {
     val below = foldable(node, state)
     val fold = if (below > 0) {
         val label = measurer.measure(foldLabel(node.ref in state.folded, below), styles.fold, maxLines = 1)
@@ -175,7 +175,7 @@ private fun measureNode(node: MapNode, state: MapState, detail: Detail, measurer
 }
 
 /** The boxes placed for one [state] at one [detail]: centres and sizes in dp, and how lines run. */
-private class Placed(
+internal class Placed(
     val state: MapState,
     val detail: Detail,
     val sizes: Map<ItemRef, GraphLayout.Size>,
@@ -195,7 +195,7 @@ private class Placed(
     val centre: GraphLayout.Point = state.root?.ref?.let(at::get) ?: GraphLayout.Point((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
 }
 
-private fun place(state: MapState, sizes: Map<ItemRef, GraphLayout.Size>, detail: Detail, bothSides: Boolean, routeWidth: Float): Placed {
+internal fun place(state: MapState, sizes: Map<ItemRef, GraphLayout.Size>, detail: Detail, bothSides: Boolean, routeWidth: Float): Placed {
     val result = BranchLayout.place(
         roots = state.tree.roots.filter { it in state.byRef },
         children = state::shownChildren,
@@ -254,7 +254,7 @@ internal class MapActions(
 )
 
 /** A line's path, and points along it for its arrow, label and taps. */
-private class EdgeShape(val path: Path, private val points: List<Offset>) {
+internal class EdgeShape(val path: Path, private val points: List<Offset>) {
     private val lengths = points.zipWithNext { a, b -> (b - a).getDistance() }.runningFold(0f) { acc, d -> acc + d }
 
     /** The point [t] (0 to 1) of the way along. */
@@ -308,7 +308,7 @@ private fun segmentDistance(p: Offset, a: Offset, b: Offset): Float {
  * over a row within one); any other link bows outwards, away from the middle. Points run from a to
  * b, for the arrow.
  */
-private fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px: Float): EdgeShape {
+internal fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px: Float): EdgeShape {
     val a = edge.link.a
     val b = edge.link.b
     fun w(r: ItemRef) = p.sizes.getValue(r).w * px
@@ -413,7 +413,7 @@ private fun shapeOf(edge: MapEdge, p: Placed, centreOf: (ItemRef) -> Offset, px:
  * Whether [edge] is a link across the tree rather than one of its lines (or a link a By route
  * branch draws along its rows): such a line runs past other boxes, so it is drawn over them.
  */
-private fun crossesTree(edge: MapEdge, p: Placed): Boolean {
+internal fun crossesTree(edge: MapEdge, p: Placed): Boolean {
     val (a, b) = edge.link.a to edge.link.b
     if (p.state.tree.joins(a, b)) return false
     val group = p.layout.routeGroup[a]
@@ -421,7 +421,7 @@ private fun crossesTree(edge: MapEdge, p: Placed): Boolean {
 }
 
 /** One line of the map: its colour and width by what it is, its kind's pattern, a halo when selected, and an arrow for a one-way label. */
-private fun DrawScope.drawEdge(edge: MapEdge, shape: EdgeShape, highlighted: Set<ItemRef>?, selection: MapSelection?, outline: Color) {
+internal fun DrawScope.drawEdge(edge: MapEdge, shape: EdgeShape, highlighted: Set<ItemRef>?, selection: MapSelection?, outline: Color) {
     val dim = highlighted != null && !(edge.link.a in highlighted && edge.link.b in highlighted)
     val selected = selection == MapSelection.Edge(edge.link.id)
     val color = when (edge.style) {
@@ -465,7 +465,7 @@ private fun DrawScope.drawEdge(edge: MapEdge, shape: EdgeShape, highlighted: Set
 }
 
 /** The same line with its points running the other way (the path is unchanged). */
-private fun reversed(shape: EdgeShape): EdgeShape {
+internal fun reversed(shape: EdgeShape): EdgeShape {
     val pts = (0..16).map { shape.pointAt(1f - it / 16f) }
     return EdgeShape(shape.path, pts)
 }
@@ -476,7 +476,13 @@ private fun reversed(shape: EdgeShape): EdgeShape {
  * boxes show more as you zoom in. It opens at a readable size, and Fit all shows everything.
  */
 @Composable
-internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: ItemRef?, actions: MapActions) {
+internal fun MapCanvas(
+    state: MapState,
+    selection: MapSelection?,
+    linkingFrom: ItemRef?,
+    actions: MapActions,
+    onView: (MapPrintView) -> Unit = {},
+) {
     val density = LocalDensity.current
     val px = density.density
     var viewport by remember { mutableStateOf(IntSize.Zero) }
@@ -510,6 +516,8 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
             place(state, sizes, detail, bothSides, routeWidth)
         }
     }
+    // What is shown, for printing it as it is.
+    LaunchedEffect(placed) { placed?.let { onView(MapPrintView(it.state, it.detail, bothSides, routeWidth, styles)) } }
     // An item being dragged, and how far in content pixels; once let go it stays put (pending) until
     // the map comes back with its new place, so it doesn't jump back for a moment.
     var drag by remember { mutableStateOf<Pair<ItemRef, Offset>?>(null) }
@@ -758,7 +766,7 @@ internal fun MapCanvas(state: MapState, selection: MapSelection?, linkingFrom: I
     }
 }
 
-private val LabelWidth = 96.dp
+internal val LabelWidth = 96.dp
 
 /** How far a link round a branch can go out from the boxes, plus half a label, in dp. */
 private const val CrossRoom = 84f + 48f

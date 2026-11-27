@@ -1,5 +1,6 @@
 package com.example.xcommandcenter.data.backup
 
+import com.example.xcommandcenter.data.entity.IdeaEntity
 import com.example.xcommandcenter.data.entity.LinkLabelEntity
 import com.example.xcommandcenter.domain.ItemRef
 import com.example.xcommandcenter.domain.ItemType
@@ -80,6 +81,20 @@ object IdeaNetwork {
         fun words(s: String?) = s?.trim()?.lowercase().orEmpty()
         return existing.firstOrNull { words(it.forward) == words(label.forward) && words(it.backward) == words(label.backward) }
     }
+
+    /**
+     * [network] with a new idea named [title] above its top-level ideas, which keep their order
+     * under it: for importing a document as one branch.
+     */
+    fun wrap(network: BackupData, title: String, now: Long = System.currentTimeMillis()): BackupData {
+        val id = (network.ideas.maxOfOrNull { it.id } ?: 0L) + 1
+        val root = IdeaEntity(id = id, title = title, createdAt = now)
+        return network.copy(ideas = listOf(root) + network.ideas.map { if (it.parentId == null) it.copy(parentId = id) else it })
+    }
+
+    /** Each idea of [network] with how deep it is (0 for a top-level one), parents before children, in order. */
+    fun outline(network: BackupData): List<PlanTree.Row<IdeaEntity>> =
+        PlanTree.flatten(network.ideas.sortedBy { it.sortOrder }, { it.id }, { it.parentId })
 
     /** What an import added, for the message after it. */
     data class Added(val ideas: Int, val links: Int, val newLabels: Int, val skipped: Int = 0) {

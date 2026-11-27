@@ -150,3 +150,6 @@ fun DetailScaffold(
 
 /** An Excel workbook's MIME type, for the file pickers of export and import. */
 const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+/** The type of a Word document (.docx), for picking an outline to import. */
+const val DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

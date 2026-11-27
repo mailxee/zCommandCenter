@@ -1509,7 +1509,9 @@ tasks, plans and habits link to visions, principles and ideas.
   ideas after the place's existing children in their own order, the rest keeping theirs; labels
   matched by key or by wording both ways ignoring case (`IdeaNetwork.sameLabel`), else added; links
   re-made between the new ends with the label read from the same idea; tags matched by name. The same
-  file imported twice gives two copies. A snackbar says what was added.
+  file imported twice gives two copies. A snackbar says what was added. (Since §2.80 a file is
+  shown first, and Import adds it.)
+
 ### 2.79 Swipe to remove list items, back twice to exit, new ideas are Ideas
 
 - **List items** (`ListEditor`: a task's checklist, a note's, idea's and person's lists) have no
@@ -1528,6 +1530,55 @@ tasks, plans and habits link to visions, principles and ideas.
   the fields to edit below.
 - **Snackbars** on the detail screens and the main tabs are cleared only after they have shown:
   clearing first changed the effect's key and cancelled the snackbar.
+
+### 2.80 Importing ideas from a Word outline, and a preview before any import
+
+- **Word outlines** (`data/backup/WordOutline.kt`): a .docx is a zip of XML, read with the JDK's zip
+  and DOM like the workbooks. Each bulleted or numbered point (`w:numPr`, its `w:ilvl` the level) and
+  each heading (a style named "heading N", or an outline level, looked up through `basedOn`, so a
+  localised style id still counts) is an idea. Headings go above list points: a point under a
+  heading at depth d is at d + 1 + its level; a stack of open ideas by depth gives each its parent, so
+  levels that jump still nest. The name is the point's bold start (bold runs, or runs in a bold or
+  "Strong" style), with a trailing ":", ";", "," or dash taken off; the rest, its separator taken off,
+  is the explanation, each "Example:" after a sentence starting a paragraph of its own. Without a bold
+  start: the text before a ":" (up to 120 characters), else the whole point if short, else its first
+  sentence (all of a long single sentence is kept as the explanation). Headings without bold are
+  named by their whole text. A paragraph that is neither is added to the explanation of the idea
+  above; before the first idea, a Title paragraph (or a lone short paragraph) is the document's
+  title, others are left out and counted. Deleted text, moved-from text and text boxes aren't read.
+  Every idea is an Idea, ordered as in the document. No outline at all, or not a Word file: an
+  `ImportException` says so.
+- **The preview** (`ui/idea/IdeaImportPreviewDialog.kt`, full screen): Ideas tab ⋮ > Import ideas from
+  Excel… or Import a Word outline…; `BackupRepository.previewIdeas` reads the file into an
+  `IdeaImportPreview` without adding anything, and `HomeViewModel.importPreview` shows it. It says how
+  many ideas and levels and what the reader noticed (paragraphs joined or left out, links to items
+  outside a network), then the tree read only; tapping an idea shows all of its explanation. "Put
+  everything under a new idea" (`IdeaNetwork.wrap`) is on for a Word outline, named after the
+  document's title or else the file's name, and off for a workbook; the name can be changed. Goes
+  picks the top level or an idea (`IdeaPlacePicker`). Import calls `addPreviewed`, which uses
+  `BackupDao.addIdeas` as before; Cancel or back adds nothing.
+
+### 2.81 The map as a PDF
+
+- **Save as PDF** (the print button on the map's top bar, `MapPdfButton`): Fit on one page (as large
+  as fits, enlarged at most 1.5 times; the page turned whichever way gives the larger map) or Across
+  pages (at 0.8 of screen size, so 12 sp titles print at about 10 pt; turned whichever way needs
+  fewer pages; pages overlap by 18 pt, about 6 mm, for joining, and each says which row and column it
+  is). Paper A4, Letter (the default in the US, Canada and a few others) or A3. The dialog shows how
+  many pages Across pages would take. The file is saved where the user picks
+  (`CreateDocument("application/pdf")`), named `Map-<title>-<date>.pdf`.
+- **What is drawn** (`ui/links/MapPdf.kt`): what the map shows now (`MapCanvas` reports a
+  `MapPrintView`: its state, with folds, filters, layouts and dragged places, the zoom's detail level,
+  and the screen's route width). It is measured and placed again at one point per dp (`measureNode`,
+  `place`, shared with the canvas) and drawn with the canvas's own `shapeOf` and `drawEdge`: lines
+  under the boxes, boxes, links across the tree over them, then labels. Boxes are drawn as the
+  screen's `NodeBox` is. Icons are read from their vector drawables' path data and filled, so
+  everything stays shapes and text: Android's `PdfDocument` records the drawing as vector PDF. Colours
+  are the light theme's (`printColors`, read inside a light `AppTheme`) on white, whatever the screen
+  uses. Each page has the title (the network's root, or "Every network") and the date at the top.
+- Robolectric's `PdfDocument` can't create a document, so `MapPdfTest` checks the page plans and
+  draws each page with the same `drawPage` onto pictures (saved to build/map-shots when that folder
+  exists).
 
 ## 3. Walkthrough: marking a habit done from the Habits tab
 
@@ -1743,6 +1794,8 @@ ten `mipmap-*dpi/ic_launcher*.webp` images (replaced by the logo, §2.14).
 | `domain/BackupNames.kt`, `data/backup/AutoBackupRepository.kt`, `AutoBackupWorker.kt` | Daily backups to a chosen folder (§2.64). |
 | `domain/ThinkRoute.kt`, `domain/ThinkAnalysis.kt` | Think mode's route and checks (§2.62). |
 | `data/backup/IdeaNetwork.kt`, `ui/idea/IdeaPlacePicker.kt` | A network of ideas to and from a file, and the picker of where it goes (§2.78). |
+| `data/backup/WordOutline.kt`, `data/backup/IdeaImportPreview.kt`, `ui/idea/IdeaImportPreviewDialog.kt` | Ideas from a Word outline, and the preview shown before any import of ideas (§2.80). |
+| `ui/links/MapPdf.kt`, `ui/links/MapPdfButton.kt` | The map as a vector PDF, on one page or across pages, and its Save as PDF dialog (§2.81). |
 | `data/db/GoalsToVisions.kt`, `data/backup/LegacyGoals.kt` | Goals become visions: the version 16 upgrade, and older workbooks on import (§2.77). |
 | `domain/AppMode.kt`, `data/prefs/ModeRepository.kt` | Do and Think: the mode, each tab's mode, what each mode's networks run through (§2.61). |
 

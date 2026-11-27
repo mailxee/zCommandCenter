@@ -110,6 +110,8 @@ fun MapScreen(
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     var showing by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
+    // What the map's picture shows, for Save as PDF.
+    var printView by remember { mutableStateOf<MapPrintView?>(null) }
     LaunchedEffect(undo) {
         val action = undo ?: return@LaunchedEffect
         viewModel.undoShown()
@@ -141,6 +143,11 @@ fun MapScreen(
                     IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back") }
                 },
                 actions = {
+                    MapPdfButton(
+                        view = printView?.takeIf { s != null && s.nodes.isNotEmpty() },
+                        title = s?.root?.title ?: "Every network",
+                        snackbar = snackbar,
+                    )
                     IconButton(onClick = { showing = true }) {
                         Icon(
                             painterResource(R.drawable.ic_filter),
@@ -214,6 +221,7 @@ fun MapScreen(
                     else -> MapCanvas(
                         s, selection, linkingFrom,
                         remember(viewModel) { MapActions(viewModel::select, viewModel::tapNode, viewModel::moveNode, viewModel::toggleFold, viewModel::dropOn) },
+                        onView = { printView = it },
                     )
                 }
                 Column(Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
