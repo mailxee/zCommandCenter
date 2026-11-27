@@ -132,12 +132,41 @@ class MapCanvasTest {
         return { current = it; compose.waitForIdle() }
     }
 
-    /** Boxes are measured and placed off the main thread, which the rule doesn't wait for. */
+    /**
+     * Boxes are measured and placed off the main thread, which the rule doesn't wait for; the
+     * clock is stepped meanwhile, so effects waiting on a new frame (a refit after re-measuring) run.
+     */
+    private fun waitUntilShown(found: () -> Boolean) {
+        val end = System.currentTimeMillis() + 30_000
+        while (!found()) {
+            if (System.currentTimeMillis() > end) throw AssertionError("Not shown within 30 s")
+            compose.mainClock.advanceTimeBy(100)
+            compose.waitForIdle()
+            Thread.sleep(20)
+        }
+    }
+
+    /** Until the zoom chip stops changing: a fit can pass through other zooms before it settles. */
+    private fun settle() {
+        fun chip() = compose.onAllNodesWithText("% · ", substring = true).fetchSemanticsNodes()
+            .map { it.config[androidx.compose.ui.semantics.SemanticsProperties.Text].first().text }
+        var last = chip()
+        var same = 0
+        val end = System.currentTimeMillis() + 30_000
+        while (same < 5 && System.currentTimeMillis() < end) {
+            compose.mainClock.advanceTimeBy(100)
+            compose.waitForIdle()
+            Thread.sleep(20)
+            val now = chip()
+            if (now == last) same++ else { same = 0; last = now }
+        }
+    }
+
     private fun waitFor(text: String, substring: Boolean = false) =
-        compose.waitUntil(30_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
+        waitUntilShown { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
 
     private fun waitForDescription(text: String) =
-        compose.waitUntil(30_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
+        waitUntilShown { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun shoot(name: String) {
         val dir = File("build/map-shots").takeIf { it.isDirectory } ?: return
@@ -215,6 +244,7 @@ class MapCanvasTest {
         shoot("mind-open")
         compose.onNodeWithText("Fit all").performClick()
         waitFor("One-line titles", substring = true)
+        settle()
         compose.onNodeWithText("One-line titles", substring = true).assertIsDisplayed()
         shoot("mind-fit")
         compose.onNodeWithContentDescription("Zoom in").performClick()
